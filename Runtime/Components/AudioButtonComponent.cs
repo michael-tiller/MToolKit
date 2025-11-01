@@ -53,7 +53,7 @@ namespace MToolKit.Runtime.Components
     [SerializeField, MinValue(0f), Tooltip("Minimum time between select sounds to prevent spam")]
     private float selectCooldown = 0.05f;
 
-    [SerializeField, Required, HideInInspector]
+    [SerializeField, Required]
     private Button button;
 
     private float lastClickTime = 0f;
@@ -97,7 +97,7 @@ namespace MToolKit.Runtime.Components
           log.ForMethod(nameof(TryResolveAudioService)).Debug("Successfully resolved IAudioService from GlobalInstaller.Instance for {0}", gameObject.name);
           return;
         }
-        
+
         log.ForMethod(nameof(TryResolveAudioService)).Warning("GlobalInstaller.Instance is null for {0}", gameObject.name);
       }
       catch (Exception ex)

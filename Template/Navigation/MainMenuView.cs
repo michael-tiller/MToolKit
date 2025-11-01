@@ -34,7 +34,7 @@ namespace MToolKit.Template.Navigation
     [SerializeField][Required] private UnityEngine.UI.Button newGameButton;
     [SerializeField][Required] private UnityEngine.UI.Button loadButton;
 
-    [SerializeField][Required] private UnityEngine.UI.Button localizationButton;    
+    [SerializeField][Required] private UnityEngine.UI.Button localizationButton;
     [SerializeField][Required] private GameObject localizationMenuContainer;
 
     private IModalService modalService;
@@ -59,11 +59,11 @@ namespace MToolKit.Template.Navigation
       this.profileManager = profileManager;
       this.contentLoader = contentLoader;
       isConstructed = true;
-      
+
 
       // Set up reactive subscriptions
       SetupReactiveSubscriptions();
-      
+
       // Initialize button states asynchronously to ensure ProfileManager is ready
       InitializeButtonStatesAsync().Forget();
       localizationMenuContainer.SetActive(false);
@@ -106,7 +106,7 @@ namespace MToolKit.Template.Navigation
     public void SetLanguage(string language)
     {
       log.ForGameObject(gameObject).ForMethod().Information("User clicked SetLocalization: {0}", language);
-      
+
       LocalizationSystem.Instance.SetNewLocale(language);
     }
     public void ToggleLocalizationMenu()
@@ -117,25 +117,25 @@ namespace MToolKit.Template.Navigation
 
     #region Localization
     #endregion
-    
+
     #region Initialization
 
     private async UniTask InitializeButtonStatesAsync()
     {
       // Wait a frame to ensure ProfileManager has finished its initialization
       await UniTask.NextFrame();
-      
+
       // Give ProfileManager a moment to scan the filesystem
       await UniTask.Delay(100);
-      
+
       log.ForGameObject(gameObject).ForMethod(nameof(InitializeButtonStatesAsync)).Information("Initializing button states after ProfileManager setup");
-      
+
       // Now update button states
       UpdateContinueButtonState();
       UpdateLoadButtonState();
 
       localizationButton.onClick.AddListener(ToggleLocalizationMenu);
-      
+
       EventSystem.current.SetSelectedGameObject(profileManager.AvailableProfiles.Value.Count > 0 ? continueButton.gameObject : newGameButton.gameObject);
     }
 
@@ -162,11 +162,11 @@ namespace MToolKit.Template.Navigation
         // Check if any profiles exist
         var availableProfiles = profileManager.AvailableProfiles.Value;
         bool hasSaveFile = availableProfiles != null && availableProfiles.Count > 0;
-        
+
         continueButton.interactable = hasSaveFile;
-        
-        log.ForGameObject(gameObject).ForMethod(nameof(UpdateContinueButtonState)).Debug("Continue button state updated: {0} (profiles: {1}) - Profile names: [{2}]", 
-          hasSaveFile ? "enabled" : "disabled", 
+
+        log.ForGameObject(gameObject).ForMethod(nameof(UpdateContinueButtonState)).Debug("Continue button state updated: {0} (profiles: {1}) - Profile names: [{2}]",
+          hasSaveFile ? "enabled" : "disabled",
           availableProfiles?.Count ?? 0,
           availableProfiles != null ? string.Join(", ", availableProfiles) : "null");
       }
@@ -190,11 +190,11 @@ namespace MToolKit.Template.Navigation
         // Check if any profiles exist
         var availableProfiles = profileManager.AvailableProfiles.Value;
         bool hasSaveFile = availableProfiles != null && availableProfiles.Count > 0;
-        
+
         loadButton.interactable = hasSaveFile;
-        
-        log.ForGameObject(gameObject).ForMethod(nameof(UpdateLoadButtonState)).Debug("Load button state updated: {0} (profiles: {1}) - Profile names: [{2}]", 
-          hasSaveFile ? "enabled" : "disabled", 
+
+        log.ForGameObject(gameObject).ForMethod(nameof(UpdateLoadButtonState)).Debug("Load button state updated: {0} (profiles: {1}) - Profile names: [{2}]",
+          hasSaveFile ? "enabled" : "disabled",
           availableProfiles?.Count ?? 0,
           availableProfiles != null ? string.Join(", ", availableProfiles) : "null");
       }
@@ -220,7 +220,7 @@ namespace MToolKit.Template.Navigation
 
       // React to profile changes - when AvailableProfiles changes, update both buttons
       profileManager.AvailableProfiles
-        .Subscribe(_ => 
+        .Subscribe(_ =>
         {
           UpdateContinueButtonState();
           UpdateLoadButtonState();
@@ -230,14 +230,14 @@ namespace MToolKit.Template.Navigation
       log.ForGameObject(gameObject).ForMethod(nameof(SetupReactiveSubscriptions)).Debug("Reactive subscriptions set up for continue and load button states");
     }
 
-        /// <summary>
-        /// Public method to refresh button states (can be called when returning to main menu)
-        /// </summary>
-        public void RefreshButtonStates()
-        {
-          UpdateContinueButtonState();
-          UpdateLoadButtonState();
-        }
+    /// <summary>
+    /// Public method to refresh button states (can be called when returning to main menu)
+    /// </summary>
+    public void RefreshButtonStates()
+    {
+      UpdateContinueButtonState();
+      UpdateLoadButtonState();
+    }
 
     #endregion
 
@@ -245,7 +245,7 @@ namespace MToolKit.Template.Navigation
 
     private UniTask NewGameAsync()
     {
-      log.ForGameObject(gameObject).ForMethod().Verbose("Starting New Game");      
+      log.ForGameObject(gameObject).ForMethod().Verbose("Starting New Game");
       GlobalAsyncMessageBroker.Publish(new NavigationRequestMessage(newGameViewRequestBody));
       return UniTask.CompletedTask;
     }
@@ -253,25 +253,25 @@ namespace MToolKit.Template.Navigation
     private async UniTask ContinueAsync()
     {
       log.ForGameObject(gameObject).ForMethod().Information("Continuing Game");
-      
+
       // Guard clause: Don't proceed if no profiles are available
       if (profileManager == null)
       {
         log.ForGameObject(gameObject).ForMethod().Warning("ProfileManager not available, cannot continue game");
         return;
       }
-      
+
       var availableProfiles = profileManager.AvailableProfiles.Value;
       if (availableProfiles == null || availableProfiles.Count == 0)
       {
-        log.ForGameObject(gameObject).ForMethod().Warning("No profiles available, cannot continue game. AvailableProfiles: {0}", 
+        log.ForGameObject(gameObject).ForMethod().Warning("No profiles available, cannot continue game. AvailableProfiles: {0}",
           availableProfiles == null ? "null" : $"Count={availableProfiles.Count}");
         return;
       }
-      
-      log.ForGameObject(gameObject).ForMethod().Debug("Proceeding with continue - found {0} profiles: [{1}]", 
+
+      log.ForGameObject(gameObject).ForMethod().Debug("Proceeding with continue - found {0} profiles: [{1}]",
         availableProfiles.Count, string.Join(", ", availableProfiles));
-      
+
       try
       {
         // Get the most recent profile
@@ -279,20 +279,20 @@ namespace MToolKit.Template.Navigation
         {
           string mostRecentProfile = await profileManager.GetMostRecentProfileAsync();
           log.ForGameObject(gameObject).ForMethod().Debug("GetMostRecentProfileAsync returned: '{0}'", mostRecentProfile ?? "null");
-          
+
           GlobalAsyncMessageBroker.Publish(new InterstitialAlertRequestMessage(LocalizationHelper.GetLocalizedString("Loading profile...")));
-          
+
           if (!string.IsNullOrEmpty(mostRecentProfile))
           {
             log.ForGameObject(gameObject).ForMethod().Information("Loading most recent profile: {0}", mostRecentProfile);
-            
+
             // Load the most recent profile
             bool profileLoaded = await profileManager.LoadProfileAsync(mostRecentProfile);
-            
+
             if (profileLoaded)
             {
               log.ForGameObject(gameObject).ForMethod().Information("Profile loaded successfully, loading save data");
-              
+
               // Load save data using the game save system
               if (gameSaveSystem != null)
               {
@@ -327,7 +327,7 @@ namespace MToolKit.Template.Navigation
         log.ForGameObject(gameObject).ForMethod().Error(ex, "Failed to load save data: {Message}", ex.Message);
         // Continue anyway - let the game handle missing save data
       }
-      
+
       var sceneRef = GlobalConstants.Instance?.GlobalConstantsConfig?.GameplaySceneReference;
       if (sceneRef != null && sceneRef.RuntimeKeyIsValid())
       {

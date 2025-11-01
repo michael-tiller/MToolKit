@@ -2,6 +2,9 @@
     "name": "MToolKit.Template.Editor",
     "rootNamespace": "",
     "references": [
+        "GUID:391b5c9e709fd0e40a4f1df12ee7bb9c",
+        "GUID:5ad43f77b8d4e5444802ca11e834b434",
+        "GUID:682f1069baedf074d861fcc1e9c957cb",
         "GUID:df1f34049e0e6a84994cae0eda81ce8e",
         "GUID:3a92f33f7019ed941bea036da364ad73",
         "GUID:3de88c88fbbb8f944b9210d496af9762",

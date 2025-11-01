@@ -2,6 +2,8 @@
     "name": "MToolKit.Editor",
     "rootNamespace": "",
     "references": [
+        "GUID:391b5c9e709fd0e40a4f1df12ee7bb9c",
+        "GUID:682f1069baedf074d861fcc1e9c957cb",
         "GUID:df1f34049e0e6a84994cae0eda81ce8e",
         "GUID:f51ebe6a0ceec4240a699833d6309b23",
         "GUID:f507f7af064857e4d8f65ddbbb8d9a87",
