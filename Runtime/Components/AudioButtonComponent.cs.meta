@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 840a78a6ab347fa438b7162f6fb6bebf
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - clickAudioClip: {fileID: 8300000, guid: 48cbe4a4acc395646908dc8ef94513ba, type: 3}
+  - selectAudioClip: {fileID: 8300000, guid: 03ef6c352e1ede7428cdaef15a43525c, type: 3}
+  - button: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

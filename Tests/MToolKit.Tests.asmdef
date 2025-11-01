@@ -1,0 +1,41 @@
+{
+    "name": "MToolKit.Tests",
+    "rootNamespace": "",
+    "references": [
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "VContainer",
+        "UniTask",
+        "MessagePipe",
+        "MessagePipe.VContainer",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI",
+        "ES3",
+        "Sirenix.OdinInspector.Modules.UnityMathematics",
+        "MToolKit.Runtime",
+        "MToolKit.Runtime.Slog",
+        "Unity.Localization"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "NSubstitute.dll",
+        "R3.dll",
+        "Serilog.dll",
+        "Serilog.Sinks.Unity3D.dll",
+        "Serilog.Sinks.File.dll",
+        "Serilog.Formatting.Compact.dll",
+        "Serilog.Enrichers.GlobalLogContext.dll",
+        "FsCheck.dll",
+        "FSharp.Core.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

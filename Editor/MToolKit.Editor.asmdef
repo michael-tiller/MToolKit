@@ -1,0 +1,20 @@
+{
+    "name": "MToolKit.Editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:df1f34049e0e6a84994cae0eda81ce8e",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "GUID:f507f7af064857e4d8f65ddbbb8d9a87",
+        "GUID:ad968d605628d06499b62cdc30f11cf8",
+        "GUID:9e49d76f04098074a8129f5541d246f6"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

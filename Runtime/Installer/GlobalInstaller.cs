@@ -1,0 +1,1038 @@
+using System;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using MToolKit.Runtime.Core.Abstractions;
+using MToolKit.Runtime.Core.Config;
+using MToolKit.Runtime.Core.Interfaces;
+using MToolKit.Runtime.Core;
+using MToolKit.Runtime.MessageBus;
+using MToolKit.Runtime.MessageBus.Events;
+using MToolKit.Runtime.Navigation;
+using MToolKit.Runtime.Persistence.ES3Integration;
+using MToolKit.Runtime.Persistence;
+using MToolKit.Runtime.Settings;
+using MToolKit.Runtime.Input;
+using MessagePipe;
+using Serilog;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using VContainer;
+using VContainer.Unity;
+using ILogger = Serilog.ILogger;
+using Sirenix.OdinInspector;
+using MToolKit.Runtime.Analytics;
+using MToolKit.Runtime.AssetLoader;
+using MToolKit.Runtime.Bootstrapper;
+using MToolKit.Runtime.ErrorSystem.Messages;
+using MToolKit.Runtime.ErrorSystem;
+using MToolKit.Runtime.Input.Interfaces;
+using MToolKit.Runtime.Core.Singletons;
+using MToolKit.Runtime.Bootstrapper.Interfaces;
+using MToolKit.Runtime.AssetLoader.Interfaces;
+using MToolKit.Runtime.Navigation.Events;
+using Cysharp.Threading.Tasks;
+using System.Threading;
+using System.Collections.Generic;
+
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
+
+[assembly: InternalsVisibleTo("Assembly-CSharp._MTools.Tests")]
+
+
+namespace MToolKit.Runtime.Installer
+{
+  /// <summary>
+  /// Global installer that provides core services across all scenes.
+  /// This installer persists via DontDestroyOnLoad and provides services
+  /// that are needed before GameInstaller is available.
+  /// </summary>
+  public class GlobalInstaller : LifetimeScope
+  {
+    private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<GlobalInstaller>().ForFeature("Runtime.Installers"));
+    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
+
+    private GlobalPluginConfigAsset globalPluginConfig;
+    private bool globalPluginConfigSetByTest = false;
+    private bool isInitialSetup = true;
+    private static bool inputServiceInitialized = false; // Static to prevent duplicate initialization across scopes
+#if ENABLE_INPUT_SYSTEM
+    [SerializeField] private InputActionAsset inputActionAsset;
+#endif
+
+    public static GlobalInstaller Instance { get; private set; }
+    
+    // Global plugin instances for PluginDiagnosisWindow
+    [field: ReadOnly] [ShowInInspector]
+    public NavigationPlugin NavigationPluginInstance { get; private set; }
+    [field: ReadOnly] [ShowInInspector]
+    public SettingsPlugin SettingsPluginInstance { get; private set; }
+    [field: ReadOnly] [ShowInInspector]
+    public ES3GameSavePlugin GameSavePluginInstance { get; private set; }
+    [field: ReadOnly] [ShowInInspector]
+    public InputRebinderPlugin InputRebinderPluginInstance { get; private set; }
+    [field: ReadOnly] [ShowInInspector]
+    public AnalyticsPlugin AnalyticsPluginInstance { get; private set; }
+    [field: ReadOnly] [ShowInInspector]
+    public ErrorSystemPlugin ErrorSystemPluginInstance { get; private set; }
+
+    [field: ReadOnly] [ShowInInspector]
+    public IProfileManager ProfileManagerInstance { get; private set; }
+
+    [field: ReadOnly] [ShowInInspector]
+    public IInputService InputServiceInstance { get; private set; }
+
+    /// <summary>
+    /// Gets the ES3GameSavePlugin instance if it exists and is ready for initialization.
+    /// </summary>
+    public ES3GameSavePlugin GetES3GameSavePlugin()
+    {
+      if (GameSavePluginInstance != null && GameSavePluginInstance.gameObject != null)
+      {
+        return GameSavePluginInstance;
+      }
+      
+      // Fallback to finding in scene
+      var sceneInstance = FindFirstObjectByType<ES3GameSavePlugin>();
+      if (sceneInstance != null)
+      {
+        GameSavePluginInstance = sceneInstance;
+        return sceneInstance;
+      }
+      
+      return null;
+    }
+    
+    /// <summary>
+    /// Resets the singleton to its initial state. Useful for testing.
+    /// </summary>
+    public static void Reset()
+    {
+      Instance = null;
+      log.ForMethod().Verbose("GlobalInstaller singleton reset");
+    }
+    
+    /// <summary>
+    /// Sets a specific instance for testing purposes. Use with caution.
+    /// </summary>
+    /// <param name="instance">The instance to set as the singleton</param>
+    public static void SetInstanceForTesting(GlobalInstaller instance)
+    {
+      Instance = instance;
+      log.ForMethod().Verbose("GlobalInstaller singleton set for testing");
+    }
+    
+    /// <summary>
+    /// For testing purposes - allows calling OnDestroy behavior
+    /// </summary>
+    public void TestOnDestroy()
+    {
+      OnDestroy();
+    }
+    
+    /// <summary>
+    /// For testing purposes - allows calling Awake behavior
+    /// </summary>
+    public void TestAwake()
+    {
+      if (DisableSingletonBehavior)
+      {
+        // In test mode, set this as instance if none exists
+        if (Instance == null)
+        {
+          Instance = this;
+          log.ForGameObject(gameObject).ForMethod().Verbose("GlobalInstaller set as instance (test mode)");
+        }
+        return;
+      }
+      
+      Awake();
+    }
+    
+    /// <summary>
+    /// For testing purposes - allows disabling singleton behavior
+    /// </summary>
+    public static bool DisableSingletonBehavior { get; set; } = false;
+
+    protected override void Awake()
+    {
+      base.Awake();
+
+      if (DisableSingletonBehavior)
+      {
+        // In test mode, don't set instance automatically - let tests control when it's set
+        log.ForGameObject(gameObject).ForMethod().Verbose("GlobalInstaller created (test mode)");
+        return;
+      }
+
+      if (Instance == null)
+      {
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+        log.ForGameObject(gameObject).ForMethod().Debug("GlobalInstaller initialized and persisted");
+        
+        // Subscribe to scene change events
+        SceneManager.sceneLoaded += OnSceneLoaded;
+      }
+      else if (Instance != this)
+      {
+        log.ForGameObject(gameObject).ForMethod().Verbose("GlobalInstaller already exists, destroying duplicate");
+        Destroy(gameObject);
+      }
+    }
+
+    protected override void OnDestroy()
+    {
+      // Unsubscribe from scene events
+      SceneManager.sceneLoaded -= OnSceneLoaded;
+      
+      if (DisableSingletonBehavior)
+      {
+        // In test mode, don't clear the instance automatically
+        log.ForGameObject(gameObject).ForMethod().Verbose("GlobalInstaller destroyed (test mode)");
+        return;
+      }
+
+      if (Instance == this)
+      {
+        Instance = null;
+        log.ForGameObject(gameObject).ForMethod().Verbose("GlobalInstaller destroyed");
+      }
+      base.OnDestroy();
+    }
+
+    protected override void Configure(IContainerBuilder builder)
+    {
+      if (builder == null)
+        throw new ArgumentNullException(nameof(builder));
+
+      log.ForGameObject(gameObject).ForMethod().Verbose("Configuring GlobalInstaller");
+
+      // Use local field if already set (e.g., in tests), otherwise get from GlobalConfigLoader
+      if (!globalPluginConfigSetByTest)
+      {
+        globalPluginConfig = GlobalConfigLoader.Instance?.GlobalPluginConfig ?? null;
+      }
+      log.ForGameObject(gameObject).ForMethod().Verbose("GlobalPluginConfig: {0}", globalPluginConfig != null ? "not null" : "null");
+
+      // Set up MessagePipe for global communication
+      RegisterMessagePipe(builder);
+
+      // ES3SaveConfig will be registered by ES3GameSavePlugin via ConfigPlugin pattern
+      // No need to register it here to avoid conflicts
+
+      // Register ES3 service globally so it's available in all scenes
+      // Use ProfileAwareES3Service to support profile-specific save files
+      builder.Register<IES3Service>(resolver => 
+      {
+        try
+        {
+          var config = resolver.Resolve<ES3SaveConfig>();
+          // Create a temporary ES3Service for ProfileManager initialization
+          var tempES3Service = new ES3SaveService(config.SaveFileName, config);
+          ProfileManagerInstance = new ProfileManager(tempES3Service, config);
+          return new ProfileAwareES3Service(config, ProfileManagerInstance);
+        }
+        catch (VContainerException)
+        {
+          // Config not available yet, create with default settings
+          log.ForGameObject(gameObject).ForMethod().Warning("ES3SaveConfig not available, using default settings");
+          var defaultConfig = ScriptableObject.CreateInstance<ES3SaveConfig>();
+          var tempES3Service = new ES3SaveService(defaultConfig.SaveFileName, defaultConfig);
+          ProfileManagerInstance = new ProfileManager(tempES3Service, defaultConfig);
+          return new ProfileAwareES3Service(defaultConfig, ProfileManagerInstance);
+        }
+      }, Lifetime.Singleton);
+      log.ForGameObject(gameObject).ForMethod().Verbose("Registered IES3Service globally");
+
+      // Register SaveDomainControllerRegistry globally
+      builder.Register<SaveDomainControllerRegistry>(Lifetime.Singleton);
+      
+      // Register PluginRegistry globally so it's available in all scenes
+      builder.Register<PluginRegistry>(Lifetime.Singleton);
+      log.ForGameObject(gameObject).ForMethod().Verbose("Registered PluginRegistry globally");
+      
+      // Register ProfileManager globally so it's available in all scenes
+      builder.Register<IProfileManager>(resolver =>
+      {
+        var es3Service = resolver.Resolve<IES3Service>();
+        // Extract ProfileManager from ProfileAwareES3Service
+        if (es3Service is ProfileAwareES3Service profileAwareService)
+        {
+          return profileAwareService.ProfileManager;
+        }
+        
+        // Fallback: create a new ProfileManager
+        ES3SaveConfig saveConfig;
+        try
+        {
+          saveConfig = resolver.Resolve<ES3SaveConfig>();
+        }
+        catch (VContainerException)
+        {
+          log.ForGameObject(gameObject).ForMethod().Warning("ES3SaveConfig not available for ProfileManager, using default");
+          saveConfig = ScriptableObject.CreateInstance<ES3SaveConfig>();
+        }
+        
+        ProfileManagerInstance = new ProfileManager(es3Service, saveConfig);
+        return ProfileManagerInstance;
+      }, Lifetime.Singleton);
+
+
+#if USE_ADDRESSABLES
+      builder.Register<IAssetLoader, AddressablesAssetLoader>(Lifetime.Singleton);
+#else
+      builder.Register<IAssetLoader, ResourcesAssetLoader>(Lifetime.Singleton);
+#endif
+      builder.Register<IRuntimeAssetService, RuntimeAssetService>(Lifetime.Singleton);
+      builder.Register<IContentLoaderService, ContentLoaderService>(Lifetime.Singleton);
+      builder.Register<IGameLoader, GameLoader>(Lifetime.Singleton);
+
+      
+      log.ForGameObject(gameObject).ForMethod().Verbose("Registered ProfileManager globally");
+      
+      // Register SaveSystemCoordinator globally so it's available in all scenes
+      builder.Register(resolver =>
+      {
+        var es3Service = resolver.Resolve<IES3Service>();
+        var globalRegistry = resolver.Resolve<SaveDomainControllerRegistry>();
+
+          // Try to resolve config, fall back to default if not available
+          ES3SaveConfig saveConfig;
+        try
+        {
+          saveConfig = resolver.Resolve<ES3SaveConfig>();
+        }
+        catch (VContainerException)
+        {
+          log.ForGameObject(gameObject).ForMethod().Warning("ES3SaveConfig not available for SaveSystemCoordinator, using default");
+          saveConfig = ScriptableObject.CreateInstance<ES3SaveConfig>();
+        }
+        
+        // Create a local registry that will be populated by GameInstaller
+        var localRegistry = new SaveDomainControllerRegistry();
+        
+        var profileManager = resolver.Resolve<IProfileManager>();
+        return new SaveSystemCoordinator(es3Service, globalRegistry, localRegistry, saveConfig, profileManager);
+      }, Lifetime.Singleton);
+      
+      log.ForGameObject(gameObject).ForMethod().Verbose("Registered SaveSystemCoordinator globally");
+
+      // Register ES3GameSaveSystem concrete type for backward compatibility
+      // This is needed because some views still inject the concrete type
+      builder.Register(resolver =>
+      {
+        var es3Service = resolver.Resolve<IES3Service>();
+        var globalRegistry = resolver.Resolve<SaveDomainControllerRegistry>();
+        
+        // Create ES3GameSaveSystem with global controllers for backward compatibility
+        var globalControllers = globalRegistry.GetControllers();
+        return new ES3GameSaveSystem(globalControllers, es3Service);
+      }, Lifetime.Singleton);
+      
+      log.ForGameObject(gameObject).ForMethod().Verbose("Registered ES3GameSaveSystem concrete type for backward compatibility");
+
+      // Register Input Service globally
+      if (inputActionAsset != null)
+      {
+        builder.Register<IInputService, InputService>(Lifetime.Singleton);
+        builder.RegisterInstance(inputActionAsset);
+        
+        // Initialize and enable InputService after container is built
+        // Use a static flag to ensure we only initialize once across all scopes
+        builder.RegisterBuildCallback(resolver =>
+        {
+          if (inputServiceInitialized)
+          {
+            log.ForGameObject(gameObject).ForMethod().Verbose("InputService already initialized in a previous scope, skipping duplicate initialization");
+            
+            // Still set the instance reference in case this is a child scope resolving the service
+            if (InputServiceInstance == null)
+            {
+              InputServiceInstance = resolver.Resolve<IInputService>();
+              log.ForGameObject(gameObject).ForMethod().Debug("Set InputServiceInstance reference from existing singleton");
+            }
+            return;
+          }
+          
+          var inputService = resolver.Resolve<IInputService>();
+          
+          // Additional defensive check: if InputService is already initialized, don't initialize again
+          if (inputService is InputService concreteService && concreteService != null)
+          {
+            InputServiceInstance = inputService;
+            inputService.Initialize(inputActionAsset);
+            inputService.Enable();
+            inputServiceInitialized = true;
+            log.ForGameObject(gameObject).ForMethod().Debug("InputService initialized and enabled");
+          }
+          else
+          {
+            log.ForGameObject(gameObject).ForMethod().Warning("Failed to resolve InputService or service is null");
+          }
+        });
+        
+        log.ForGameObject(gameObject).ForMethod().Debug("Registered Input Service globally");
+      }
+      else
+      {
+        // Register a no-op implementation to prevent injection errors
+        // This allows components to work without the Input System being configured
+        builder.Register<IInputService, NullInputService>(Lifetime.Singleton);
+        builder.RegisterBuildCallback(resolver =>
+        {
+          InputServiceInstance = resolver.Resolve<IInputService>();
+          log.ForGameObject(gameObject).ForMethod().Debug("Using NullInputService (no-op implementation)");
+        });
+        log.ForGameObject(gameObject).ForMethod().Warning("InputActionAsset not assigned in GlobalInstaller, using NullInputService (no-op implementation)");
+      }
+
+      // Register global plugins if config is provided
+      if (globalPluginConfig != null)
+      {
+        RegisterGlobalPlugins(builder);
+        RegisterAsyncEntryPoints(builder);
+        InitializeGlobalRuntimePlugins(builder);
+      }
+      else
+      {
+        log.ForGameObject(gameObject).ForMethod().Warning("No global plugin config provided");
+      }
+    }
+
+
+    private void RegisterMessagePipe(IContainerBuilder builder)
+    {
+      log.ForGameObject(gameObject).ForMethod().Verbose("Setting up global MessagePipe");
+
+      MessagePipeOptions options = builder.RegisterMessagePipe();
+
+      // Set the global provider for MessagePipe diagnostics
+      builder.RegisterBuildCallback(resolver =>
+      {
+        // Get the MessagePipe provider from the resolver
+        var provider = resolver.Resolve<IServiceProvider>();
+        GlobalMessagePipe.SetProvider(provider);
+        log.ForGameObject(gameObject).ForMethod().Verbose("GlobalMessagePipe provider set");
+      });
+
+      // Register global message brokers that need to persist across scenes
+      builder.RegisterMessageBroker<BackRequestMessage>(options);
+      builder.RegisterMessageBroker<QuitRequestMessage>(options);
+      builder.RegisterMessageBroker<NavigationRequestMessage>(options);
+      builder.RegisterMessageBroker<ClearRequestMessage>(options);
+      builder.RegisterMessageBroker<ErrorRequestMessage>(options);
+      builder.RegisterMessageBroker<InterstitialAlertRequestMessage>(options);
+
+      log.ForGameObject(gameObject).ForMethod().Verbose("Global MessagePipe setup completed");
+    }
+
+    private void RegisterGlobalPlugins(IContainerBuilder builder)
+    {
+      if (builder == null)
+      {
+        throw new ArgumentNullException(nameof(builder));
+      }
+
+      if (globalPluginConfig?.GlobalPluginPrefabs == null || globalPluginConfig.GlobalPluginPrefabs.Count == 0)
+      {
+        log.ForGameObject(gameObject).ForMethod().Warning("No global plugins configured");
+        return;
+      }
+
+      log.ForGameObject(gameObject).ForMethod().Debug("Registering {0} global plugins: {1}", globalPluginConfig.GlobalPluginPrefabs.Count, globalPluginConfig.GlobalPluginPrefabs.Any() ? string.Join(", ", globalPluginConfig.GlobalPluginPrefabs.Where(p => p != null).Select(p => p.name)) : "none");
+
+      foreach (AbstractGamePlugin prefab in globalPluginConfig.GlobalPluginPrefabs)
+      {
+        if (prefab == null)
+        {
+          log.ForGameObject(gameObject).ForMethod().Warning("Global plugin prefab is null");
+          continue;
+        }
+
+        // Check if this type of plugin already exists (especially for persistent plugins)
+        if (ShouldSkipPluginInstantiation(prefab))
+        {
+          log.ForGameObject(gameObject).ForMethod().Verbose("Skipping instantiation of {0} - instance already exists and persists", prefab.name);
+          
+          // For persistent plugins, they were registered when first instantiated
+          // The container should already have their services registered from the initial bootstrapper scene
+          // No need to re-register as that would cause duplicate registration errors
+          continue;
+        }
+
+        log.ForGameObject(gameObject).ForMethod().Verbose("Instantiating global plugin: {0}", prefab.name);
+        AbstractGamePlugin instance = Instantiate(prefab);
+        instance.name = prefab.name;
+        log.ForGameObject(gameObject).ForMethod().Verbose("About to call Register on: {0}", instance.name);
+        instance.Register(builder);
+        log.ForGameObject(gameObject).ForMethod().Verbose("Global plugin registered: {0}", instance.name);
+        
+        // Store plugin instances for PluginDiagnosisWindow
+        StorePluginInstance(instance);
+      }
+
+      log.ForGameObject(gameObject).ForMethod().Verbose("Global plugins registration completed.");
+    }
+
+    /// <summary>
+    /// Registers plugins that implement IAsyncStartable as entry points for VContainer's UniTask integration.
+    /// This replaces manual async initialization with VContainer's automatic async startup.
+    /// </summary>
+    private void RegisterAsyncEntryPoints(IContainerBuilder builder)
+    {
+      if (builder == null)
+      {
+        throw new ArgumentNullException(nameof(builder));
+      }
+
+      if (globalPluginConfig?.GlobalPluginPrefabs == null || globalPluginConfig.GlobalPluginPrefabs.Count == 0)
+      {
+        log.ForGameObject(gameObject).ForMethod().Verbose("No global plugins to register as async entry points");
+        return;
+      }
+
+      log.ForGameObject(gameObject).ForMethod().Debug("Registering async entry points for global plugins");
+
+      foreach (AbstractGamePlugin prefab in globalPluginConfig.GlobalPluginPrefabs)
+      {
+        if (prefab == null)
+        {
+          continue;
+        }
+
+        // Check if this plugin implements IAsyncStartable
+        if (prefab is IAsyncStartable)
+        {
+          // Get the existing instance (plugins are already instantiated in RegisterGlobalPlugins)
+          AbstractGamePlugin existingInstance = GetExistingPluginInstance(prefab);
+          
+          if (existingInstance != null && existingInstance is IAsyncStartable)
+          {
+            // Register the instance as an entry point - VContainer will automatically call StartAsync
+            builder.RegisterEntryPoint(resolver => existingInstance as IAsyncStartable, Lifetime.Singleton);
+            log.ForGameObject(gameObject).ForMethod().Debug("Registered {0} as async entry point", existingInstance.name);
+          }
+        }
+      }
+
+      log.ForGameObject(gameObject).ForMethod().Verbose("Async entry points registration completed");
+    }
+
+    /// <summary>
+    /// Gets an existing plugin instance of the specified type.
+    /// </summary>
+    /// <param name="prefab">The plugin prefab to find an existing instance for</param>
+    /// <returns>The existing plugin instance, or null if none exists</returns>
+    private AbstractGamePlugin GetExistingPluginInstance(AbstractGamePlugin prefab)
+    {
+      // Special handling for NavigationPlugin in bootstrapper scene
+      if (prefab is NavigationPlugin)
+      {
+        var currentScene = SceneManager.GetActiveScene();
+        if (currentScene.buildIndex == 0)
+        {
+          return null; // Skip NavigationPlugin in bootstrapper scene
+        }
+      }
+      
+      // For persistent plugins, check stored reference first (they survive scene changes)
+      var persistentInstance = GetStoredPluginInstance(prefab);
+      if (persistentInstance != null && persistentInstance.gameObject != null)
+      {
+        return persistentInstance;
+      }
+      
+      // For all plugins, try to find anywhere (FindFirstObjectByType searches all loaded objects including DontDestroyOnLoad)
+      var sceneInstance = FindFirstObjectByType(prefab.GetType()) as AbstractGamePlugin;
+      if (sceneInstance != null)
+      {
+        return sceneInstance;
+      }
+      
+      return null;
+    }
+    
+    /// <summary>
+    /// Gets stored plugin instance for backward compatibility.
+    /// </summary>
+    private AbstractGamePlugin GetStoredPluginInstance(AbstractGamePlugin prefab)
+    {
+      return prefab switch
+      {
+        ES3GameSavePlugin => GameSavePluginInstance,
+        NavigationPlugin => NavigationPluginInstance,
+        SettingsPlugin => SettingsPluginInstance,
+        ErrorSystemPlugin => ErrorSystemPluginInstance,
+        _ => null
+      };
+    }
+
+    /// <summary>
+    /// Determines if a plugin should be skipped during instantiation because it already exists.
+    /// This prevents duplicate instantiation of persistent plugins like ES3GameSavePlugin.
+    /// </summary>
+    /// <param name="prefab">The plugin prefab to check</param>
+    /// <returns>True if the plugin should be skipped, false if it should be instantiated</returns>
+    private bool ShouldSkipPluginInstantiation(AbstractGamePlugin prefab)
+    {
+      // Special handling for NavigationPlugin in bootstrapper scene
+      if (prefab is NavigationPlugin)
+      {
+        var currentScene = SceneManager.GetActiveScene();
+        if (currentScene.buildIndex == 0)
+        {
+          log.ForGameObject(gameObject).ForMethod().Verbose("NavigationPlugin not needed in bootstrapper scene (index 0), skipping entirely");
+          return true;
+        }
+      }
+      
+      // Special handling for ES3GameSavePlugin (persistent)
+      if (prefab is ES3GameSavePlugin)
+      {
+        var existingGameSavePlugin = FindFirstObjectByType<ES3GameSavePlugin>();
+        if (existingGameSavePlugin != null)
+        {
+          log.ForGameObject(gameObject).ForMethod().Verbose("ES3GameSavePlugin already exists in scene, skipping instantiation but ensuring initialization");
+          GameSavePluginInstance = existingGameSavePlugin;
+          return true;
+        }
+        
+        if (GameSavePluginInstance != null && GameSavePluginInstance.gameObject != null)
+        {
+          log.ForGameObject(gameObject).ForMethod().Verbose("ES3GameSavePlugin already exists (stored reference), skipping instantiation");
+          return true;
+        }
+        return false;
+      }
+      
+      // Special handling for ErrorSystemPlugin (persistent)
+      if (prefab is ErrorSystemPlugin)
+      {
+        // First, check if we have a stored reference
+        if (ErrorSystemPluginInstance != null && ErrorSystemPluginInstance.gameObject != null)
+        {
+          log.ForGameObject(gameObject).ForMethod().Verbose("ErrorSystemPlugin already exists (stored reference), skipping instantiation");
+          return true;
+        }
+        
+        // Then check if it exists in the scene
+        var existingErrorSystemPlugin = FindFirstObjectByType<ErrorSystemPlugin>();
+        if (existingErrorSystemPlugin != null)
+        {
+          log.ForGameObject(gameObject).ForMethod().Verbose("ErrorSystemPlugin already exists in scene, using existing instance");
+          ErrorSystemPluginInstance = existingErrorSystemPlugin;
+          return true;
+        }
+        
+        return false;
+      }
+      
+      // For all other plugin types (including persistent plugins that use DontDestroyOnLoad),
+      // check if any instance of this type already exists
+      var existingInstance = FindFirstObjectByType(prefab.GetType());
+      if (existingInstance != null)
+      {
+        log.ForGameObject(gameObject).ForMethod().Verbose("{0} already exists, skipping instantiation", prefab.GetType().Name);
+        return true;
+      }
+      
+      return false;
+    }
+
+    /// <summary>
+    /// Stores plugin instances for PluginDiagnosisWindow access.
+    /// </summary>
+    private void StorePluginInstance(AbstractGamePlugin instance)
+    {
+      switch (instance)
+      {
+        case NavigationPlugin navigationPlugin:
+          NavigationPluginInstance = navigationPlugin;
+          log.ForGameObject(gameObject).ForMethod().Verbose("Stored NavigationPlugin instance (scene-specific)");
+          break;
+        case SettingsPlugin settingsPlugin:
+          SettingsPluginInstance = settingsPlugin;
+          log.ForGameObject(gameObject).ForMethod().Verbose("Stored SettingsPlugin instance (scene-specific)");
+          break;
+        case ES3GameSavePlugin gameSavePlugin:
+          GameSavePluginInstance = gameSavePlugin;
+          // Make GameSavePlugin persist between scenes
+          DontDestroyOnLoad(gameSavePlugin.gameObject);
+          log.ForGameObject(gameObject).ForMethod().Verbose("Stored GameSavePlugin instance (persistent)");
+          break;
+        case InputRebinderPlugin inputRebinderPlugin:
+          InputRebinderPluginInstance = inputRebinderPlugin;
+          DontDestroyOnLoad(inputRebinderPlugin.gameObject);
+          log.ForGameObject(gameObject).ForMethod().Verbose("Stored InputRebinderPlugin instance");
+          break;
+        case AnalyticsPlugin analyticsPlugin:
+          AnalyticsPluginInstance = analyticsPlugin;  
+          DontDestroyOnLoad(analyticsPlugin.gameObject);
+          log.ForGameObject(gameObject).ForMethod().Verbose("Stored AnalyticsPlugin instance");
+          break;
+        case ErrorSystemPlugin errorSystemPlugin:
+          ErrorSystemPluginInstance = errorSystemPlugin;
+          DontDestroyOnLoad(errorSystemPlugin.gameObject);
+          log.ForGameObject(gameObject).ForMethod().Verbose("Stored ErrorSystemPlugin instance (persistent)");
+          break;
+        default:
+          log.ForGameObject(gameObject).ForMethod().Verbose("Stored {0} instance (generic)", instance.GetType().Name);
+          break;
+      }
+    }
+
+    /// <summary>
+    /// Refreshes plugin instance references by finding them in the current scene.
+    /// This is needed because scene-specific plugin GameObjects are destroyed when scenes change,
+    /// but GlobalInstaller persists via DontDestroyOnLoad.
+    /// GameSavePlugin is persistent and doesn't need refreshing.
+    /// </summary>
+    public void RefreshPluginReferences()
+    {
+      log.ForGameObject(gameObject).ForMethod().Verbose("Refreshing global plugin references");
+      
+      // Find NavigationPlugin in scene (scene-specific)
+      var navigationPlugin = FindFirstObjectByType<NavigationPlugin>();
+      if (navigationPlugin != null)
+      {
+        NavigationPluginInstance = navigationPlugin;
+        log.ForGameObject(gameObject).ForMethod().Verbose("Refreshed NavigationPlugin reference");
+        
+        // NavigationPlugin is now handled by RegisterEntryPoint - no manual initialization needed
+      }
+      else
+      {
+        NavigationPluginInstance = null;
+        log.ForGameObject(gameObject).ForMethod().Verbose("NavigationPlugin not found in scene - this is normal for scenes that don't need navigation");
+      }
+
+      // Find SettingsPlugin in scene (scene-specific)
+      var settingsPlugin = FindFirstObjectByType<SettingsPlugin>();
+      if (settingsPlugin != null)
+      {
+        SettingsPluginInstance = settingsPlugin;
+        log.ForGameObject(gameObject).ForMethod().Verbose("Refreshed SettingsPlugin reference");
+      }
+      else
+      {
+        SettingsPluginInstance = null;
+        log.ForGameObject(gameObject).ForMethod().Verbose("SettingsPlugin not found in scene");
+      }
+
+      // GameSavePlugin is persistent - check if it's still valid
+      if (GameSavePluginInstance != null && GameSavePluginInstance.gameObject != null)
+      {
+        log.ForGameObject(gameObject).ForMethod().Verbose("GameSavePlugin reference is still valid (persistent)");
+      }
+      else
+      {
+        // Try to find it in case it was recreated
+        var gameSavePlugin = FindFirstObjectByType<ES3GameSavePlugin>();
+        if (gameSavePlugin != null)
+        {
+          GameSavePluginInstance = gameSavePlugin;
+          DontDestroyOnLoad(gameSavePlugin.gameObject);
+          log.ForGameObject(gameObject).ForMethod().Verbose("Found and refreshed GameSavePlugin reference");
+        }
+        else
+        {
+          GameSavePluginInstance = null;
+          log.ForGameObject(gameObject).ForMethod().Warning("GameSavePlugin not found anywhere");
+        }
+      }
+
+      // ErrorSystemPlugin is persistent - check if it's still valid
+      if (ErrorSystemPluginInstance != null && ErrorSystemPluginInstance.gameObject != null)
+      {
+        log.ForGameObject(gameObject).ForMethod().Verbose("ErrorSystemPlugin reference is still valid (persistent)");
+      }
+      else
+      {
+        // Try to find it in case it was recreated
+        var errorSystemPlugin = FindFirstObjectByType<ErrorSystemPlugin>();
+        if (errorSystemPlugin != null)
+        {
+          ErrorSystemPluginInstance = errorSystemPlugin;
+          DontDestroyOnLoad(errorSystemPlugin.gameObject);
+          log.ForGameObject(gameObject).ForMethod().Verbose("Found and refreshed ErrorSystemPlugin reference");
+        }
+        else
+        {
+          ErrorSystemPluginInstance = null;
+          log.ForGameObject(gameObject).ForMethod().Warning("ErrorSystemPlugin not found anywhere");
+        }
+      }
+    }
+
+    private void InitializeGlobalRuntimePlugins(IContainerBuilder builder)
+    {
+      if (builder == null)
+        throw new ArgumentNullException(nameof(builder));
+
+      log.ForGameObject(gameObject).ForMethod().Verbose("Received call to initialize global runtime plugins");
+
+      // Initialize global runtime plugins after container is built
+      builder.RegisterBuildCallback(resolver =>
+      {
+        log.ForGameObject(gameObject).ForMethod().Verbose("Initializing global runtime plugins");
+
+        // Initialize the GlobalAsyncMessageBroker
+        GlobalAsyncMessageBroker.Initialize(resolver);
+        log.ForGameObject(gameObject).ForMethod().Verbose("GlobalAsyncMessageBroker initialized");
+
+        if (globalPluginConfig?.GlobalPluginPrefabs != null)
+        {
+          foreach (AbstractGamePlugin plugin in globalPluginConfig.GlobalPluginPrefabs)
+          {
+            if (plugin is IRuntimePlugin runtimePlugin)
+            {
+              // Skip plugins that implement IAsyncStartable - they're handled by RegisterEntryPoint
+              if (plugin is IAsyncStartable)
+              {
+                log.ForGameObject(gameObject).ForMethod().Verbose("Skipping {0} initialization - handled by RegisterEntryPoint", plugin.name);
+                continue;
+              }
+              
+              runtimePlugin.Initialize(resolver);
+              log.ForGameObject(gameObject).ForMethod().Verbose("Initialized global runtime plugin: {0}", plugin.name);
+            }
+          }
+        }
+
+        log.ForGameObject(gameObject).ForMethod().Verbose("Global runtime plugins initialization completed");
+      });
+
+      log.ForGameObject(gameObject).ForMethod().Verbose("GlobalInstaller configuration completed");
+      
+      // Mark initial setup as complete
+      isInitialSetup = false;
+    }
+
+    /// <summary>
+    /// Called when a new scene is loaded. Refreshes scene-specific plugin references.
+    /// </summary>
+    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+      if (isInitialSetup)
+      {
+        // Skip the first scene load (initial setup)
+        return;
+      }
+
+      log.ForGameObject(gameObject).ForMethod().Verbose("Scene loaded: {0}, refreshing plugin references", scene.name);
+      RefreshPluginReferences();
+      
+      // Ensure scene-specific plugins are properly initialized
+      InitializeScenePlugins(scene);
+
+      GlobalAsyncMessageBroker.Publish(new SceneLoadedMessage(scene.name));
+    }
+    
+    /// <summary>
+    /// Initializes scene-specific plugins that may exist in the loaded scene.
+    /// This ensures plugins like NavigationPlugin are properly instantiated, registered, and started
+    /// even when they were skipped during bootstrapper initialization (scene index 0).
+    /// </summary>
+    private void InitializeScenePlugins(Scene scene)
+    {
+      try
+      {
+        // Skip if we're still in bootstrapper scene
+        if (scene.buildIndex == 0)
+        {
+          return;
+        }
+        
+        var resolver = Container;
+        if (resolver == null)
+        {
+          log.ForGameObject(gameObject).ForMethod().Warning("Container not available for scene plugin initialization");
+          return;
+        }
+        
+        // Check if we need to instantiate plugins that were skipped during bootstrapper initialization
+        if (globalPluginConfig?.GlobalPluginPrefabs == null)
+        {
+          log.ForGameObject(gameObject).ForMethod().Verbose("No global plugin config available");
+          return;
+        }
+        
+        // First, check for plugins that exist in the scene
+        var scenePlugins = FindObjectsByType<AbstractGamePlugin>(FindObjectsSortMode.None)
+          .Where(p => p.gameObject.scene == scene && p is IAsyncStartable)
+          .ToList();
+        
+        // Then, check for plugins from GlobalPluginConfig that should be instantiated now
+        // (they were skipped in bootstrapper scene but are needed in this scene)
+        foreach (var prefab in globalPluginConfig.GlobalPluginPrefabs)
+        {
+          if (prefab == null || !(prefab is IAsyncStartable))
+            continue;
+          
+          // Check if this plugin was supposed to be instantiated but was skipped
+          // (e.g., NavigationPlugin in bootstrapper scene)
+          bool shouldInstantiate = ShouldInstantiatePluginNow(prefab, scene);
+          
+          if (shouldInstantiate)
+          {
+            // Check if it already exists in the scene
+            var existingInScene = scenePlugins.FirstOrDefault(p => p.GetType() == prefab.GetType());
+            if ((object)existingInScene == null)
+            {
+              log.ForGameObject(gameObject).ForMethod().Information("Instantiating {0} for scene {1} (was skipped during bootstrapper)", prefab.name, scene.name);
+              
+              // Instantiate the plugin
+              var instance = Instantiate(prefab);
+              instance.name = prefab.name;
+              
+              // Register and start it
+              if (instance is IAsyncStartable asyncStartable)
+              {
+                RegisterAndStartScenePlugin(instance, asyncStartable, resolver).Forget();
+                scenePlugins.Add(instance);
+              }
+            }
+          }
+        }
+        
+        // Also handle any plugins that exist in the scene but aren't registered
+        foreach (var plugin in scenePlugins)
+        {
+          if (plugin is IAsyncStartable asyncStartable)
+          {
+            bool isRegistered = IsPluginRegistered(plugin, resolver);
+            
+            if (!isRegistered)
+            {
+              log.ForGameObject(gameObject).ForMethod().Information("Found {0} in scene {1} that needs registration and initialization", plugin.GetType().Name, scene.name);
+              RegisterAndStartScenePlugin(plugin, asyncStartable, resolver).Forget();
+            }
+          }
+        }
+      }
+      catch (Exception ex)
+      {
+        log.ForGameObject(gameObject).ForMethod().Error(ex, "Error initializing scene plugins for scene {0}", scene.name);
+      }
+    }
+    
+    /// <summary>
+    /// Determines if a plugin should be instantiated now for the current scene.
+    /// Returns true if the plugin was skipped during bootstrapper but should exist in this scene.
+    /// </summary>
+    private bool ShouldInstantiatePluginNow(AbstractGamePlugin prefab, Scene currentScene)
+    {
+      // NavigationPlugin was skipped in bootstrapper scene (index 0) but should exist in other scenes
+      if (prefab is NavigationPlugin)
+      {
+        return currentScene.buildIndex != 0;
+      }
+      
+      // Add other scene-specific plugin logic here as needed
+      // For now, other plugins are handled normally
+      return false;
+    }
+    
+    /// <summary>
+    /// Checks if a plugin instance is already registered with the container.
+    /// </summary>
+    private bool IsPluginRegistered(AbstractGamePlugin plugin, IObjectResolver resolver)
+    {
+      try
+      {
+        // Try to resolve the plugin type - if it succeeds and matches, it's registered
+        var resolved = resolver.Resolve(plugin.GetType());
+        return (object)resolved == (object)plugin;
+      }
+      catch (VContainerException)
+      {
+        // Not registered
+        return false;
+      }
+    }
+    
+    /// <summary>
+    /// Registers and starts a scene plugin asynchronously by creating a child scope.
+    /// </summary>
+    private async UniTaskVoid RegisterAndStartScenePlugin(AbstractGamePlugin plugin, IAsyncStartable asyncStartable, IObjectResolver parentResolver)
+    {
+      try
+      {
+        log.ForGameObject(gameObject).ForMethod().Debug("Registering and starting {0} from scene", plugin.GetType().Name);
+        
+        // Create a child scope attached to the plugin's GameObject
+        // This allows the plugin to register its services while accessing parent container services
+        var childScope = plugin.gameObject.AddComponent<ScenePluginLifetimeScope>();
+        childScope.SetPluginForConfiguration(plugin);
+        
+        // Wait for Unity to initialize the component and build the scope
+        await UniTask.Yield();
+        
+        // Wait for the scope container to be built
+        var maxWaitTime = DateTime.UtcNow.AddSeconds(5);
+        while (childScope.Container == null && DateTime.UtcNow < maxWaitTime)
+        {
+          await UniTask.Yield();
+        }
+        
+        if (childScope.Container == null)
+        {
+          log.ForGameObject(gameObject).ForMethod().Error("Child scope for {0} failed to build", plugin.GetType().Name);
+          return;
+        }
+        
+        // Register as entry point so StartAsync gets called automatically
+        // Since we can't use RegisterEntryPoint after build, we'll manually call StartAsync
+        var cancellationToken = childScope.GetCancellationTokenOnDestroy();
+        await asyncStartable.StartAsync(cancellationToken);
+        
+        log.ForGameObject(gameObject).ForMethod().Information("{0} started successfully for scene", plugin.GetType().Name);
+      }
+      catch (Exception ex)
+      {
+        log.ForGameObject(gameObject).ForMethod().Error(ex, "Failed to register and start {0} from scene", plugin.GetType().Name);
+      }
+    }
+    
+    /// <summary>
+    /// Internal LifetimeScope class for scene-specific plugins.
+    /// Allows plugins in scenes to have their own container with access to parent services.
+    /// </summary>
+    private class ScenePluginLifetimeScope : LifetimeScope
+    {
+      private AbstractGamePlugin pluginToRegister;
+      
+      public void SetPluginForConfiguration(AbstractGamePlugin plugin)
+      {
+        pluginToRegister = plugin;
+      }
+      
+      protected override void Configure(IContainerBuilder builder)
+      {
+        if (pluginToRegister != null)
+        {
+          // Register the plugin with its installer (registers its services)
+          pluginToRegister.Register(builder);
+          
+          // Register the plugin instance itself
+          builder.RegisterInstance(pluginToRegister).AsSelf().AsImplementedInterfaces();
+        }
+      }
+    }
+
+#if UNITY_EDITOR
+    [ContextMenu("Context Error")]
+    private void ContextError() {
+      GlobalAsyncMessageBroker.Publish(new ErrorRequestMessage("An error occurred in the context of the current scene", fatal: false));
+    }
+    [ContextMenu("Context Error Fatal")]
+    private void ContextErrorFatal() {
+      GlobalAsyncMessageBroker.Publish(new ErrorRequestMessage("An error occurred in the context of the current scene", fatal: true));
+    }
+#endif
+
+  }
+
+}
