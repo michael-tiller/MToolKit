@@ -25,7 +25,7 @@ namespace MToolKit.Template.Navigation.Profile
   public class SelectProfileView : View
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<SelectProfileView>().ForFeature("MToolKit.Template.Navigation.Profile"));
-   private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
+    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
 
     [SerializeField][Required] private Button selectProfileButton;
     [SerializeField][Required] private Button cancelButton;
@@ -54,7 +54,7 @@ namespace MToolKit.Template.Navigation.Profile
     private void InitializeSelectProfileListElements()
     {
       log.ForGameObject(gameObject).ForMethod().Debug("Starting InitializeSelectProfileListElements");
-      
+
       // Check each dependency step by step
       if (selectProfileListElementPrototype == null)
       {
@@ -79,19 +79,19 @@ namespace MToolKit.Template.Navigation.Profile
 
       selectProfileListElementPrototype.gameObject.SetActive(false);
       ClearSelectProfileListElements();
-      
+
       try
       {
         log.ForGameObject(gameObject).ForMethod().Debug("Getting AvailableProfiles from profileManager");
         var allProfiles = profileManager.AvailableProfiles.Value;
-        
+
         if (allProfiles == null)
         {
           log.ForGameObject(gameObject).ForMethod().Error("allProfiles is NULL!");
           return;
         }
         log.ForGameObject(gameObject).ForMethod().Debug("allProfiles retrieved, count: {0}", allProfiles.Count);
-        
+
         if (allProfiles.Count == 0)
         {
           log.ForGameObject(gameObject).ForMethod().Information("No profiles found");
@@ -101,7 +101,7 @@ namespace MToolKit.Template.Navigation.Profile
         // Sort profiles by LastSaveTime (newest first)
         var sortedProfiles = allProfiles
           .Select(profileName => new { ProfileName = profileName, Metadata = profileManager.GetProfileMetaData(profileName) })
-          .OrderByDescending(p => 
+          .OrderByDescending(p =>
           {
             if (p.Metadata?.LastSaveTime != null && DateTime.TryParse(p.Metadata.LastSaveTime, out DateTime lastSaveTime))
               return lastSaveTime;
@@ -114,29 +114,29 @@ namespace MToolKit.Template.Navigation.Profile
         foreach (var profileName in sortedProfiles)
         {
           log.ForGameObject(gameObject).ForMethod().Debug("Processing profile: {0}", profileName);
-          
+
           if (selectProfileListElementPrototype.transform.parent == null)
           {
             log.ForGameObject(gameObject).ForMethod().Error("selectProfileListElementPrototype.transform.parent is NULL!");
             continue;
           }
-          
+
           SelectProfileListElement element = container.Instantiate(selectProfileListElementPrototype, selectProfileListElementPrototype.transform.parent);
-          
+
           if (element == null)
           {
             log.ForGameObject(gameObject).ForMethod().Error("container.Instantiate returned NULL for profile: {0}", profileName);
             continue;
           }
-          
+
           element.gameObject.SetActive(true);
-          
+
           element.Setup(this, profileName);
           SelectProfileListElements.Add(element);
-          
+
           log.ForGameObject(gameObject).ForMethod().Debug("Successfully created element for profile: {0}", profileName);
         }
-        
+
         log.ForGameObject(gameObject).ForMethod().Debug("Initialized {0} profile elements", allProfiles.Count);
       }
       catch (Exception ex)
@@ -158,7 +158,7 @@ namespace MToolKit.Template.Navigation.Profile
       OnSetInputFieldText(SelectedProfile.Value);
       selectProfileButton.onClick.AddListener(() => OnNextButtonClickedAsync().Forget());
       cancelButton.onClick.AddListener(OnBackButtonClicked);
-      
+
       // Initialize the profile list
       InitializeSelectProfileListElements();
     }
@@ -187,13 +187,13 @@ namespace MToolKit.Template.Navigation.Profile
     private async UniTask OnNextButtonClickedAsync()
     {
       log.ForGameObject(gameObject).ForMethod().Information("Selected profile: {0}", SelectedProfile.Value);
-      
+
       if (string.IsNullOrEmpty(SelectedProfile.Value))
       {
         log.ForGameObject(gameObject).ForMethod().Warning("No profile selected");
         return;
       }
-      
+
       try
       {
         // Load the selected profile
@@ -203,16 +203,16 @@ namespace MToolKit.Template.Navigation.Profile
         if (success)
         {
           log.ForGameObject(gameObject).ForMethod().Information("Successfully loaded profile: {0}", SelectedProfile.Value);
-          
-            var sceneRef = GlobalConstants.Instance?.GlobalConstantsConfig?.GameplaySceneReference;
-            if (sceneRef != null && sceneRef.RuntimeKeyIsValid())
-            {
-              await contentLoader.LoadSceneAsync(sceneRef);
-            }
-            else
-            {
-              log.ForGameObject(gameObject).ForMethod().Error("Invalid or missing GameplaySceneReference in GlobalConstantsConfig");
-            }
+
+          var sceneRef = GlobalConstants.Instance?.GlobalConstantsConfig?.GameplaySceneReference;
+          if (sceneRef != null && sceneRef.RuntimeKeyIsValid())
+          {
+            await contentLoader.LoadSceneAsync(sceneRef);
+          }
+          else
+          {
+            log.ForGameObject(gameObject).ForMethod().Error("Invalid or missing GameplaySceneReference in GlobalConstantsConfig");
+          }
         }
         else
         {

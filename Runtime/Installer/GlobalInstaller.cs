@@ -62,25 +62,33 @@ namespace MToolKit.Runtime.Installer
 #endif
 
     public static GlobalInstaller Instance { get; private set; }
-    
+
     // Global plugin instances for PluginDiagnosisWindow
-    [field: ReadOnly] [ShowInInspector]
+    [field: ReadOnly]
+    [ShowInInspector]
     public NavigationPlugin NavigationPluginInstance { get; private set; }
-    [field: ReadOnly] [ShowInInspector]
+    [field: ReadOnly]
+    [ShowInInspector]
     public SettingsPlugin SettingsPluginInstance { get; private set; }
-    [field: ReadOnly] [ShowInInspector]
+    [field: ReadOnly]
+    [ShowInInspector]
     public ES3GameSavePlugin GameSavePluginInstance { get; private set; }
-    [field: ReadOnly] [ShowInInspector]
+    [field: ReadOnly]
+    [ShowInInspector]
     public InputRebinderPlugin InputRebinderPluginInstance { get; private set; }
-    [field: ReadOnly] [ShowInInspector]
+    [field: ReadOnly]
+    [ShowInInspector]
     public AnalyticsPlugin AnalyticsPluginInstance { get; private set; }
-    [field: ReadOnly] [ShowInInspector]
+    [field: ReadOnly]
+    [ShowInInspector]
     public ErrorSystemPlugin ErrorSystemPluginInstance { get; private set; }
 
-    [field: ReadOnly] [ShowInInspector]
+    [field: ReadOnly]
+    [ShowInInspector]
     public IProfileManager ProfileManagerInstance { get; private set; }
 
-    [field: ReadOnly] [ShowInInspector]
+    [field: ReadOnly]
+    [ShowInInspector]
     public IInputService InputServiceInstance { get; private set; }
 
     /// <summary>
@@ -92,7 +100,7 @@ namespace MToolKit.Runtime.Installer
       {
         return GameSavePluginInstance;
       }
-      
+
       // Fallback to finding in scene
       var sceneInstance = FindFirstObjectByType<ES3GameSavePlugin>();
       if (sceneInstance != null)
@@ -100,10 +108,10 @@ namespace MToolKit.Runtime.Installer
         GameSavePluginInstance = sceneInstance;
         return sceneInstance;
       }
-      
+
       return null;
     }
-    
+
     /// <summary>
     /// Resets the singleton to its initial state. Useful for testing.
     /// </summary>
@@ -112,7 +120,7 @@ namespace MToolKit.Runtime.Installer
       Instance = null;
       log.ForMethod().Verbose("GlobalInstaller singleton reset");
     }
-    
+
     /// <summary>
     /// Sets a specific instance for testing purposes. Use with caution.
     /// </summary>
@@ -122,7 +130,7 @@ namespace MToolKit.Runtime.Installer
       Instance = instance;
       log.ForMethod().Verbose("GlobalInstaller singleton set for testing");
     }
-    
+
     /// <summary>
     /// For testing purposes - allows calling OnDestroy behavior
     /// </summary>
@@ -130,7 +138,7 @@ namespace MToolKit.Runtime.Installer
     {
       OnDestroy();
     }
-    
+
     /// <summary>
     /// For testing purposes - allows calling Awake behavior
     /// </summary>
@@ -146,10 +154,10 @@ namespace MToolKit.Runtime.Installer
         }
         return;
       }
-      
+
       Awake();
     }
-    
+
     /// <summary>
     /// For testing purposes - allows disabling singleton behavior
     /// </summary>
@@ -171,7 +179,7 @@ namespace MToolKit.Runtime.Installer
         Instance = this;
         DontDestroyOnLoad(gameObject);
         log.ForGameObject(gameObject).ForMethod().Debug("GlobalInstaller initialized and persisted");
-        
+
         // Subscribe to scene change events
         SceneManager.sceneLoaded += OnSceneLoaded;
       }
@@ -186,7 +194,7 @@ namespace MToolKit.Runtime.Installer
     {
       // Unsubscribe from scene events
       SceneManager.sceneLoaded -= OnSceneLoaded;
-      
+
       if (DisableSingletonBehavior)
       {
         // In test mode, don't clear the instance automatically
@@ -224,7 +232,7 @@ namespace MToolKit.Runtime.Installer
 
       // Register ES3 service globally so it's available in all scenes
       // Use ProfileAwareES3Service to support profile-specific save files
-      builder.Register<IES3Service>(resolver => 
+      builder.Register<IES3Service>(resolver =>
       {
         try
         {
@@ -248,11 +256,11 @@ namespace MToolKit.Runtime.Installer
 
       // Register SaveDomainControllerRegistry globally
       builder.Register<SaveDomainControllerRegistry>(Lifetime.Singleton);
-      
+
       // Register PluginRegistry globally so it's available in all scenes
       builder.Register<PluginRegistry>(Lifetime.Singleton);
       log.ForGameObject(gameObject).ForMethod().Verbose("Registered PluginRegistry globally");
-      
+
       // Register ProfileManager globally so it's available in all scenes
       builder.Register<IProfileManager>(resolver =>
       {
@@ -262,7 +270,7 @@ namespace MToolKit.Runtime.Installer
         {
           return profileAwareService.ProfileManager;
         }
-        
+
         // Fallback: create a new ProfileManager
         ES3SaveConfig saveConfig;
         try
@@ -274,7 +282,7 @@ namespace MToolKit.Runtime.Installer
           log.ForGameObject(gameObject).ForMethod().Warning("ES3SaveConfig not available for ProfileManager, using default");
           saveConfig = ScriptableObject.CreateInstance<ES3SaveConfig>();
         }
-        
+
         ProfileManagerInstance = new ProfileManager(es3Service, saveConfig);
         return ProfileManagerInstance;
       }, Lifetime.Singleton);
@@ -289,17 +297,17 @@ namespace MToolKit.Runtime.Installer
       builder.Register<IContentLoaderService, ContentLoaderService>(Lifetime.Singleton);
       builder.Register<IGameLoader, GameLoader>(Lifetime.Singleton);
 
-      
+
       log.ForGameObject(gameObject).ForMethod().Verbose("Registered ProfileManager globally");
-      
+
       // Register SaveSystemCoordinator globally so it's available in all scenes
       builder.Register(resolver =>
       {
         var es3Service = resolver.Resolve<IES3Service>();
         var globalRegistry = resolver.Resolve<SaveDomainControllerRegistry>();
 
-          // Try to resolve config, fall back to default if not available
-          ES3SaveConfig saveConfig;
+        // Try to resolve config, fall back to default if not available
+        ES3SaveConfig saveConfig;
         try
         {
           saveConfig = resolver.Resolve<ES3SaveConfig>();
@@ -309,14 +317,14 @@ namespace MToolKit.Runtime.Installer
           log.ForGameObject(gameObject).ForMethod().Warning("ES3SaveConfig not available for SaveSystemCoordinator, using default");
           saveConfig = ScriptableObject.CreateInstance<ES3SaveConfig>();
         }
-        
+
         // Create a local registry that will be populated by GameInstaller
         var localRegistry = new SaveDomainControllerRegistry();
-        
+
         var profileManager = resolver.Resolve<IProfileManager>();
         return new SaveSystemCoordinator(es3Service, globalRegistry, localRegistry, saveConfig, profileManager);
       }, Lifetime.Singleton);
-      
+
       log.ForGameObject(gameObject).ForMethod().Verbose("Registered SaveSystemCoordinator globally");
 
       // Register ES3GameSaveSystem concrete type for backward compatibility
@@ -325,12 +333,12 @@ namespace MToolKit.Runtime.Installer
       {
         var es3Service = resolver.Resolve<IES3Service>();
         var globalRegistry = resolver.Resolve<SaveDomainControllerRegistry>();
-        
+
         // Create ES3GameSaveSystem with global controllers for backward compatibility
         var globalControllers = globalRegistry.GetControllers();
         return new ES3GameSaveSystem(globalControllers, es3Service);
       }, Lifetime.Singleton);
-      
+
       log.ForGameObject(gameObject).ForMethod().Verbose("Registered ES3GameSaveSystem concrete type for backward compatibility");
 
       // Register Input Service globally
@@ -338,7 +346,7 @@ namespace MToolKit.Runtime.Installer
       {
         builder.Register<IInputService, InputService>(Lifetime.Singleton);
         builder.RegisterInstance(inputActionAsset);
-        
+
         // Initialize and enable InputService after container is built
         // Use a static flag to ensure we only initialize once across all scopes
         builder.RegisterBuildCallback(resolver =>
@@ -346,7 +354,7 @@ namespace MToolKit.Runtime.Installer
           if (inputServiceInitialized)
           {
             log.ForGameObject(gameObject).ForMethod().Verbose("InputService already initialized in a previous scope, skipping duplicate initialization");
-            
+
             // Still set the instance reference in case this is a child scope resolving the service
             if (InputServiceInstance == null)
             {
@@ -355,9 +363,9 @@ namespace MToolKit.Runtime.Installer
             }
             return;
           }
-          
+
           var inputService = resolver.Resolve<IInputService>();
-          
+
           // Additional defensive check: if InputService is already initialized, don't initialize again
           if (inputService is InputService concreteService && concreteService != null)
           {
@@ -372,7 +380,7 @@ namespace MToolKit.Runtime.Installer
             log.ForGameObject(gameObject).ForMethod().Warning("Failed to resolve InputService or service is null");
           }
         });
-        
+
         log.ForGameObject(gameObject).ForMethod().Debug("Registered Input Service globally");
       }
       else
@@ -455,7 +463,7 @@ namespace MToolKit.Runtime.Installer
         if (ShouldSkipPluginInstantiation(prefab))
         {
           log.ForGameObject(gameObject).ForMethod().Verbose("Skipping instantiation of {0} - instance already exists and persists", prefab.name);
-          
+
           // For persistent plugins, they were registered when first instantiated
           // The container should already have their services registered from the initial bootstrapper scene
           // No need to re-register as that would cause duplicate registration errors
@@ -468,7 +476,7 @@ namespace MToolKit.Runtime.Installer
         log.ForGameObject(gameObject).ForMethod().Verbose("About to call Register on: {0}", instance.name);
         instance.Register(builder);
         log.ForGameObject(gameObject).ForMethod().Verbose("Global plugin registered: {0}", instance.name);
-        
+
         // Store plugin instances for PluginDiagnosisWindow
         StorePluginInstance(instance);
       }
@@ -507,7 +515,7 @@ namespace MToolKit.Runtime.Installer
         {
           // Get the existing instance (plugins are already instantiated in RegisterGlobalPlugins)
           AbstractGamePlugin existingInstance = GetExistingPluginInstance(prefab);
-          
+
           if (existingInstance != null && existingInstance is IAsyncStartable)
           {
             // Register the instance as an entry point - VContainer will automatically call StartAsync
@@ -536,24 +544,24 @@ namespace MToolKit.Runtime.Installer
           return null; // Skip NavigationPlugin in bootstrapper scene
         }
       }
-      
+
       // For persistent plugins, check stored reference first (they survive scene changes)
       var persistentInstance = GetStoredPluginInstance(prefab);
       if (persistentInstance != null && persistentInstance.gameObject != null)
       {
         return persistentInstance;
       }
-      
+
       // For all plugins, try to find anywhere (FindFirstObjectByType searches all loaded objects including DontDestroyOnLoad)
       var sceneInstance = FindFirstObjectByType(prefab.GetType()) as AbstractGamePlugin;
       if (sceneInstance != null)
       {
         return sceneInstance;
       }
-      
+
       return null;
     }
-    
+
     /// <summary>
     /// Gets stored plugin instance for backward compatibility.
     /// </summary>
@@ -587,7 +595,7 @@ namespace MToolKit.Runtime.Installer
           return true;
         }
       }
-      
+
       // Special handling for ES3GameSavePlugin (persistent)
       if (prefab is ES3GameSavePlugin)
       {
@@ -598,7 +606,7 @@ namespace MToolKit.Runtime.Installer
           GameSavePluginInstance = existingGameSavePlugin;
           return true;
         }
-        
+
         if (GameSavePluginInstance != null && GameSavePluginInstance.gameObject != null)
         {
           log.ForGameObject(gameObject).ForMethod().Verbose("ES3GameSavePlugin already exists (stored reference), skipping instantiation");
@@ -606,7 +614,7 @@ namespace MToolKit.Runtime.Installer
         }
         return false;
       }
-      
+
       // Special handling for ErrorSystemPlugin (persistent)
       if (prefab is ErrorSystemPlugin)
       {
@@ -616,7 +624,7 @@ namespace MToolKit.Runtime.Installer
           log.ForGameObject(gameObject).ForMethod().Verbose("ErrorSystemPlugin already exists (stored reference), skipping instantiation");
           return true;
         }
-        
+
         // Then check if it exists in the scene
         var existingErrorSystemPlugin = FindFirstObjectByType<ErrorSystemPlugin>();
         if (existingErrorSystemPlugin != null)
@@ -625,10 +633,10 @@ namespace MToolKit.Runtime.Installer
           ErrorSystemPluginInstance = existingErrorSystemPlugin;
           return true;
         }
-        
+
         return false;
       }
-      
+
       // For all other plugin types (including persistent plugins that use DontDestroyOnLoad),
       // check if any instance of this type already exists
       var existingInstance = FindFirstObjectByType(prefab.GetType());
@@ -637,7 +645,7 @@ namespace MToolKit.Runtime.Installer
         log.ForGameObject(gameObject).ForMethod().Verbose("{0} already exists, skipping instantiation", prefab.GetType().Name);
         return true;
       }
-      
+
       return false;
     }
 
@@ -668,7 +676,7 @@ namespace MToolKit.Runtime.Installer
           log.ForGameObject(gameObject).ForMethod().Verbose("Stored InputRebinderPlugin instance");
           break;
         case AnalyticsPlugin analyticsPlugin:
-          AnalyticsPluginInstance = analyticsPlugin;  
+          AnalyticsPluginInstance = analyticsPlugin;
           DontDestroyOnLoad(analyticsPlugin.gameObject);
           log.ForGameObject(gameObject).ForMethod().Verbose("Stored AnalyticsPlugin instance");
           break;
@@ -692,15 +700,19 @@ namespace MToolKit.Runtime.Installer
     public void RefreshPluginReferences()
     {
       log.ForGameObject(gameObject).ForMethod().Verbose("Refreshing global plugin references");
-      
+
       // Find NavigationPlugin in scene (scene-specific)
       var navigationPlugin = FindFirstObjectByType<NavigationPlugin>();
       if (navigationPlugin != null)
       {
         NavigationPluginInstance = navigationPlugin;
         log.ForGameObject(gameObject).ForMethod().Verbose("Refreshed NavigationPlugin reference");
-        
+
         // NavigationPlugin is now handled by RegisterEntryPoint - no manual initialization needed
+
+        // Check if we need to hide canvases based on current scene
+        // This handles the case where NavigationPlugin is created after scene load
+        CheckAndApplyNavigationCanvasVisibility(navigationPlugin);
       }
       else
       {
@@ -794,7 +806,7 @@ namespace MToolKit.Runtime.Installer
                 log.ForGameObject(gameObject).ForMethod().Verbose("Skipping {0} initialization - handled by RegisterEntryPoint", plugin.name);
                 continue;
               }
-              
+
               runtimePlugin.Initialize(resolver);
               log.ForGameObject(gameObject).ForMethod().Verbose("Initialized global runtime plugin: {0}", plugin.name);
             }
@@ -805,7 +817,7 @@ namespace MToolKit.Runtime.Installer
       });
 
       log.ForGameObject(gameObject).ForMethod().Verbose("GlobalInstaller configuration completed");
-      
+
       // Mark initial setup as complete
       isInitialSetup = false;
     }
@@ -821,15 +833,351 @@ namespace MToolKit.Runtime.Installer
         return;
       }
 
-      log.ForGameObject(gameObject).ForMethod().Verbose("Scene loaded: {0}, refreshing plugin references", scene.name);
+      log.ForGameObject(gameObject).ForMethod().Information("=== Scene loaded: {0} (path: {1}) ===", scene.name, scene.path ?? "null");
       RefreshPluginReferences();
-      
+
       // Ensure scene-specific plugins are properly initialized
       InitializeScenePlugins(scene);
 
+      // Handle navigation canvas visibility based on scene type
+      // Use a coroutine to delay slightly so NavigationPlugin has time to be created/initialized
+      HandleNavigationCanvasVisibilityDelayed(scene);
+
       GlobalAsyncMessageBroker.Publish(new SceneLoadedMessage(scene.name));
     }
-    
+
+    /// <summary>
+    /// Hides navigation canvases when gameplay scene is loaded, shows them when menu scene is loaded.
+    /// Uses a delayed check to ensure NavigationPlugin has been created/initialized first.
+    /// </summary>
+    private void HandleNavigationCanvasVisibilityDelayed(Scene loadedScene)
+    {
+      // Delay slightly to ensure NavigationPlugin is created and initialized
+      HandleNavigationCanvasVisibilityDelayedAsync(loadedScene).Forget();
+    }
+
+    private async UniTaskVoid HandleNavigationCanvasVisibilityDelayedAsync(Scene loadedScene)
+    {
+      // Wait a few frames to ensure NavigationPlugin is created
+      await UniTask.NextFrame();
+      await UniTask.NextFrame();
+
+      // Try to find NavigationPlugin after it's been created
+      RefreshPluginReferences();
+
+      // If NavigationPlugin still doesn't exist, wait a bit more and try again
+      // (handles async plugin instantiation)
+      if (NavigationPluginInstance == null)
+      {
+        await UniTask.Delay(100); // Wait 100ms for async plugin creation
+        RefreshPluginReferences();
+      }
+
+      // Now handle visibility
+      HandleNavigationCanvasVisibility(loadedScene);
+    }
+
+    /// <summary>
+    /// Checks if navigation canvases should be hidden/shown based on current scene and applies it.
+    /// This is called when NavigationPlugin is found/refreshed to ensure canvases are hidden in gameplay scenes.
+    /// </summary>
+    private void CheckAndApplyNavigationCanvasVisibility(NavigationPlugin navigationPlugin)
+    {
+      if (navigationPlugin == null || navigationPlugin.gameObject == null)
+      {
+        return;
+      }
+
+      // Get scene references from GlobalConstants
+      var globalConstants = GlobalConstants.Instance?.GlobalConstantsConfig;
+      if (globalConstants == null)
+      {
+        return;
+      }
+
+      var currentScene = SceneManager.GetActiveScene();
+      var gameplaySceneRef = globalConstants.GameplaySceneReference;
+      var menuSceneRef = globalConstants.MenuSceneReference;
+
+      bool isGameplayScene = IsSceneMatch(gameplaySceneRef, currentScene);
+      bool isMenuScene = IsSceneMatch(menuSceneRef, currentScene);
+
+      if (isGameplayScene)
+      {
+        log.ForGameObject(gameObject).ForMethod().Information("NavigationPlugin found in gameplay scene, hiding canvases");
+        SetNavigationCanvasesVisibility(navigationPlugin, false);
+      }
+      else if (isMenuScene)
+      {
+        log.ForGameObject(gameObject).ForMethod().Information("NavigationPlugin found in menu scene, showing canvases");
+        SetNavigationCanvasesVisibility(navigationPlugin, true);
+      }
+      else
+      {
+        // Fallback: if we can't match the scene but menu scene reference is valid, hide by default
+        if (menuSceneRef != null && menuSceneRef.RuntimeKeyIsValid())
+        {
+          log.ForGameObject(gameObject).ForMethod().Warning("NavigationPlugin found but scene matching failed - hiding canvases as fallback");
+          SetNavigationCanvasesVisibility(navigationPlugin, false);
+        }
+      }
+    }
+
+    /// <summary>
+    /// Hides navigation canvases when gameplay scene is loaded, shows them when menu scene is loaded.
+    /// </summary>
+    private void HandleNavigationCanvasVisibility(Scene loadedScene)
+    {
+      // Find NavigationPlugin - try stored reference first, then search in scene
+      NavigationPlugin navigationPlugin = NavigationPluginInstance;
+      if (navigationPlugin == null || navigationPlugin.gameObject == null)
+      {
+        // Try to find it in the scene or DontDestroyOnLoad
+        navigationPlugin = FindFirstObjectByType<NavigationPlugin>();
+        if (navigationPlugin != null)
+        {
+          NavigationPluginInstance = navigationPlugin;
+          log.ForGameObject(gameObject).ForMethod().Debug("Found NavigationPlugin via FindFirstObjectByType");
+        }
+      }
+
+      if (navigationPlugin == null || navigationPlugin.gameObject == null)
+      {
+        log.ForGameObject(gameObject).ForMethod().Verbose("NavigationPlugin not found, skipping canvas visibility handling");
+        return;
+      }
+
+      // Get scene references from GlobalConstants
+      var globalConstants = GlobalConstants.Instance?.GlobalConstantsConfig;
+      if (globalConstants == null)
+      {
+        log.ForGameObject(gameObject).ForMethod().Warning("GlobalConstantsConfig not available, cannot determine scene type");
+        return;
+      }
+
+      var gameplaySceneRef = globalConstants.GameplaySceneReference;
+      var menuSceneRef = globalConstants.MenuSceneReference;
+
+      // Check if this is the gameplay scene
+      bool isGameplayScene = IsSceneMatch(gameplaySceneRef, loadedScene);
+      // Check if this is the menu scene
+      bool isMenuScene = IsSceneMatch(menuSceneRef, loadedScene);
+
+      log.ForGameObject(gameObject).ForMethod().Debug("Scene loaded: {0}, isGameplayScene: {1}, isMenuScene: {2}", loadedScene.name, isGameplayScene, isMenuScene);
+
+      if (isGameplayScene)
+      {
+        log.ForGameObject(gameObject).ForMethod().Information("Gameplay scene loaded, hiding navigation canvases");
+        SetNavigationCanvasesVisibility(navigationPlugin, false);
+      }
+      else if (isMenuScene)
+      {
+        log.ForGameObject(gameObject).ForMethod().Information("Menu scene loaded, showing navigation canvases");
+        SetNavigationCanvasesVisibility(navigationPlugin, true);
+      }
+      else
+      {
+        log.ForGameObject(gameObject).ForMethod().Warning("Scene {0} is neither gameplay nor menu scene, leaving navigation canvases as-is", loadedScene.name);
+        // Debug: log what the scene references are for troubleshooting
+        if (gameplaySceneRef != null && gameplaySceneRef.RuntimeKeyIsValid())
+        {
+          log.ForGameObject(gameObject).ForMethod().Warning("GameplaySceneReference RuntimeKey: {0}", gameplaySceneRef.RuntimeKey);
+        }
+        else
+        {
+          log.ForGameObject(gameObject).ForMethod().Warning("GameplaySceneReference is null or invalid");
+        }
+        if (menuSceneRef != null && menuSceneRef.RuntimeKeyIsValid())
+        {
+          log.ForGameObject(gameObject).ForMethod().Warning("MenuSceneReference RuntimeKey: {0}", menuSceneRef.RuntimeKey);
+        }
+        else
+        {
+          log.ForGameObject(gameObject).ForMethod().Warning("MenuSceneReference is null or invalid");
+        }
+        log.ForGameObject(gameObject).ForMethod().Warning("Loaded scene name: {0}, path: {1}", loadedScene.name, loadedScene.path);
+
+        // Fallback: If scene matching failed, assume it's gameplay if it's not the menu scene
+        // This is a safety fallback - we'll hide canvases by default unless we're sure it's the menu scene
+        if (menuSceneRef != null && menuSceneRef.RuntimeKeyIsValid())
+        {
+          log.ForGameObject(gameObject).ForMethod().Warning("Scene matching failed - assuming gameplay scene and hiding navigation canvases as fallback");
+          SetNavigationCanvasesVisibility(navigationPlugin, false);
+        }
+      }
+    }
+
+    /// <summary>
+    /// Checks if a loaded scene matches an AssetReferenceScene by comparing scene names/paths.
+    /// Handles GUID-based RuntimeKeys by resolving them through Addressables.
+    /// </summary>
+    private bool IsSceneMatch(MToolKit.Runtime.AssetLoader.AssetReferenceScene sceneRef, Scene loadedScene)
+    {
+      if (sceneRef == null || !sceneRef.RuntimeKeyIsValid())
+      {
+        log.ForGameObject(gameObject).ForMethod().Debug("SceneRef is null or invalid");
+        return false;
+      }
+
+      // Get the runtime key (could be GUID, address, or label)
+      object runtimeKey = sceneRef.RuntimeKey;
+      string sceneKey = runtimeKey?.ToString() ?? string.Empty;
+
+      log.ForGameObject(gameObject).ForMethod().Debug("Comparing scene - RuntimeKey: '{0}', Loaded scene name: '{1}', path: '{2}'",
+        sceneKey, loadedScene.name, loadedScene.path ?? "null");
+
+      // If RuntimeKey looks like a GUID (32 hex characters), resolve it through Addressables
+      // GUID format: exactly 32 hexadecimal characters
+      bool looksLikeGUID = sceneKey.Length == 32 && System.Text.RegularExpressions.Regex.IsMatch(sceneKey, "^[0-9a-fA-F]{32}$");
+
+      if (looksLikeGUID)
+      {
+        // Resolve GUID through Addressables to get the actual scene path
+#if USE_ADDRESSABLES
+        try
+        {
+          var locationHandle = UnityEngine.AddressableAssets.Addressables.LoadResourceLocationsAsync(sceneKey);
+          if (locationHandle.IsDone && locationHandle.Status == UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationStatus.Succeeded)
+          {
+            var locations = locationHandle.Result;
+            foreach (var location in locations)
+            {
+              if (location != null)
+              {
+                // Check InternalId which should contain the asset path
+                string internalId = location.InternalId;
+                if (!string.IsNullOrEmpty(internalId))
+                {
+                  // Extract scene name from path (e.g., "Assets/_Template/Data/Scenes/Menu.unity" -> "Menu")
+                  string sceneNameFromPath = System.IO.Path.GetFileNameWithoutExtension(internalId);
+
+                  // Compare with loaded scene name
+                  if (string.Equals(sceneNameFromPath, loadedScene.name, StringComparison.OrdinalIgnoreCase))
+                  {
+                    log.ForGameObject(gameObject).ForMethod().Debug("Scene match found via GUID resolution: '{0}' -> '{1}'", sceneKey, internalId);
+                    return true;
+                  }
+
+                  // Also compare with full path if available
+                  if (!string.IsNullOrEmpty(loadedScene.path))
+                  {
+                    // Normalize paths for comparison (remove leading/trailing slashes, handle different separators)
+                    string normalizedInternalId = internalId.Replace('\\', '/').Trim('/');
+                    string normalizedLoadedPath = loadedScene.path.Replace('\\', '/').Trim('/');
+
+                    if (string.Equals(normalizedInternalId, normalizedLoadedPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                      log.ForGameObject(gameObject).ForMethod().Debug("Scene match found via GUID resolution (full path): '{0}' -> '{1}'", sceneKey, internalId);
+                      return true;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        catch (Exception ex)
+        {
+          log.ForGameObject(gameObject).ForMethod().Verbose("Error resolving Addressable location for GUID {0}: {1}", sceneKey, ex.Message);
+        }
+#else
+        // In non-Addressables builds, try to resolve GUID directly using Unity's AssetDatabase (editor only)
+#if UNITY_EDITOR
+        try
+        {
+          string assetPath = UnityEditor.AssetDatabase.GUIDToAssetPath(sceneKey);
+          if (!string.IsNullOrEmpty(assetPath))
+          {
+            string sceneNameFromPath = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+            if (string.Equals(sceneNameFromPath, loadedScene.name, StringComparison.OrdinalIgnoreCase))
+            {
+              log.ForGameObject(gameObject).ForMethod().Debug("Scene match found via GUID (editor): '{0}' -> '{1}'", sceneKey, assetPath);
+              return true;
+            }
+          }
+        }
+        catch (Exception ex)
+        {
+          log.ForGameObject(gameObject).ForMethod().Verbose("Error resolving GUID via AssetDatabase: {0}", ex.Message);
+        }
+#endif
+#endif
+      }
+      else
+      {
+        // RuntimeKey is not a GUID, try direct comparison
+        // Compare with loaded scene name (most reliable)
+        if (string.Equals(sceneKey, loadedScene.name, StringComparison.OrdinalIgnoreCase))
+        {
+          log.ForGameObject(gameObject).ForMethod().Debug("Scene match found by name: '{0}'", loadedScene.name);
+          return true;
+        }
+
+        // Also check scene path if available
+        if (!string.IsNullOrEmpty(loadedScene.path))
+        {
+          string scenePath = loadedScene.path;
+          // Extract scene name from path (e.g., "Assets/Scenes/GameplayScene.unity" -> "GameplayScene")
+          string sceneNameFromPath = System.IO.Path.GetFileNameWithoutExtension(scenePath);
+          if (string.Equals(sceneKey, sceneNameFromPath, StringComparison.OrdinalIgnoreCase))
+          {
+            log.ForGameObject(gameObject).ForMethod().Debug("Scene match found by path name: '{0}'", sceneNameFromPath);
+            return true;
+          }
+
+          // Also compare with full path
+          if (string.Equals(sceneKey, scenePath, StringComparison.OrdinalIgnoreCase))
+          {
+            log.ForGameObject(gameObject).ForMethod().Debug("Scene match found by full path: '{0}'", scenePath);
+            return true;
+          }
+        }
+      }
+
+      log.ForGameObject(gameObject).ForMethod().Debug("No scene match found for RuntimeKey: '{0}'", sceneKey);
+      return false;
+    }
+
+    /// <summary>
+    /// Sets the visibility of all navigation canvas GameObjects.
+    /// </summary>
+    private void SetNavigationCanvasesVisibility(NavigationPlugin navigationPlugin, bool visible)
+    {
+      if (navigationPlugin == null || navigationPlugin.gameObject == null)
+      {
+        log.ForGameObject(gameObject).ForMethod().Warning("NavigationPlugin is null, cannot set canvas visibility");
+        return;
+      }
+
+      // Hide/show the main canvas children (MainCanvas, AlertCanvas, OverlayCanvas)
+      // These are direct children of the NavigationPlugin GameObject
+      Transform pluginTransform = navigationPlugin.transform;
+
+      int canvasCount = 0;
+      for (int i = 0; i < pluginTransform.childCount; i++)
+      {
+        Transform child = pluginTransform.GetChild(i);
+        string childName = child.name;
+
+        // Hide/show canvas GameObjects (MainCanvas, AlertCanvas, OverlayCanvas, etc.)
+        if (childName.Contains("Canvas", StringComparison.OrdinalIgnoreCase))
+        {
+          child.gameObject.SetActive(visible);
+          canvasCount++;
+          log.ForGameObject(gameObject).ForMethod().Information("{0} navigation canvas {1} (active: {2})", visible ? "Showed" : "Hid", childName, child.gameObject.activeSelf);
+        }
+      }
+
+      if (canvasCount == 0)
+      {
+        log.ForGameObject(gameObject).ForMethod().Warning("No canvas children found in NavigationPlugin to hide/show");
+      }
+      else
+      {
+        log.ForGameObject(gameObject).ForMethod().Information("Set visibility for {0} navigation canvas(es) to {1}", canvasCount, visible);
+      }
+    }
+
     /// <summary>
     /// Initializes scene-specific plugins that may exist in the loaded scene.
     /// This ensures plugins like NavigationPlugin are properly instantiated, registered, and started
@@ -844,37 +1192,37 @@ namespace MToolKit.Runtime.Installer
         {
           return;
         }
-        
+
         var resolver = Container;
         if (resolver == null)
         {
           log.ForGameObject(gameObject).ForMethod().Warning("Container not available for scene plugin initialization");
           return;
         }
-        
+
         // Check if we need to instantiate plugins that were skipped during bootstrapper initialization
         if (globalPluginConfig?.GlobalPluginPrefabs == null)
         {
           log.ForGameObject(gameObject).ForMethod().Verbose("No global plugin config available");
           return;
         }
-        
+
         // First, check for plugins that exist in the scene
         var scenePlugins = FindObjectsByType<AbstractGamePlugin>(FindObjectsSortMode.None)
           .Where(p => p.gameObject.scene == scene && p is IAsyncStartable)
           .ToList();
-        
+
         // Then, check for plugins from GlobalPluginConfig that should be instantiated now
         // (they were skipped in bootstrapper scene but are needed in this scene)
         foreach (var prefab in globalPluginConfig.GlobalPluginPrefabs)
         {
           if (prefab == null || !(prefab is IAsyncStartable))
             continue;
-          
+
           // Check if this plugin was supposed to be instantiated but was skipped
           // (e.g., NavigationPlugin in bootstrapper scene)
           bool shouldInstantiate = ShouldInstantiatePluginNow(prefab, scene);
-          
+
           if (shouldInstantiate)
           {
             // Check if it already exists in the scene
@@ -882,11 +1230,11 @@ namespace MToolKit.Runtime.Installer
             if ((object)existingInScene == null)
             {
               log.ForGameObject(gameObject).ForMethod().Information("Instantiating {0} for scene {1} (was skipped during bootstrapper)", prefab.name, scene.name);
-              
+
               // Instantiate the plugin
               var instance = Instantiate(prefab);
               instance.name = prefab.name;
-              
+
               // Register and start it
               if (instance is IAsyncStartable asyncStartable)
               {
@@ -896,14 +1244,14 @@ namespace MToolKit.Runtime.Installer
             }
           }
         }
-        
+
         // Also handle any plugins that exist in the scene but aren't registered
         foreach (var plugin in scenePlugins)
         {
           if (plugin is IAsyncStartable asyncStartable)
           {
             bool isRegistered = IsPluginRegistered(plugin, resolver);
-            
+
             if (!isRegistered)
             {
               log.ForGameObject(gameObject).ForMethod().Information("Found {0} in scene {1} that needs registration and initialization", plugin.GetType().Name, scene.name);
@@ -917,7 +1265,7 @@ namespace MToolKit.Runtime.Installer
         log.ForGameObject(gameObject).ForMethod().Error(ex, "Error initializing scene plugins for scene {0}", scene.name);
       }
     }
-    
+
     /// <summary>
     /// Determines if a plugin should be instantiated now for the current scene.
     /// Returns true if the plugin was skipped during bootstrapper but should exist in this scene.
@@ -929,12 +1277,12 @@ namespace MToolKit.Runtime.Installer
       {
         return currentScene.buildIndex != 0;
       }
-      
+
       // Add other scene-specific plugin logic here as needed
       // For now, other plugins are handled normally
       return false;
     }
-    
+
     /// <summary>
     /// Checks if a plugin instance is already registered with the container.
     /// </summary>
@@ -952,7 +1300,7 @@ namespace MToolKit.Runtime.Installer
         return false;
       }
     }
-    
+
     /// <summary>
     /// Registers and starts a scene plugin asynchronously by creating a child scope.
     /// </summary>
@@ -961,33 +1309,33 @@ namespace MToolKit.Runtime.Installer
       try
       {
         log.ForGameObject(gameObject).ForMethod().Debug("Registering and starting {0} from scene", plugin.GetType().Name);
-        
+
         // Create a child scope attached to the plugin's GameObject
         // This allows the plugin to register its services while accessing parent container services
         var childScope = plugin.gameObject.AddComponent<ScenePluginLifetimeScope>();
         childScope.SetPluginForConfiguration(plugin);
-        
+
         // Wait for Unity to initialize the component and build the scope
         await UniTask.Yield();
-        
+
         // Wait for the scope container to be built
         var maxWaitTime = DateTime.UtcNow.AddSeconds(5);
         while (childScope.Container == null && DateTime.UtcNow < maxWaitTime)
         {
           await UniTask.Yield();
         }
-        
+
         if (childScope.Container == null)
         {
           log.ForGameObject(gameObject).ForMethod().Error("Child scope for {0} failed to build", plugin.GetType().Name);
           return;
         }
-        
+
         // Register as entry point so StartAsync gets called automatically
         // Since we can't use RegisterEntryPoint after build, we'll manually call StartAsync
         var cancellationToken = childScope.GetCancellationTokenOnDestroy();
         await asyncStartable.StartAsync(cancellationToken);
-        
+
         log.ForGameObject(gameObject).ForMethod().Information("{0} started successfully for scene", plugin.GetType().Name);
       }
       catch (Exception ex)
@@ -995,7 +1343,7 @@ namespace MToolKit.Runtime.Installer
         log.ForGameObject(gameObject).ForMethod().Error(ex, "Failed to register and start {0} from scene", plugin.GetType().Name);
       }
     }
-    
+
     /// <summary>
     /// Internal LifetimeScope class for scene-specific plugins.
     /// Allows plugins in scenes to have their own container with access to parent services.
@@ -1003,19 +1351,19 @@ namespace MToolKit.Runtime.Installer
     private class ScenePluginLifetimeScope : LifetimeScope
     {
       private AbstractGamePlugin pluginToRegister;
-      
+
       public void SetPluginForConfiguration(AbstractGamePlugin plugin)
       {
         pluginToRegister = plugin;
       }
-      
+
       protected override void Configure(IContainerBuilder builder)
       {
         if (pluginToRegister != null)
         {
           // Register the plugin with its installer (registers its services)
           pluginToRegister.Register(builder);
-          
+
           // Register the plugin instance itself
           builder.RegisterInstance(pluginToRegister).AsSelf().AsImplementedInterfaces();
         }
@@ -1024,11 +1372,13 @@ namespace MToolKit.Runtime.Installer
 
 #if UNITY_EDITOR
     [ContextMenu("Context Error")]
-    private void ContextError() {
+    private void ContextError()
+    {
       GlobalAsyncMessageBroker.Publish(new ErrorRequestMessage("An error occurred in the context of the current scene", fatal: false));
     }
     [ContextMenu("Context Error Fatal")]
-    private void ContextErrorFatal() {
+    private void ContextErrorFatal()
+    {
       GlobalAsyncMessageBroker.Publish(new ErrorRequestMessage("An error occurred in the context of the current scene", fatal: true));
     }
 #endif

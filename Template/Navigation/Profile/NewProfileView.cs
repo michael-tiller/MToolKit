@@ -24,7 +24,7 @@ namespace MToolKit.Template.Navigation.Profile
   public class NewProfileView : View
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<NewProfileView>().ForFeature("MToolKit.Template.Navigation.Profile"));
-   private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
+    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
 
     [SerializeField][Required] private InputFieldWithText profileNameInputField;
     [SerializeField][Required] private Button createProfileButton;
@@ -53,7 +53,7 @@ namespace MToolKit.Template.Navigation.Profile
       profileNameInputField.InputField.onEndEdit.AddListener(OnSetInputFieldText);
       inputValue.Subscribe(InputValueChangedHandler);
       OnSetInputFieldText(profileNameInputField.InputField.text);
-      
+
       createProfileButton.onClick.AddListener(OnNextButtonClicked);
       cancelButton.onClick.AddListener(OnBackButtonClicked);
     }
@@ -66,15 +66,15 @@ namespace MToolKit.Template.Navigation.Profile
     private void InputValueChangedHandler(string text)
     {
       log.ForGameObject(gameObject).ForMethod().Information("{0}: {1}", nameof(InputValueChangedHandler), text);
-      
+
       // Validate profile name (no longer check for duplicates since we handle that automatically)
-      bool isValid = !string.IsNullOrEmpty(text) && 
-                     !string.IsNullOrWhiteSpace(text) && 
-                     text.Length >= 3 && 
+      bool isValid = !string.IsNullOrEmpty(text) &&
+                     !string.IsNullOrWhiteSpace(text) &&
+                     text.Length >= 3 &&
                      text.Length <= 50;
-      
+
       createProfileButton.interactable = isValid;
-      
+
       if (!isValid && !string.IsNullOrEmpty(text))
       {
         if (text.Length < 3)
@@ -95,30 +95,30 @@ namespace MToolKit.Template.Navigation.Profile
         log.ForGameObject(gameObject).ForMethod().Warning("Profile creation already in progress, ignoring click");
         return;
       }
-      
+
       OnNextButtonClickedAsync().Forget();
     }
 
     private async UniTask OnNextButtonClickedAsync()
     {
       var profileName = inputValue.Value?.Trim();
-      
+
       if (string.IsNullOrEmpty(profileName))
       {
         log.ForGameObject(gameObject).ForMethod().Warning("Cannot create profile with empty name");
         return;
       }
-      
+
       // Set flag to prevent concurrent operations
       isCreatingProfile = true;
-      
+
       log.ForGameObject(gameObject).ForMethod().Information("Creating new profile: {0}", profileName);
-      
+
       try
       {
         // Disable button during creation
         createProfileButton.interactable = false;
-        
+
         // Show interstitial alert immediately when user clicks the button
         GlobalAsyncMessageBroker.Publish(new InterstitialAlertRequestMessage(LocalizationHelper.GetLocalizedString("Creating profile...")));
 
@@ -128,26 +128,26 @@ namespace MToolKit.Template.Navigation.Profile
           profileName = "Player";
           InputValueChangedHandler(profileName);
         }
-        
+
         // Create the profile and get the actual name used
         var (success, actualProfileName) = profileManager.CreateProfileWithName(profileName);
-        
+
         if (success)
         {
           log.ForGameObject(gameObject).ForMethod().Information("Successfully created profile: {0}", actualProfileName);
-          
+
           // If a different name was used, inform the user
           if (actualProfileName != profileName)
           {
             log.ForGameObject(gameObject).ForMethod().Information("Profile name '{0}' was already taken, created as '{1}'", profileName, actualProfileName);
           }
-          
+
           // Load the newly created profile
           bool loadSuccess = await profileManager.LoadProfileAsync(actualProfileName);
           if (loadSuccess)
           {
             log.ForGameObject(gameObject).ForMethod().Information("Successfully loaded new profile: {0}", actualProfileName);
-            
+
             var sceneRef = GlobalConstants.Instance?.GlobalConstantsConfig?.GameplaySceneReference;
             if (sceneRef != null && sceneRef.RuntimeKeyIsValid())
             {
@@ -181,7 +181,7 @@ namespace MToolKit.Template.Navigation.Profile
         createProfileButton.interactable = true;
         isCreatingProfile = false;
       }
-  
+
     }
 
     public override void Show()
