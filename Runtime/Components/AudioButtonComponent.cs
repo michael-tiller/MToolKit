@@ -150,7 +150,7 @@ namespace MToolKit.Runtime.Components
     {
       if (audioService == null)
       {
-        log.ForMethod(nameof(OnSelect)).Warning("AudioService is null on {0}, cannot play select sound", gameObject.name);
+        log.ForMethod(nameof(OnSelect)).Verbose("AudioService is null on {0}, cannot play select sound", gameObject.name);
         return;
       }
 

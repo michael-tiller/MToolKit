@@ -88,7 +88,7 @@ namespace MToolKit.Runtime.Navigation
       if (cts == null) log.ForGameObject(gameObject).ForMethod().Warning("No CTS has been set.");
 
       log.ForGameObject(gameObject).ForMethod().Verbose("Starting NavigationController");
-      
+
       // Debug: Check if interstitialAlertView is properly assigned
       if (interstitialAlertView == null)
       {
@@ -96,7 +96,7 @@ namespace MToolKit.Runtime.Navigation
       }
       else
       {
-        log.ForGameObject(gameObject).ForMethod().Debug("interstitialAlertView prefab assigned: {0}, Canvas: {1}", 
+        log.ForGameObject(gameObject).ForMethod().Debug("interstitialAlertView prefab assigned: {0}, Canvas: {1}",
           interstitialAlertView.name, interstitialAlertView.Canvas);
       }
 
@@ -116,7 +116,7 @@ namespace MToolKit.Runtime.Navigation
         log.ForGameObject(gameObject).ForMethod().Error("canvasTransforms is null - NavigationInstaller may not have been configured properly");
         return;
       }
-      
+
       foreach (KeyValuePair<ECanvasType, Transform> config in canvasTransforms)
         if (config.Value == null)
           log.ForGameObject(gameObject).ForMethod().Error("Canvas Transform not set in canvasTransforms: {0}", config.Key);
@@ -136,7 +136,7 @@ namespace MToolKit.Runtime.Navigation
           log.ForMethod().Warning("NavigationSystem or GameObject destroyed during initialization, aborting.");
           return;
         }
-        
+
         log.ForGameObject(gameObject).ForMethod().Verbose("InitializeAsync called");
 
         if (disposables != null)
@@ -155,27 +155,27 @@ namespace MToolKit.Runtime.Navigation
           log.ForMethod().Warning("NavigationSystem or GameObject destroyed during initialization, aborting.");
           return;
         }
-        
+
         ToggleCanvasGroup(noScreenCanvasGroup, false);
         await ShowInitialCanvasElements(token);
-        
+
         // Check again after async operation
         if (this == null || gameObject == null)
         {
           log.ForMethod().Warning("NavigationSystem or GameObject destroyed after ShowInitialCanvasElements, aborting.");
           return;
         }
-        
+
         log.ForGameObject(gameObject).ForMethod().Verbose("About to call SubscribeToMessages");
         await SubscribeToMessages(token);
-        
+
         // Final check before completion
         if (this == null || gameObject == null)
         {
           log.ForMethod().Warning("NavigationSystem or GameObject destroyed after SubscribeToMessages, aborting.");
           return;
         }
-        
+
         log.ForGameObject(gameObject).ForMethod().Verbose("NavigationController initialization completed successfully.");
       }
       catch (OperationCanceledException)
@@ -231,7 +231,7 @@ namespace MToolKit.Runtime.Navigation
           log.ForMethod().Warning("NavigationSystem or GameObject destroyed during ShowInitialCanvasElements, aborting.");
           return;
         }
-        
+
         if (initialViewsShown)
         {
           log.ForGameObject(gameObject).ForMethod().Warning("Initial views already shown, skipping.");
@@ -246,7 +246,7 @@ namespace MToolKit.Runtime.Navigation
             log.ForMethod().Warning("NavigationSystem or GameObject destroyed during ShowInitialCanvasElements iteration, aborting.");
             return;
           }
-          
+
           if (canvasType != ECanvasType.None)
             await ShowInitialView(canvasType, token);
         }
@@ -296,7 +296,7 @@ namespace MToolKit.Runtime.Navigation
             log.ForMethod().Warning("NavigationSystem or GameObject destroyed during ValidateViewsAsync iteration, aborting.");
             return;
           }
-          
+
           if (canvasType == ECanvasType.None) continue;
 
           if (!navigationService.TryPeek(canvasType, out _))
@@ -330,7 +330,7 @@ namespace MToolKit.Runtime.Navigation
     private bool AreAllViewsEmpty()
     {
       if (canvasTransforms == null) return true;
-      
+
       foreach (KeyValuePair<ECanvasType, Transform> config in canvasTransforms)
       {
         if (config.Value == null) continue;
@@ -414,7 +414,7 @@ namespace MToolKit.Runtime.Navigation
         return null;
       }
 
-      if (prefab == null) 
+      if (prefab == null)
       {
         log.ForGameObject(gameObject).ForMethod().Error("Prefab is null in ShowViewAsync for canvas type: {0}", type);
         return null;
@@ -422,14 +422,14 @@ namespace MToolKit.Runtime.Navigation
 
       try
       {
-        log.ForGameObject(gameObject).ForMethod().Information("Pushing view: {0} (type: {1}) for canvas type: {2}", 
+        log.ForGameObject(gameObject).ForMethod().Information("Pushing view: {0} (type: {1}) for canvas type: {2}",
           prefab.name, prefab.GetType().Name, type);
-        
+
         View result = await PushAsync(type, prefab, token);
-        
-        log.ForGameObject(gameObject).ForMethod().Debug("PushAsync returned view: {0} (type: {1})", 
+
+        log.ForGameObject(gameObject).ForMethod().Debug("PushAsync returned view: {0} (type: {1})",
           result?.name ?? "NULL", result?.GetType().Name ?? "NULL");
-        
+
         return result;
       }
       catch (Exception ex)
@@ -566,24 +566,24 @@ namespace MToolKit.Runtime.Navigation
       try
       {
         log.ForGameObject(gameObject).ForMethod().Information("Handling InterstitialAlertRequestMessage: Message={0}", msg.Message);
-        
+
         // Check if the NavigationSystem is still valid (not destroyed)
         if (this == null || gameObject == null)
         {
           log.ForMethod().Warning("NavigationSystem is being destroyed, skipping interstitial alert request");
           return;
         }
-        
+
         // Debug: Check if interstitialAlertView is properly assigned
         if (interstitialAlertView == null)
         {
           log.ForGameObject(gameObject).ForMethod().Error("interstitialAlertView is null! Check NavigationPlugin prefab configuration.");
           return;
         }
-        
-        log.ForGameObject(gameObject).ForMethod().Debug("interstitialAlertView prefab: {0}, Canvas: {1}", 
+
+        log.ForGameObject(gameObject).ForMethod().Debug("interstitialAlertView prefab: {0}, Canvas: {1}",
           interstitialAlertView.name, interstitialAlertView.Canvas);
-        
+
         UniTask.Void(async () =>
         {
           try
@@ -594,27 +594,27 @@ namespace MToolKit.Runtime.Navigation
               log.ForMethod().Warning("NavigationSystem or interstitialAlertView destroyed during async operation, aborting");
               return;
             }
-            
+
             // Check if the prefab's GameObject is still valid (not destroyed)
             if (interstitialAlertView.gameObject == null)
             {
               log.ForMethod().Warning("InterstitialAlertView prefab GameObject has been destroyed, aborting");
               return;
             }
-            
+
             View view = await ShowViewAsync(interstitialAlertView.Canvas, interstitialAlertView, token);
-            
+
             // Check again after async operation
             if (this == null || gameObject == null)
             {
               log.ForMethod().Warning("NavigationSystem destroyed after ShowViewAsync, aborting");
               return;
             }
-            
+
             // Debug: Log the actual type of the returned view
-            log.ForGameObject(gameObject).ForMethod().Debug("ShowViewAsync returned view type: {0}, name: {1}", 
+            log.ForGameObject(gameObject).ForMethod().Debug("ShowViewAsync returned view type: {0}, name: {1}",
               view?.GetType().Name ?? "NULL", view?.name ?? "NULL");
-            
+
             InterstitialAlertView alertView = view as InterstitialAlertView;
             if (alertView != null)
             {
@@ -624,9 +624,9 @@ namespace MToolKit.Runtime.Navigation
             else
             {
               log.ForGameObject(gameObject).ForMethod().Error("InterstitialAlertView was not found while flagged alert={0}. " +
-                "Returned view type: {1}, name: {2}", msg.Message, 
+                "Returned view type: {1}, name: {2}", msg.Message,
                 view?.GetType().Name ?? "NULL", view?.name ?? "NULL");
-              
+
               // Try to get the InterstitialAlertView component from the returned view
               if (view != null)
               {
@@ -800,9 +800,9 @@ namespace MToolKit.Runtime.Navigation
         // GameObject is destroyed, use safe logging
         log.ForMethod().Verbose("Disposing resources (GameObject destroyed during disposal).");
       }
-      
+
       disposables?.Dispose();
-      
+
       // Safely dispose CancellationTokenSource with proper exception handling
       if (cts != null)
       {
@@ -814,7 +814,7 @@ namespace MToolKit.Runtime.Navigation
         {
           // CancellationTokenSource was already disposed, ignore
         }
-        
+
         try
         {
           cts.Dispose();
@@ -823,7 +823,7 @@ namespace MToolKit.Runtime.Navigation
         {
           // CancellationTokenSource was already disposed, ignore
         }
-        
+
         cts = null;
       }
     }
@@ -887,15 +887,9 @@ namespace MToolKit.Runtime.Navigation
           newModal.Initialize(
             title,
             message,
-            type1,
-            text1,
-            action1,
-            type2,
-            text2,
-            action2,
-            type3,
-            text3,
-            action3
+            new ModalButtonConfig(type1, text1, action1),
+            new ModalButtonConfig(type2, text2, action2),
+            new ModalButtonConfig(type3, text3, action3)
           );
         }
         catch (Exception ex)
@@ -963,15 +957,9 @@ namespace MToolKit.Runtime.Navigation
           newModal.Initialize(
             title,
             message,
-            type1,
-            text1,
-            action1,
-            type2,
-            text2,
-            action2,
-            type3,
-            text3,
-            action3,
+            new ModalButtonConfig(type1, text1, action1),
+            new ModalButtonConfig(type2, text2, action2),
+            new ModalButtonConfig(type3, text3, action3),
             timeout,
             timeoutCallback
           );

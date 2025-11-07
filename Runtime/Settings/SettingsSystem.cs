@@ -1,18 +1,18 @@
 using System;
-using MToolKit.Runtime.Installer;
 using MessagePipe;
-using MToolKit.Runtime.MessageBus;
-using MToolKit.Runtime.Navigation.Enums;
-using MToolKit.Runtime.Settings.Audio;
-using MToolKit.Runtime.Settings.Graphics;
-using MToolKit.Runtime.Settings.Interfaces;
 using R3;
 using Serilog;
 using Sirenix.OdinInspector;
 using VContainer;
 using ILogger = Serilog.ILogger;
+using MToolKit.Runtime.Installer;
+using MToolKit.Runtime.MessageBus;
+using MToolKit.Runtime.Navigation.Enums;
 using MToolKit.Runtime.Settings.Game;
 using MToolKit.Runtime.Settings.Input;
+using MToolKit.Runtime.Settings.Audio;
+using MToolKit.Runtime.Settings.Graphics;
+using MToolKit.Runtime.Settings.Interfaces;
 using MToolKit.Runtime.Input;
 using MToolKit.Runtime.Navigation.Events;
 
@@ -49,7 +49,17 @@ namespace MToolKit.Runtime.Settings
     private string hash => GetHashCode().ToString();
 
     [ShowInInspector, ReadOnly]
-    private bool isDirty => IsDirty.Value;
+    private bool isDirty
+    {
+      get
+      {
+        if (GlobalInstaller.Instance != null && IsDirty != null)
+        {
+          return IsDirty.Value;
+        }
+        return false;
+      }
+    }
 
     public SettingsSystem(InputRebinderService inputRebinderService)
     {

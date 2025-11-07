@@ -1,6 +1,7 @@
 ﻿// Navigation/Views/TimedModalView.cs
 
 using System.Collections;
+using MToolKit.Runtime.Navigation.DataStructures;
 using MToolKit.Runtime.Settings.Enums;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -11,7 +12,7 @@ namespace MToolKit.Runtime.Navigation.Views
 {
     public class TimedModalView : ModalView
     {
-        [SerializeField, Tooltip("Timeout duration in seconds")] 
+        [SerializeField, Tooltip("Timeout duration in seconds")]
         private float timeoutDuration = 5f;
 
         [SerializeField, Required, Tooltip("Slider displaying timeout progress")]
@@ -37,15 +38,13 @@ namespace MToolKit.Runtime.Navigation.Views
         /// <param name="timeout">Optional override for timeout duration (seconds).</param>
         /// <param name="timeoutCallback">The callback executed when timeout occurs.</param>
         public void Initialize(
-            string title, 
-            string message, 
-            EModalButtonType type1, string text1, UnityAction action1, 
-            EModalButtonType type2 = EModalButtonType.None, string text2 = null, UnityAction action2 = null, 
-            EModalButtonType type3 = EModalButtonType.None, string text3 = null, UnityAction action3 = null, 
+            string title,
+            string message,
+            ModalButtonConfig button1, ModalButtonConfig button2 = default, ModalButtonConfig button3 = default,
             float? timeout = null, UnityAction timeoutCallback = null)
         {
             // Initialize the modal with provided button setups.
-            base.Initialize(title, message, type1, text1, action1, type2, text2, action2, type3, text3, action3);
+            base.Initialize(title, message, button1, button2, button3);
 
             // Override timeout if specified.
             if (timeout.HasValue)

@@ -1,4 +1,5 @@
 using System;
+using MToolKit.Runtime.Installer;
 using MToolKit.Runtime.Settings.BoundSettings;
 using MToolKit.Runtime.Settings.Interfaces;
 using Serilog;
@@ -18,13 +19,13 @@ namespace MToolKit.Runtime.Settings.Audio
     public ReactiveSetting<float> InterfaceVolume { get; }
 
     [ShowInInspector, ReadOnly]
-    public float MasterVolumeValue { get => MasterVolume.Value; }
+    public float MasterVolumeValue { get { if (GlobalInstaller.Instance != null && MasterVolume != null) { return MasterVolume.Value; } return 0; } }
     [ShowInInspector, ReadOnly]
-    public float MusicVolumeValue { get => MusicVolume.Value; }
+    public float MusicVolumeValue { get { if (GlobalInstaller.Instance != null && MusicVolume != null) { return MusicVolume.Value; } return 0; } }
     [ShowInInspector, ReadOnly]
-    public float GameVolumeValue { get => GameVolume.Value; }
+    public float GameVolumeValue { get { if (GlobalInstaller.Instance != null && GameVolume != null) { return GameVolume.Value; } return 0; } }
     [ShowInInspector, ReadOnly]
-    public float InterfaceVolumeValue { get => InterfaceVolume.Value; }
+    public float InterfaceVolumeValue { get { if (GlobalInstaller.Instance != null && InterfaceVolume != null) { return InterfaceVolume.Value; } return 0; } }
     public ReactiveSetting<float> GetReactiveSettingForAudioType(EAudioTypes audioType)
     {
       switch (audioType)

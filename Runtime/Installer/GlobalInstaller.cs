@@ -725,6 +725,7 @@ namespace MToolKit.Runtime.Installer
       if (settingsPlugin != null)
       {
         SettingsPluginInstance = settingsPlugin;
+        DontDestroyOnLoad(settingsPlugin.gameObject);
         log.ForGameObject(gameObject).ForMethod().Verbose("Refreshed SettingsPlugin reference");
       }
       else

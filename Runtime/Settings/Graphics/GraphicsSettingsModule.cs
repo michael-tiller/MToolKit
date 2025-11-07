@@ -1,4 +1,5 @@
 using System;
+using MToolKit.Runtime.Installer;
 using MToolKit.Runtime.Settings.BoundSettings;
 using MToolKit.Runtime.Settings.Interfaces;
 using Serilog;
@@ -19,13 +20,13 @@ namespace MToolKit.Runtime.Settings.Graphics
     public ReactiveSetting<bool> VerticalSync { get; }
 
     [ShowInInspector, ReadOnly]
-    public bool VSyncEnabled { get => VerticalSync.Value; }
+    public bool VSyncEnabled { get { if (GlobalInstaller.Instance != null && VerticalSync != null) { return VerticalSync.Value; } return false; } }
     [ShowInInspector, ReadOnly]
-    public bool FullscreenEnabled { get => Fullscreen.Value; }
+    public bool FullscreenEnabled { get { if (GlobalInstaller.Instance != null && Fullscreen != null) { return Fullscreen.Value; } return false; } }
     [ShowInInspector, ReadOnly]
-    public int QualityIndexValue { get => QualityIndex.Value; }
+    public int QualityIndexValue { get { if (GlobalInstaller.Instance != null && QualityIndex != null) { return QualityIndex.Value; } return 0; } }
     [ShowInInspector, ReadOnly]
-    public int ResolutionIndexValue { get => ResolutionIndex.Value; }
+    public int ResolutionIndexValue { get { if (GlobalInstaller.Instance != null && ResolutionIndex != null) { return ResolutionIndex.Value; } return 0; } }
 
     public GraphicsSettingsModule(ISettingsSystem settingsController = null)
     {

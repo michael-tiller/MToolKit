@@ -14,8 +14,10 @@ namespace MToolKit.Runtime.Input
         private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<NullInputService>().ForFeature("Core.Services.InputService"));
         private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
 
+#pragma warning disable CS0067
         public event Action OnPausePressed;
         public event Action OnAnyKeyPressed;
+#pragma warning restore CS0067
 
         public void Initialize(object inputActionAsset)
         {

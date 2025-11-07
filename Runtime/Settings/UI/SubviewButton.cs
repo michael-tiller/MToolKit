@@ -14,7 +14,7 @@ namespace MToolKit.Runtime.Settings.UI
         private Subview targetSubview;
         [SerializeField, Required]
         private Button button;
-    
+
         private void Reset()
         {
             button = GetComponent<Button>();
@@ -32,7 +32,7 @@ namespace MToolKit.Runtime.Settings.UI
 
         private void OnSubviewChangedHandler(Subview subview)
         {
-            button.interactable = subview != targetSubview;
+            //button.interactable = subview != targetSubview;
         }
 
         private void OnDestroy()
