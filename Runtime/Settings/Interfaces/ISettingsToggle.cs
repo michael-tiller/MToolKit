@@ -5,7 +5,7 @@ namespace MToolKit.Runtime.Settings.Interfaces
 {
   public interface ISettingsToggle
   {
-    Toggle Toggle  { get; }
+    Toggle Toggle { get; }
     bool Value { get; set; }
 
     event Action<bool> OnValueChanged;

@@ -5,10 +5,12 @@ using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MessagePipe;
+using MToolKit.Runtime.Localization;
 using MToolKit.Runtime.MessageBus;
 using MToolKit.Runtime.Navigation.Config;
 using MToolKit.Runtime.Navigation.DataStructures;
 using MToolKit.Runtime.Navigation.Enums;
+using MToolKit.Runtime.Navigation.Events;
 using MToolKit.Runtime.Navigation.Interfaces;
 using MToolKit.Runtime.Navigation.Views;
 using MToolKit.Runtime.Settings.Enums;
@@ -21,8 +23,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using VContainer;
 using ILogger = Serilog.ILogger;
-using MToolKit.Runtime.Localization;
-using MToolKit.Runtime.Navigation.Events;
+using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.Navigation
 {
@@ -33,13 +34,13 @@ namespace MToolKit.Runtime.Navigation
   public class NavigationSystem : MonoBehaviour, IDisposable, IModalService
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<NavigationSystem>().ForFeature("Navigation"));
-    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
+    private static ILogger log => logLazy.Value ?? Logger.None;
 
     /// <summary>
     ///   Navigation service handling view stack operations.
     /// </summary>
-    [Inject] private INavigationService navigationService;
-
+    [Inject]
+    private INavigationService navigationService;
 
 
     [TabGroup("Config")]
@@ -91,14 +92,10 @@ namespace MToolKit.Runtime.Navigation
 
       // Debug: Check if interstitialAlertView is properly assigned
       if (interstitialAlertView == null)
-      {
         log.ForGameObject(gameObject).ForMethod().Error("interstitialAlertView is null in Start()! Check NavigationPlugin prefab configuration.");
-      }
       else
-      {
         log.ForGameObject(gameObject).ForMethod().Debug("interstitialAlertView prefab assigned: {0}, Canvas: {1}",
           interstitialAlertView.name, interstitialAlertView.Canvas);
-      }
 
       InitializeCanvasConfigs();
       isInitializing = true;
@@ -384,13 +381,9 @@ namespace MToolKit.Runtime.Navigation
       try
       {
         if (gameObject != null)
-        {
           log.ForGameObject(gameObject).ForMethod().Verbose("Quitting.");
-        }
         else
-        {
           log.ForMethod().Verbose("Quitting (GameObject already destroyed).");
-        }
       }
       catch (NullReferenceException)
       {
@@ -502,7 +495,7 @@ namespace MToolKit.Runtime.Navigation
         EModalButtonType.Primary,
         LocalizationHelper.GetLocalizedString("No"),
         OnCancel
-      );
+        );
     }
 
 
@@ -547,14 +540,14 @@ namespace MToolKit.Runtime.Navigation
 
       // Dispose existing subscription if needed
       disposables?.Dispose();
-      disposables = new()
+      disposables = new CompositeDisposable
       {
-          // Add all subscriptions to disposables
-          GlobalAsyncMessageBroker.GetSubscriber<QuitRequestMessage>()?.Subscribe(_ => HandleQuitRequest(token).Forget()),
-          GlobalAsyncMessageBroker.GetSubscriber<NavigationRequestMessage>()?.Subscribe(msg => OnNavigationRequest(msg, token)),
-          GlobalAsyncMessageBroker.GetSubscriber<BackRequestMessage>()?.Subscribe(msg => OnBackRequest(msg, token)),
-          GlobalAsyncMessageBroker.GetSubscriber<ClearRequestMessage>()?.Subscribe(msg => OnClearRequest(msg, token)),
-          GlobalAsyncMessageBroker.GetSubscriber<InterstitialAlertRequestMessage>()?.Subscribe(msg => OnInterstitialAlertRequest(msg, token))
+        // Add all subscriptions to disposables
+        GlobalAsyncMessageBroker.GetSubscriber<QuitRequestMessage>()?.Subscribe(_ => HandleQuitRequest(token).Forget()),
+        GlobalAsyncMessageBroker.GetSubscriber<NavigationRequestMessage>()?.Subscribe(msg => OnNavigationRequest(msg, token)),
+        GlobalAsyncMessageBroker.GetSubscriber<BackRequestMessage>()?.Subscribe(msg => OnBackRequest(msg, token)),
+        GlobalAsyncMessageBroker.GetSubscriber<ClearRequestMessage>()?.Subscribe(msg => OnClearRequest(msg, token)),
+        GlobalAsyncMessageBroker.GetSubscriber<InterstitialAlertRequestMessage>()?.Subscribe(msg => OnInterstitialAlertRequest(msg, token))
       };
 
       log.ForGameObject(gameObject).ForMethod().Verbose("SubscribeToMessages completed - all subscriptions added via GlobalAsyncMessageBroker");
@@ -624,7 +617,7 @@ namespace MToolKit.Runtime.Navigation
             else
             {
               log.ForGameObject(gameObject).ForMethod().Error("InterstitialAlertView was not found while flagged alert={0}. " +
-                "Returned view type: {1}, name: {2}", msg.Message,
+                                                              "Returned view type: {1}, name: {2}", msg.Message,
                 view?.GetType().Name ?? "NULL", view?.name ?? "NULL");
 
               // Try to get the InterstitialAlertView component from the returned view
@@ -661,23 +654,23 @@ namespace MToolKit.Runtime.Navigation
     {
       try
       {
-        if (msg.Body.view == null)
+        if (msg.Body.View == null)
         {
           log.Warning("NavigationRequestMessage received without view.");
           return;
         }
 
-        log.ForGameObject(gameObject).ForMethod().Information("Handling OnNavigationRequest: CanvasId={0}, ViewType={1}", msg.Body.canvasType, msg.Body.view);
+        log.ForGameObject(gameObject).ForMethod().Information("Handling OnNavigationRequest: CanvasId={0}, ViewType={1}", msg.Body.CanvasType, msg.Body.View);
         UniTask.Void(async () =>
         {
           try
           {
-            await ShowViewAsync(msg.Body.canvasType, msg.Body.view, token);
+            await ShowViewAsync(msg.Body.CanvasType, msg.Body.View, token);
           }
           catch (Exception ex)
           {
             log.ForGameObject(gameObject).ForMethod().Error("OnNavigationRequest Exception while pushing ViewType={0} on CanvasId={1}: {2}",
-              msg.Body.view, msg.Body.canvasType, ex.Message);
+              msg.Body.View, msg.Body.CanvasType, ex.Message);
           }
         });
       }
@@ -701,7 +694,7 @@ namespace MToolKit.Runtime.Navigation
             log.ForGameObject(gameObject).ForMethod().Verbose("Pop operation completed for CanvasId={0}", msg.Canvas);
 
             // Immediately check if the canvas is empty and show initial view
-            bool hasView = navigationService.TryPeek(msg.Canvas, out var peekedView);
+            bool hasView = navigationService.TryPeek(msg.Canvas, out IView peekedView);
             log.ForGameObject(gameObject).ForMethod().Verbose("After pop - Canvas {0} has view: {1}, view type: {2}",
               msg.Canvas, hasView, peekedView?.GetType().Name ?? "null");
 
@@ -714,7 +707,7 @@ namespace MToolKit.Runtime.Navigation
             else
             {
               log.ForGameObject(gameObject).ForMethod().Verbose("Canvas {0} still has view: {1}, not showing initial view",
-                msg.Canvas, peekedView.GetType().Name);
+                msg.Canvas, peekedView != null ? peekedView.GetType().Name : "null");
             }
 
             await ValidateViewsAsync();
@@ -787,13 +780,9 @@ namespace MToolKit.Runtime.Navigation
       try
       {
         if (gameObject != null)
-        {
           log.ForGameObject(gameObject).ForMethod().Verbose("Disposing resources.");
-        }
         else
-        {
           log.ForMethod().Verbose("Disposing resources (GameObject already destroyed).");
-        }
       }
       catch (NullReferenceException)
       {
@@ -890,7 +879,7 @@ namespace MToolKit.Runtime.Navigation
             new ModalButtonConfig(type1, text1, action1),
             new ModalButtonConfig(type2, text2, action2),
             new ModalButtonConfig(type3, text3, action3)
-          );
+            );
         }
         catch (Exception ex)
         {
@@ -962,7 +951,7 @@ namespace MToolKit.Runtime.Navigation
             new ModalButtonConfig(type3, text3, action3),
             timeout,
             timeoutCallback
-          );
+            );
         }
         catch (Exception ex)
         {

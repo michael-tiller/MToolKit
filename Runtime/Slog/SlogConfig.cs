@@ -1,21 +1,23 @@
+using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Serilog;
 using Serilog.Events;
+using Serilog.Formatting.Compact;
 using Serilog.Sinks.Unity3D;
 using UnityEngine;
-using Serilog.Formatting.Compact; // for compact json formatter
 using UnityEngine.Analytics;
-using System;
-using Serilog.Core;
-using System.Threading.Tasks;
+using Object = UnityEngine.Object;
+
+// for compact json formatter
 
 namespace MToolKit.Runtime.Slog
 {
-  public class SlogConfig
+  public class SlogConfig : IDisposable
   {
-    private const string configFile = "SlogConfig";
-    private const string overrideConfigFile = "OverrideSlogConfig";
+    private const string CONFIG_FILE = "SlogConfig";
+    private const string OVERRIDE_CONFIG_FILE = "OverrideSlogConfig";
 
     private static SlogConfigAsset configurationAsset;
     public static SlogConfigAsset ConfigurationAsset => configurationAsset;
@@ -25,7 +27,7 @@ namespace MToolKit.Runtime.Slog
       // start serilog config
       LoggerConfiguration loggerConfig = new LoggerConfiguration().Enrich.FromGlobalLogContext();
 
-      LoadSerilogConfiguration(configFile, overrideConfigFile);
+      LoadSerilogConfiguration(CONFIG_FILE, OVERRIDE_CONFIG_FILE);
       ConfigMininumLevel(ref loggerConfig);
       ConfigLoggingToFile(ref loggerConfig);
 
@@ -34,10 +36,10 @@ namespace MToolKit.Runtime.Slog
       loggerConfig = loggerConfig.WriteTo.Unity3D(outputTemplate: outputTemplate);
 
       // Apply source context filtering if enabled
-      if (configurationAsset.enableSourceContextFiltering) loggerConfig = loggerConfig.Filter.ByIncludingOnly(evt => IsSourceContextAllowed(evt));
+      if (configurationAsset.IsSourceContextFilteringEnabled) loggerConfig = loggerConfig.Filter.ByIncludingOnly(IsSourceContextAllowed);
 
       // Apply feature filtering if enabled
-      if (configurationAsset.enableFeatureFiltering) loggerConfig = loggerConfig.Filter.ByIncludingOnly(evt => IsFeatureAllowed(evt));
+      if (configurationAsset.IsFeatureFilteringEnabled) loggerConfig = loggerConfig.Filter.ByIncludingOnly(IsFeatureAllowed);
 
       Log.Logger = loggerConfig.CreateLogger();
       Log.Logger = Log.Logger
@@ -52,11 +54,20 @@ namespace MToolKit.Runtime.Slog
         ;
     }
 
+    #region IDisposable Members
+
+    public void Dispose()
+    {
+      Log.CloseAndFlush();
+    }
+
+    #endregion
+
     private static bool IsFeatureAllowed(LogEvent evt)
     {
-      if (!configurationAsset.enableFeatureFiltering ||
-          configurationAsset.allowedFeatures == null ||
-          configurationAsset.allowedFeatures.Count == 0)
+      if (!configurationAsset.IsFeatureFilteringEnabled ||
+          configurationAsset.AllowedFeatures == null ||
+          configurationAsset.AllowedFeatures.Count == 0)
         return true;
 
       // Get the feature from the log event
@@ -64,7 +75,7 @@ namespace MToolKit.Runtime.Slog
       {
         string feature = featureValue.ToString().Trim('"');
         // Check if any allowed feature is contained within the feature string
-        return configurationAsset.allowedFeatures.Any(allowedFeature =>
+        return configurationAsset.AllowedFeatures.Any(allowedFeature =>
           feature.Contains(allowedFeature, StringComparison.OrdinalIgnoreCase));
       }
 
@@ -73,9 +84,9 @@ namespace MToolKit.Runtime.Slog
 
     private static bool IsSourceContextAllowed(LogEvent evt)
     {
-      if (!configurationAsset.enableSourceContextFiltering ||
-          configurationAsset.allowedSourceContexts == null ||
-          configurationAsset.allowedSourceContexts.Count == 0)
+      if (!configurationAsset.IsSourceContextFilteringEnabled ||
+          configurationAsset.AllowedSourceContexts == null ||
+          configurationAsset.AllowedSourceContexts.Count == 0)
         return true;
 
       // Get the source context from the log event
@@ -83,7 +94,7 @@ namespace MToolKit.Runtime.Slog
       {
         string sourceContext = sourceContextValue.ToString().Trim('"');
         // Check if any allowed source context is contained within the source context string
-        return configurationAsset.allowedSourceContexts.Any(allowedContext =>
+        return configurationAsset.AllowedSourceContexts.Any(allowedContext =>
           sourceContext.Contains(allowedContext, StringComparison.OrdinalIgnoreCase));
       }
 
@@ -93,27 +104,27 @@ namespace MToolKit.Runtime.Slog
 
     private static void ConfigLoggingToFile(ref LoggerConfiguration loggerConfig)
     {
-      if (!configurationAsset.loggingToFile) return;
+      if (!configurationAsset.IsLoggingToFile) return;
 
       // Ensure logs directory exists
-      string logsDir = Application.persistentDataPath + configurationAsset.logPath;
+      string logsDir = Application.persistentDataPath + configurationAsset.LogPath;
       if (!string.IsNullOrEmpty(logsDir) && !Directory.Exists(logsDir)) Directory.CreateDirectory(logsDir);
 
       loggerConfig = loggerConfig.WriteTo.File(
         new RenderedCompactJsonFormatter(),
-        Application.persistentDataPath + configurationAsset.logPath + configurationAsset.logFileName,
+        Application.persistentDataPath + configurationAsset.LogPath + configurationAsset.LogFileName,
         rollingInterval: RollingInterval.Day,
         retainedFileCountLimit: 7,
         fileSizeLimitBytes: 10 * 1024 * 1024, // 10MB
         rollOnFileSizeLimit: true,
         shared: false, // Don't share file handles
         flushToDiskInterval: TimeSpan.FromSeconds(1)
-      );
+        );
     }
 
     private static void ConfigMininumLevel(ref LoggerConfiguration loggerConfig)
     {
-      switch (configurationAsset.logLevel)
+      switch (configurationAsset.LogLevel)
       {
         case LogEventLevel.Verbose:
           loggerConfig = loggerConfig.MinimumLevel.Verbose();
@@ -135,12 +146,12 @@ namespace MToolKit.Runtime.Slog
           return;
       }
 
-      Debug.LogWarning($"SerilogConfigurationAsset.LogLevel {configurationAsset.logLevel} was not handled.");
+      Debug.LogWarning($"SerilogConfigurationAsset.LogLevel {configurationAsset.LogLevel} was not handled.");
     }
 
     public static bool DoesResourceAssetExist(string filename, string ext = ".asset", string dir = "/Resources/")
     {
-      UnityEngine.Object obj = Resources.Load<UnityEngine.Object>(filename);
+      Object obj = Resources.Load<Object>(filename);
       return obj != null;
     }
 
@@ -160,7 +171,7 @@ namespace MToolKit.Runtime.Slog
         if (request.isDone)
           config = (SlogConfigAsset)request.asset;
         else
-          // Fallback to synchronous loading if async isn't immediately available
+        // Fallback to synchronous loading if async isn't immediately available
           config = Resources.Load<SlogConfigAsset>(path);
       }
       catch (Exception ex)
@@ -209,29 +220,29 @@ namespace MToolKit.Runtime.Slog
         bool overrideExists = false;
         if (!string.IsNullOrEmpty(overridePath))
           overrideExists = DoesResourceAssetExist(overridePath);
-        string finalpath = "";
+        string finalPath;
         if (overrideExists)
         {
           Debug.LogFormat($"Override path found. Attempting to use [{overridePath}.asset].");
-          finalpath = overridePath;
+          finalPath = overridePath;
         }
         else
         {
           //Debug.LogFormat($"No override path found. Attempting to use {path}.asset.");
-          finalpath = path;
+          finalPath = path;
         }
 
-        if (DoesResourceAssetExist(finalpath))
+        if (DoesResourceAssetExist(finalPath))
         {
           try
           {
-            LoadFromAsset(ref configurationAsset, finalpath);
+            LoadFromAsset(ref configurationAsset, finalPath);
             // configurationAsset is now validated and not null due to LoadFromAsset's error handling
-            Debug.LogFormat($"Serilog successfully loaded from [{finalpath}.asset].  Level: [{configurationAsset.logLevel}] ToFile: [{configurationAsset.loggingToFile}]");
+            Debug.LogFormat($"Serilog successfully loaded from [{finalPath}.asset].  Level: [{configurationAsset.LogLevel}] ToFile: [{configurationAsset.IsLoggingToFile}]");
           }
           catch (InvalidOperationException ex)
           {
-            Debug.LogError($"Failed to load Serilog configuration from [{finalpath}]: {ex.Message}");
+            Debug.LogError($"Failed to load Serilog configuration from [{finalPath}]: {ex.Message}");
             // Create default configuration as fallback
             InitWithoutAsset(ref configurationAsset);
             Debug.LogWarning("Using default Serilog configuration due to load failure.");
@@ -239,7 +250,7 @@ namespace MToolKit.Runtime.Slog
         }
         else
         {
-          Debug.LogErrorFormat("No serilog config asset was found in resources at path [{0}].", finalpath);
+          Debug.LogErrorFormat("No serilog config asset was found in resources at path [{0}].", finalPath);
           // Create default configuration as fallback
           InitWithoutAsset(ref configurationAsset);
           Debug.LogWarning("Using default Serilog configuration due to missing asset.");

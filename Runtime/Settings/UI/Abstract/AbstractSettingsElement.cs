@@ -6,14 +6,16 @@ using UnityEngine;
 
 namespace MToolKit.Runtime.Settings.UI.Abstract
 {
-    public abstract class AbstractSettingsElement : MonoBehaviour, ISettingsElement
-    {
-        [SerializeField, Required] protected TextMeshProUGUI label;
+  public abstract class AbstractSettingsElement : MonoBehaviour, ISettingsElement
+  {
+    [SerializeField]
+    [Required]
+    protected TextMeshProUGUI label;
 
-        public string Name
-        {
-            get => label.text;
-            set => label.text = LocalizationHelper.GetLocalizedString(value);
-        }
+    public string Name
+    {
+      get => label.text;
+      set => label.text = LocalizationHelper.GetLocalizedString(value);
     }
+  }
 }

@@ -14,6 +14,7 @@ using UnityEngine;
 using VContainer;
 using VContainer.Unity;
 using ILogger = Serilog.ILogger;
+using Logger = Serilog.Core.Logger;
 
 
 namespace MToolKit.Runtime.Navigation
@@ -21,10 +22,15 @@ namespace MToolKit.Runtime.Navigation
   public class NavigationInstaller : LifetimeScope
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<NavigationInstaller>().ForFeature("Navigation"));
-    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
-    [SerializeField][Required] private NavigationCanvasConfig config;
+    private static ILogger log => logLazy.Value ?? Logger.None;
 
-    [SerializeField][Required] private CanvasTransformsDict canvasTransformsDict = new();
+    [SerializeField]
+    [Required]
+    private NavigationCanvasConfig config;
+
+    [SerializeField]
+    [Required]
+    private CanvasTransformsDict canvasTransformsDict = new();
 
     public void Install(IContainerBuilder builder)
     {
@@ -35,7 +41,7 @@ namespace MToolKit.Runtime.Navigation
     protected override void Configure(IContainerBuilder builder)
     {
       // Register MessagePipe for scene-specific messages (if needed for other message types)
-      MessagePipeOptions options = builder.RegisterMessagePipe();
+      builder.RegisterMessagePipe();
 
       // Register services
       builder.Register<INavigationService, NavigationService>(Lifetime.Singleton);
@@ -48,15 +54,15 @@ namespace MToolKit.Runtime.Navigation
       if (config == null || config.CanvasConfigDict == null || config.CanvasConfigDict.Count == 0)
       {
         log.ForGameObject(gameObject).ForMethod().Error("canvasConfigs is null or empty during registration.");
-        
+
         // Still register empty dictionaries to prevent VContainer resolution failures
-        var emptyCanvasConfigs = new CanvasConfigDict();
+        CanvasConfigDict emptyCanvasConfigs = new();
         builder.RegisterInstance(emptyCanvasConfigs);
-        var emptyCanvasTransforms = new Dictionary<ECanvasType, Transform>();
+        Dictionary<ECanvasType, Transform> emptyCanvasTransforms = new();
         builder.RegisterInstance(emptyCanvasTransforms);
         return; // Early return to avoid NullReferenceException
       }
-      
+
       log.ForGameObject(gameObject).ForMethod().Verbose("Registering canvasConfigs with {0} entries.", config.CanvasConfigDict.Count);
       CanvasConfigDict canvasConfigs = config.CanvasConfigDict;
       builder.RegisterInstance(canvasConfigs);
@@ -64,9 +70,9 @@ namespace MToolKit.Runtime.Navigation
       builder.RegisterInstance(canvasTransforms);
       log.ForGameObject(gameObject).ForMethod().Verbose("NavigationInstaller: Registered canvasConfigs.");
     }
-    
+
     /// <summary>
-    /// For testing purposes - allows calling Awake behavior without Unity's automatic Awake()
+    ///   For testing purposes - allows calling Awake behavior without Unity's automatic Awake()
     /// </summary>
     public void TestAwake()
     {

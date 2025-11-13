@@ -4,9 +4,8 @@ using UnityEngine;
 
 namespace MToolKit.Runtime.Settings.UI.Abstract
 {
-    
-    public abstract class AbstractSettingsInitializer : MonoBehaviour, ISettingsInitializer
-    {
-        public abstract UniTask ConfigureAsync();
-    }
+  public abstract class AbstractSettingsInitializer : MonoBehaviour, ISettingsInitializer
+  {
+    public abstract UniTask ConfigureAsync();
+  }
 }

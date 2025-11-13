@@ -1,4 +1,5 @@
 // Navigation/Enums/ECanvasType.cs
+
 namespace MToolKit.Runtime.Navigation.Enums
 {
   public enum ECanvasType

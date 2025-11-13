@@ -6,10 +6,10 @@ using Sirenix.OdinInspector;
 
 namespace MToolKit.Runtime.Navigation.Config
 {
-    [Serializable]
-    public class ViewConfig
-    {
-        [Required]
-        public View ViewPrefab;
-    }
+  [Serializable]
+  public class ViewConfig
+  {
+    [Required]
+    public View ViewPrefab;
+  }
 }

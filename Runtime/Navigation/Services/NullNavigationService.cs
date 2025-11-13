@@ -8,25 +8,15 @@ namespace MToolKit.Runtime.Navigation.Services
 {
   public class NullNavigationService : INavigationService
   {
-    public void NavigateTo(ECanvasType canvas, object data = null)
-    {
-    }
+    public void NavigateTo(ECanvasType canvas, object data = null) { }
 
-    public void NavigateBack()
-    {
-    }
+    public void NavigateBack() { }
 
-    public void NavigateClear()
-    {
-    }
+    public void NavigateClear() { }
 
-    public void NavigateQuit()
-    {
-    }
+    public void NavigateQuit() { }
 
-    public void Cleanup(ECanvasType canvas, IView view)
-    {
-    }
+    public void Cleanup(ECanvasType canvas, IView view) { }
 
     public UniTask<T> PushAsync<T>(ECanvasType canvasType, T prefab, CancellationToken token = default) where T : View
     {
@@ -49,8 +39,6 @@ namespace MToolKit.Runtime.Navigation.Services
       return false;
     }
 
-    public void Cleanup(ECanvasType canvas, View view)
-    {
-    }
+    public void Cleanup(ECanvasType canvas, View view) { }
   }
 }

@@ -7,6 +7,6 @@ using MToolKit.Runtime.Utilities.SerializableDictionary;
 
 namespace MToolKit.Runtime.Navigation.DataStructures
 {
-    [Serializable]
-    public class CanvasConfigDict : SerializableDictionary<ECanvasType, CanvasConfig> { }
+  [Serializable]
+  public class CanvasConfigDict : SerializableDictionary<ECanvasType, CanvasConfig> { }
 }

@@ -13,10 +13,18 @@ namespace MToolKit.Runtime.Persistence.Abstractions
     private T data;
 
     public T Data => data;
+    public ISaveable AsSaveable => Data;
 
     public string Key => data.Key;
-    public ISaveable AsSaveable => Data;
-    public UniTask<object> SaveAsync() => data.SaveAsync();
-    public UniTask LoadAsync(object state) => data.LoadAsync(state);
+
+    public UniTask<object> SaveAsync()
+    {
+      return data.SaveAsync();
+    }
+
+    public UniTask LoadAsync(object state)
+    {
+      return data.LoadAsync(state);
+    }
   }
 }

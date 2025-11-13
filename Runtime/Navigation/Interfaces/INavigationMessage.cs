@@ -1,12 +1,14 @@
 using MToolKit.Runtime.MessageBus.Interfaces;
 
-/// <summary>
-/// Namespace for navigation message interfaces.
-/// </summary>
-namespace MToolKit.Runtime.Navigation.Interfaces 
+namespace MToolKit.Runtime.Navigation.Interfaces
 {
   /// <summary>
-  /// Interface for navigation messages.
+  ///   Namespace for navigation message interfaces.
+  /// </summary>
+  internal sealed class NamespaceDoc { }
+
+  /// <summary>
+  ///   Interface for navigation messages.
   /// </summary>
   public interface INavigationMessage : IGameMessage { }
 }

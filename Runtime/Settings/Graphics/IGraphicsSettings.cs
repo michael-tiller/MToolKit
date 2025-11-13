@@ -9,5 +9,4 @@ namespace MToolKit.Runtime.Settings.Graphics
     ReactiveSetting<bool> Fullscreen { get; }
     ReactiveSetting<bool> VerticalSync { get; }
   }
-
 }

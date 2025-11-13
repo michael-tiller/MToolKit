@@ -1,10 +1,8 @@
-﻿using System;
-using System.Reflection;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
+using UnityEngine;
 
 namespace Serilog
 {
-
   public static class SerilogILoggerExtension
   {
     public static ILogger ForFeature(this ILogger log, string featureName)
@@ -12,7 +10,7 @@ namespace Serilog
       return log.ForContext(new FeatureEnricher(featureName));
     }
 
-    public static ILogger ForGameObject(this ILogger log, UnityEngine.Object obj)
+    public static ILogger ForGameObject(this ILogger log, Object obj)
     {
       return log.ForContext(new UnityObjectEnricher(obj));
     }

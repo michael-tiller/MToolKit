@@ -10,26 +10,25 @@ namespace MToolKit.Editor
   [CustomEditor(typeof(TweenAnimatedButton))]
   public class TweenAnimatedButtonEditor : ButtonEditor
   {
-    private SerializedProperty normalButtonColor;
-    private SerializedProperty highlightedButtonColor;
-    private SerializedProperty pressedButtonColor;
-    private SerializedProperty selectedButtonColor;
-    private SerializedProperty disabledButtonColor;
-    private SerializedProperty tweenDuration;
-    private SerializedProperty label;
-    private SerializedProperty normalLabelColor;
-    private SerializedProperty highlightedLabelColor;
-    private SerializedProperty pressedLabelColor;
-    private SerializedProperty selectedLabelColor;
-    private SerializedProperty disabledLabelColor;
-
     private SerializedProperty border;
-    private SerializedProperty normalBorderColor;
-    private SerializedProperty highlightedBorderColor;
-    private SerializedProperty pressedBorderColor;
     private SerializedProperty disabledBorderColor;
+    private SerializedProperty disabledButtonColor;
+    private SerializedProperty disabledLabelColor;
+    private SerializedProperty highlightedBorderColor;
+    private SerializedProperty highlightedButtonColor;
+    private SerializedProperty highlightedLabelColor;
+    private SerializedProperty label;
+    private SerializedProperty normalBorderColor;
+    private SerializedProperty normalButtonColor;
+    private SerializedProperty normalLabelColor;
+    private SerializedProperty pressedBorderColor;
+    private SerializedProperty pressedButtonColor;
+    private SerializedProperty pressedLabelColor;
     private SerializedProperty selectedBorderColor;
-    private SerializedProperty m_TargetGraphicProperty;
+    private SerializedProperty selectedButtonColor;
+    private SerializedProperty selectedLabelColor;
+    private SerializedProperty targetGraphicProperty;
+    private SerializedProperty tweenDuration;
 
     protected override void OnEnable()
     {
@@ -54,7 +53,7 @@ namespace MToolKit.Editor
       pressedBorderColor = t.FindProperty("pressedBorderColor");
       selectedBorderColor = t.FindProperty("selectedBorderColor");
       disabledBorderColor = t.FindProperty("disabledBorderColor");
-      m_TargetGraphicProperty = serializedObject.FindProperty("m_TargetGraphic");
+      targetGraphicProperty = serializedObject.FindProperty("m_TargetGraphic");
     }
 
     public override void OnInspectorGUI()
@@ -64,7 +63,7 @@ namespace MToolKit.Editor
 
       EditorGUILayout.Space();
       //EditorGUILayout.LabelField("Button Settings", EditorStyles.boldLabel);
-      EditorGUILayout.PropertyField(m_TargetGraphicProperty);
+      EditorGUILayout.PropertyField(targetGraphicProperty);
       EditorGUILayout.PropertyField(normalButtonColor);
       EditorGUILayout.PropertyField(highlightedButtonColor);
       EditorGUILayout.PropertyField(pressedButtonColor);
@@ -100,4 +99,5 @@ namespace MToolKit.Editor
     }
   }
 }
+
 #endif

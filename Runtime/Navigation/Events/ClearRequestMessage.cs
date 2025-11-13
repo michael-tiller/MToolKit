@@ -1,4 +1,5 @@
 // MessageBus/Messages/ClearRequestMessage.cs
+
 using MToolKit.Runtime.Navigation.Enums;
 using MToolKit.Runtime.Navigation.Interfaces;
 

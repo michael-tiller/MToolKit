@@ -1,7 +1,7 @@
 namespace MToolKit.Runtime.Navigation.Interfaces
 {
-    public interface ISubview
-    {
-        void SetVisible(bool visible);
-    }
+  public interface ISubview
+  {
+    void SetVisible(bool visible);
+  }
 }

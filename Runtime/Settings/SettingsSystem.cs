@@ -1,31 +1,70 @@
 using System;
 using MessagePipe;
-using R3;
-using Serilog;
-using Sirenix.OdinInspector;
-using VContainer;
-using ILogger = Serilog.ILogger;
+using MToolKit.Runtime.Input;
 using MToolKit.Runtime.Installer;
 using MToolKit.Runtime.MessageBus;
 using MToolKit.Runtime.Navigation.Enums;
-using MToolKit.Runtime.Settings.Game;
-using MToolKit.Runtime.Settings.Input;
-using MToolKit.Runtime.Settings.Audio;
-using MToolKit.Runtime.Settings.Graphics;
-using MToolKit.Runtime.Settings.Interfaces;
-using MToolKit.Runtime.Input;
 using MToolKit.Runtime.Navigation.Events;
+using MToolKit.Runtime.Settings.Audio;
+using MToolKit.Runtime.Settings.Game;
+using MToolKit.Runtime.Settings.Graphics;
+using MToolKit.Runtime.Settings.Input;
+using MToolKit.Runtime.Settings.Interfaces;
+using R3;
+using Serilog;
+using Serilog.Core;
+using Sirenix.OdinInspector;
+using VContainer;
+using ILogger = Serilog.ILogger;
 
 namespace MToolKit.Runtime.Settings
 {
   /// <summary>
-  /// Central controller for settings management with reactive state.
+  ///   Central controller for settings management with reactive state.
   /// </summary>
   [Serializable]
   public class SettingsSystem : ISettingsSystem
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<SettingsSystem>().ForFeature("Settings"));
-    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
+    private static ILogger log => logLazy.Value ?? Logger.None;
+
+    public SettingsSystem(InputRebinderService inputRebinderService)
+    {
+      InitializeModules(inputRebinderService);
+    }
+
+
+    [ShowInInspector]
+    [ReadOnly]
+    private GraphicsSettingsModule graphicsSettings => GraphicsSettings;
+
+    [ShowInInspector]
+    [ReadOnly]
+    private AudioSettingsModule audioSettings => AudioSettings;
+
+    [ShowInInspector]
+    [ReadOnly]
+    private GameSettingsModule gameSettings => GameSettings;
+
+    [ShowInInspector]
+    [ReadOnly]
+    private InputSettingsModule inputSettings => InputSettings;
+
+    [ShowInInspector]
+    [ReadOnly]
+    private string hash => GetHashCode().ToString();
+
+    [ShowInInspector]
+    [ReadOnly]
+    private bool isDirtyValue
+    {
+      get
+      {
+        if (GlobalInstaller.Instance != null && IsDirty != null)
+          return IsDirty.Value;
+        return false;
+      }
+    }
 
     // Injected dependencies - none needed since we use GlobalAsyncMessageBroker
 
@@ -35,54 +74,6 @@ namespace MToolKit.Runtime.Settings
     public GameSettingsModule GameSettings { get; private set; }
     public InputSettingsModule InputSettings { get; private set; }
     public ReactiveProperty<bool> IsDirty { get; } = new();
-
-
-    [ShowInInspector, ReadOnly]
-    private GraphicsSettingsModule graphicsSettings => GraphicsSettings;
-    [ShowInInspector, ReadOnly]
-    private AudioSettingsModule audioSettings => AudioSettings;
-    [ShowInInspector, ReadOnly]
-    private GameSettingsModule gameSettings => GameSettings;
-    [ShowInInspector, ReadOnly]
-    private InputSettingsModule inputSettings => InputSettings;
-    [ShowInInspector, ReadOnly]
-    private string hash => GetHashCode().ToString();
-
-    [ShowInInspector, ReadOnly]
-    private bool isDirty
-    {
-      get
-      {
-        if (GlobalInstaller.Instance != null && IsDirty != null)
-        {
-          return IsDirty.Value;
-        }
-        return false;
-      }
-    }
-
-    public SettingsSystem(InputRebinderService inputRebinderService)
-    {
-      InitializeModules(inputRebinderService);
-    }
-
-    private void InitializeModules(InputRebinderService inputRebinderService)
-    {
-      log.ForMethod().Debug("Initializing settings modules");
-      AudioSettings = new AudioSettingsModule(this);
-      GraphicsSettings = new GraphicsSettingsModule(this);
-      GameSettings = new GameSettingsModule(this);
-      InputSettings = new InputSettingsModule(inputRebinderService, this);
-    }
-
-    private void ShutdownModules()
-    {
-      log.ForMethod().Debug("Shutting down settings modules");
-      AudioSettings?.OnShutdown();
-      GraphicsSettings?.OnShutdown();
-      GameSettings?.OnShutdown();
-      InputSettings?.OnShutdown();
-    }
 
     public void Apply(bool autoFinish = true, bool gotoMenu = true)
     {
@@ -127,6 +118,24 @@ namespace MToolKit.Runtime.Settings
       IsDirty.Value = isDirty;
     }
 
+    private void InitializeModules(InputRebinderService inputRebinderService)
+    {
+      log.ForMethod().Debug("Initializing settings modules");
+      AudioSettings = new AudioSettingsModule(this);
+      GraphicsSettings = new GraphicsSettingsModule(this);
+      GameSettings = new GameSettingsModule(this);
+      InputSettings = new InputSettingsModule(inputRebinderService, this);
+    }
+
+    private void ShutdownModules()
+    {
+      log.ForMethod().Debug("Shutting down settings modules");
+      AudioSettings?.OnShutdown();
+      GraphicsSettings?.OnShutdown();
+      GameSettings?.OnShutdown();
+      InputSettings?.OnShutdown();
+    }
+
     private void GoToMainMenu()
     {
       log.ForMethod().Debug("Going to main menu");
@@ -144,7 +153,7 @@ namespace MToolKit.Runtime.Settings
       {
         try
         {
-          var globalBackPublisher = GlobalInstaller.Instance.Container.Resolve<IPublisher<BackRequestMessage>>();
+          IPublisher<BackRequestMessage> globalBackPublisher = GlobalInstaller.Instance.Container.Resolve<IPublisher<BackRequestMessage>>();
           if (globalBackPublisher != null)
           {
             log.ForMethod().Verbose("Using globalBackPublisher");
@@ -159,7 +168,7 @@ namespace MToolKit.Runtime.Settings
 
         try
         {
-          var globalQuitPublisher = GlobalInstaller.Instance.Container.Resolve<IPublisher<QuitRequestMessage>>();
+          IPublisher<QuitRequestMessage> globalQuitPublisher = GlobalInstaller.Instance.Container.Resolve<IPublisher<QuitRequestMessage>>();
           if (globalQuitPublisher != null)
           {
             log.ForMethod().Verbose("Using globalQuitPublisher");

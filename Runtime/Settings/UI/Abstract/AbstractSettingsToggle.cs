@@ -8,33 +8,31 @@ namespace MToolKit.Runtime.Settings.UI.Abstract
 {
   public abstract class AbstractSettingsToggle : AbstractSettingsElement, ISettingsToggle
   {
-    [SerializeField, Required] protected Toggle toggle;
-        
-    public Toggle Toggle => toggle;
-    public bool Value { get => toggle.isOn; set => UpdateToggleValue(value); }
-
-    public event Action<bool> OnValueChanged;
+    [SerializeField]
+    [Required]
+    protected Toggle toggle;
 
     protected virtual void OnEnable()
     {
       if (toggle != null)
-      {
         toggle.onValueChanged.AddListener(OnToggleValueChangedHandler);
-      }
     }
 
     protected virtual void OnDisable()
     {
       if (toggle != null)
-      {
         toggle.onValueChanged.RemoveListener(OnToggleValueChangedHandler);
-      }
     }
 
-    protected virtual void OnToggleValueChangedHandler(bool newValue)
+    public Toggle Toggle => toggle;
+
+    public bool Value
     {
-      OnValueChanged?.Invoke(newValue);
+      get => toggle.isOn;
+      set => UpdateToggleValue(value);
     }
+
+    public event Action<bool> OnValueChanged;
 
     public virtual void ConfigureToggle(string toggleName, bool initialState)
     {
@@ -47,6 +45,11 @@ namespace MToolKit.Runtime.Settings.UI.Abstract
       if (toggle.isOn == newValue)
         return;
       toggle.isOn = newValue;
+    }
+
+    protected virtual void OnToggleValueChangedHandler(bool newValue)
+    {
+      OnValueChanged?.Invoke(newValue);
     }
   }
 }

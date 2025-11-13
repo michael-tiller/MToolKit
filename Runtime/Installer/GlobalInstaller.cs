@@ -570,7 +570,7 @@ namespace MToolKit.Runtime.Installer
         SettingsPlugin => SettingsPluginInstance,
         ErrorSystemPlugin => ErrorSystemPluginInstance,
         _ => null
-        };
+      };
     }
 
     /// <summary>
@@ -1259,7 +1259,7 @@ namespace MToolKit.Runtime.Installer
       {
         // Try to resolve the plugin type - if it succeeds and matches, it's registered
         object resolved = resolver.Resolve(plugin.GetType());
-        return resolved == plugin;
+        return (object)resolved == plugin;
       }
       catch (VContainerException)
       {

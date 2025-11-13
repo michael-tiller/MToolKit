@@ -1,41 +1,50 @@
 using System;
-using UnityEngine;
-using Serilog;
-using ILogger = Serilog.ILogger;
-using MToolKit.Runtime.Settings.UI;
-using Sirenix.OdinInspector;
-using MToolKit.Runtime.Settings.UI.Abstract;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Settings.Interfaces;
+using MToolKit.Runtime.Settings.UI;
+using MToolKit.Runtime.Settings.UI.Abstract;
+using Serilog;
+using Sirenix.OdinInspector;
+using UnityEngine;
 using VContainer;
+using ILogger = Serilog.ILogger;
+using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.Settings.Game
 {
-  public class GameSettingsInitializer : AbstractSettingsInitializer 
+  public class GameSettingsInitializer : AbstractSettingsInitializer
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<GameSettingsInitializer>().ForFeature("Settings.Game"));
-    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
-        [SerializeField, Required] private BoolBoundToggle autoSaveToggle;
-        [SerializeField, Required] private BoolBoundToggle analyticsEnabledToggle;
-        [Inject] private ISettingsSystem settingsController;
+    private static ILogger log => logLazy.Value ?? Logger.None;
 
-        public override UniTask ConfigureAsync()
-        {
-            if (settingsController?.GameSettings == null)
-            {
-                log.ForGameObject(gameObject).ForMethod().Warning("GameSettings are not available");
-                return UniTask.CompletedTask;
-            }
+    [SerializeField]
+    [Required]
+    private BoolBoundToggle autoSaveToggle;
 
-            autoSaveToggle.Bind(settingsController.GameSettings.AutoSave);
+    [SerializeField]
+    [Required]
+    private BoolBoundToggle analyticsEnabledToggle;
 
-            autoSaveToggle.Value = settingsController.GameSettings.AutoSave.Value;
+    [Inject]
+    private ISettingsSystem settingsController;
 
-            analyticsEnabledToggle.Bind(settingsController.GameSettings.AnalyticsEnabled);
+    public override UniTask ConfigureAsync()
+    {
+      if (settingsController?.GameSettings == null)
+      {
+        log.ForGameObject(gameObject).ForMethod().Warning("GameSettings are not available");
+        return UniTask.CompletedTask;
+      }
 
-            analyticsEnabledToggle.Value = settingsController.GameSettings.AnalyticsEnabled.Value;
+      autoSaveToggle.Bind(settingsController.GameSettings.AutoSave);
 
-            return UniTask.CompletedTask;
-        }
+      autoSaveToggle.Value = settingsController.GameSettings.AutoSave.Value;
+
+      analyticsEnabledToggle.Bind(settingsController.GameSettings.AnalyticsEnabled);
+
+      analyticsEnabledToggle.Value = settingsController.GameSettings.AnalyticsEnabled.Value;
+
+      return UniTask.CompletedTask;
     }
+  }
 }

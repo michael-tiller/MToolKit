@@ -7,6 +7,7 @@ using MToolKit.Runtime.Navigation.Views;
 using Serilog;
 using UnityEngine;
 using ILogger = Serilog.ILogger;
+using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.Navigation.Config
 {
@@ -14,10 +15,13 @@ namespace MToolKit.Runtime.Navigation.Config
   public class CanvasConfig
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<CanvasConfig>().ForFeature("Navigation.Config"));
-    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
-    [SerializeField] private View initialViewPrefab;
+    private static ILogger log => logLazy.Value ?? Logger.None;
 
-    [SerializeField] private List<ViewConfig> views = new();
+    [SerializeField]
+    private View initialViewPrefab;
+
+    [SerializeField]
+    private List<ViewConfig> views = new();
 
 
     public View InitialViewPrefab => initialViewPrefab;

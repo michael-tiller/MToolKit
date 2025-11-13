@@ -1,63 +1,62 @@
 using System;
 using System.Collections.Generic;
 using MToolKit.Runtime.Core.Abstractions;
-using MToolKit.Runtime.Settings.Interfaces;
+using MToolKit.Runtime.Input;
 using MToolKit.Runtime.Installer;
+using MToolKit.Runtime.Settings.Interfaces;
 using Serilog;
 using Sirenix.OdinInspector;
 using VContainer;
-using MToolKit.Runtime.Input;
 
 namespace MToolKit.Runtime.Settings
 {
   public class SettingsPlugin : DomainPlugin<SettingsSystem, ISettingsSystem>
   {
-    [ShowInInspector] [ReadOnly] private SettingsSystem SettingsSystem => GetService();
+    [ShowInInspector]
+    [ReadOnly]
+    private SettingsSystem settingsSystem => GetService();
 
     /// <summary>
-    /// Required services for dependency validation.
+    ///   Required services for dependency validation.
     /// </summary>
     public override IEnumerable<Type> RequiredServices => Array.Empty<Type>();
 
     /// <summary>
-    /// Optional services for dependency validation.
+    ///   Optional services for dependency validation.
     /// </summary>
     public override IEnumerable<Type> OptionalServices => Array.Empty<Type>();
 
     protected override SettingsSystem CreateService(IObjectResolver resolver)
     {
       log.ForGameObject(gameObject).ForMethod().Debug("Created SettingsSystem instance with HashCode: {0}", service?.GetHashCode() ?? 0);
-      
+
       // Create the InputRebinderService instance
-      var inputRebinderService = new InputRebinderService();
+      InputRebinderService inputRebinderService = new();
       return new SettingsSystem(inputRebinderService);
     }
 
     /// <summary>
-    /// Gets the service, ensuring it's properly resolved for this instance.
-    /// This ensures the Inspector shows the correct service even if this instance
-    /// wasn't properly initialized during the normal flow.
+    ///   Gets the service, ensuring it's properly resolved for this instance.
+    ///   This ensures the Inspector shows the correct service even if this instance
+    ///   wasn't properly initialized during the normal flow.
     /// </summary>
     private SettingsSystem GetService()
     {
       // If this instance has a service, return it
       if (service != null)
-      {
         return service;
-      }
 
       // Try to resolve the service from the container if this instance doesn't have one
       // This can happen if the scene instance wasn't properly initialized
       try
       {
         // Find the GlobalInstaller to get access to the container
-        var globalInstaller = FindFirstObjectByType<GlobalInstaller>();
+        GlobalInstaller globalInstaller = FindFirstObjectByType<GlobalInstaller>();
         if (globalInstaller != null)
         {
           // Try to resolve the service from the container
-          var resolver = globalInstaller.Container.Resolve<IObjectResolver>();
-          var resolvedService = resolver.Resolve<ISettingsSystem>() as SettingsSystem;
-          if (resolvedService != null)
+          IObjectResolver resolver = globalInstaller.Container.Resolve<IObjectResolver>();
+          if (resolver.Resolve<ISettingsSystem>() is SettingsSystem resolvedService)
           {
             // Cache it for future use
             service = resolvedService;

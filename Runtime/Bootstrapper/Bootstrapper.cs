@@ -491,16 +491,16 @@ namespace MToolKit.Runtime.Bootstrapper
       }
 
       // Wait for SlogLoader to initialize (non-UI dependency)
-      if (!SlogLoader.Initialized)
+      if (!SlogLoader.IsInitialized)
       {
         await UniTask.WaitUntil(() =>
         {
           // Only check for FlushSlogOnQuit if SlogLoader is not yet initialized
-          if (SlogLoader.Initialized)
+          if (SlogLoader.IsInitialized)
             return true;
 
           FlushSlogOnQuit flushObject = FindFirstObjectByType<FlushSlogOnQuit>();
-          return flushObject != null && SlogLoader.Initialized;
+          return flushObject != null && SlogLoader.IsInitialized;
         });
 
         log.ForMethod().Verbose("Slog initialized successfully");

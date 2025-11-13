@@ -12,18 +12,19 @@ using TMPro;
 using UnityEngine;
 using VContainer;
 using ILogger = Serilog.ILogger;
+using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.Navigation.Views
 {
-
   public class InterstitialAlertView : View
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<InterstitialAlertView>().ForFeature("Navigation.Views"));
-    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
+    private static ILogger log => logLazy.Value ?? Logger.None;
 
     private CancellationTokenSource cts;
 
-    [SerializeField, Required]
+    [SerializeField]
+    [Required]
     private TextMeshProUGUI messageText;
 
     [Inject]
@@ -37,13 +38,9 @@ namespace MToolKit.Runtime.Navigation.Views
     {
       log.ForGameObject(gameObject).ForMethod().Debug("Setting message: {0}", message);
       if (message.IsNullOrWhitespace())
-      {
         GlobalAsyncMessageBroker.Publish(new BackRequestMessage(Canvas));
-      }
       else
-      {
         messageText.SetText(message);
-      }
     }
 
     private void OnEnable()
@@ -66,11 +63,8 @@ namespace MToolKit.Runtime.Navigation.Views
       log.ForGameObject(gameObject).ForMethod().Verbose("Subscribing to events");
       await token.WaitUntilCanceled();
     }
-    
+
     // Override Hide to prevent destruction during async operations
-    public override void Hide()
-    {
-    }
-  
+    public override void Hide() { }
   }
 }

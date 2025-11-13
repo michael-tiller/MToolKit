@@ -1,12 +1,9 @@
-
 namespace Serilog
 {
   public class MethodEnricher : ScalarValueEnricher
   {
-    private const string MethodPropertyName = "method";
+    private const string METHOD_PROPERTY_NAME = "method";
 
-    public MethodEnricher(string methodName) : base(MethodPropertyName, methodName)
-    {
-    }
+    public MethodEnricher(string methodName) : base(METHOD_PROPERTY_NAME, methodName) { }
   }
 }

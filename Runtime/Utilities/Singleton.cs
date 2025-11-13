@@ -2,6 +2,7 @@ using System;
 using Serilog;
 using UnityEngine;
 using ILogger = Serilog.ILogger;
+using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.Utilities
 {
@@ -12,7 +13,6 @@ namespace MToolKit.Runtime.Utilities
   public abstract class Singleton<T> : MonoBehaviour where T : Singleton<T>
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<Singleton<T>>().ForFeature("Utility"));
-    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
 
     /// <summary>
     ///   Holds the Singleton instance.
@@ -22,7 +22,9 @@ namespace MToolKit.Runtime.Utilities
     /// <summary>
     ///   True if the application is quitting; used to prevent new instance creation.
     /// </summary>
-    protected static bool isApplicationQuitting;
+    private static bool isApplicationQuitting;
+
+    private static ILogger log => logLazy.Value ?? Logger.None;
 
     /// <summary>
     ///   Readonly property indicating whether we have a valid instance.
@@ -109,7 +111,7 @@ namespace MToolKit.Runtime.Utilities
           "Duplicate Singleton<{0}> found. Destroying new instance on '{1}'.",
           typeof(T).Name,
           gameObject.name
-        );
+          );
         Destroy(gameObject);
       }
     }

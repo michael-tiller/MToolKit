@@ -4,10 +4,10 @@ using MToolKit.Runtime.Persistence.Enums;
 
 namespace MToolKit.Runtime.Persistence.Interfaces
 {
-    public interface ISaveDomainController
-    {
-        ESaveDomain Domain { get; }
-        UniTask SaveAsync(CancellationToken ct = default);
-        UniTask LoadAsync(CancellationToken ct = default);
-    }
+  public interface ISaveDomainController
+  {
+    ESaveDomain Domain { get; }
+    UniTask SaveAsync(CancellationToken ct = default);
+    UniTask LoadAsync(CancellationToken ct = default);
+  }
 }

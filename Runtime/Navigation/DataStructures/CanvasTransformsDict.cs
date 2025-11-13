@@ -7,6 +7,6 @@ using UnityEngine;
 
 namespace MToolKit.Runtime.Navigation.DataStructures
 {
-    [Serializable]
-    public class CanvasTransformsDict : SerializableDictionary<ECanvasType, Transform> { }
+  [Serializable]
+  public class CanvasTransformsDict : SerializableDictionary<ECanvasType, Transform> { }
 }

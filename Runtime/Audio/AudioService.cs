@@ -30,8 +30,10 @@ namespace MToolKit.Runtime.Audio
 
     // Track which AssetReferences are currently being loaded to prevent duplicate loads
     private static readonly HashSet<string> activeLoads = new();
-    private readonly IRuntimeAssetService assetService;
+    private static ILogger log => logLazy.Value ?? Logger.None;
 
+
+    private readonly IRuntimeAssetService assetService;
     private readonly Transform audioRoot;
     private readonly AudioConfig config;
     private readonly Dictionary<AudioClip, float> lastPlayTimes = new();
@@ -53,8 +55,6 @@ namespace MToolKit.Runtime.Audio
 
       log.ForMethod(nameof(AudioService)).Debug("AudioService constructor called with asset service: {Type}", assetService?.GetType().Name ?? "NULL");
     }
-
-    private static ILogger log => logLazy.Value ?? Logger.None;
 
     #region IAudioService Members
 

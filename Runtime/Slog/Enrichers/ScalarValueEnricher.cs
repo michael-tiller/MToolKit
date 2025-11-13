@@ -6,14 +6,20 @@ namespace Serilog
 //https://stackoverflow.com/questions/65396561/serilog-access-original-object-in-logevent-that-was-passed-to-logging-statement
   public class ScalarValueEnricher : ILogEventEnricher
   {
-    private readonly LogEventProperty _prop;
+    private readonly LogEventProperty prop;
 
     public ScalarValueEnricher(string name, object value)
     {
-      _prop = new LogEventProperty(name, new ScalarValue(value));
+      prop = new LogEventProperty(name, new ScalarValue(value));
     }
 
-    public void Enrich(LogEvent evt, ILogEventPropertyFactory _) =>
-      evt.AddPropertyIfAbsent(_prop);
+    #region ILogEventEnricher Members
+
+    public void Enrich(LogEvent evt, ILogEventPropertyFactory _)
+    {
+      evt.AddPropertyIfAbsent(prop);
+    }
+
+    #endregion
   }
 }

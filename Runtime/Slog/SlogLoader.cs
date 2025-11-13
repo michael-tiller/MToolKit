@@ -5,7 +5,8 @@ namespace MToolKit.Runtime.Slog
   public static class SlogLoader
   {
     private static SlogConfig loggerConfig;
-    public static bool Initialized { get; private set; }
+
+    public static bool IsInitialized { get; private set; }
 
     /// <summary>
     ///   Load Serilog first thing
@@ -21,7 +22,7 @@ namespace MToolKit.Runtime.Slog
     /// </summary>
     private static void InitializeSerilog()
     {
-      if (Initialized)
+      if (IsInitialized)
         return;
 
       TryInitializeSerilog();
@@ -32,7 +33,7 @@ namespace MToolKit.Runtime.Slog
     /// </summary>
     private static void TryInitializeSerilog()
     {
-      if (Initialized)
+      if (IsInitialized)
         return;
 
       // Create the logger config
@@ -43,7 +44,7 @@ namespace MToolKit.Runtime.Slog
       if (flush == null)
         CreateFlushSlogOnQuit();
 
-      Initialized = true;
+      IsInitialized = true;
     }
 
     /// <summary>

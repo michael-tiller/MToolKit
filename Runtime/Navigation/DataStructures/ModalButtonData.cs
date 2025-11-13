@@ -1,18 +1,25 @@
-
-using MToolKit.Runtime.Settings.UI;
-using MToolKit.Runtime.Settings.Enums;
-using UnityEngine.Events;
 using System;
+using MToolKit.Runtime.Settings.Enums;
+using UnityEngine;
+using UnityEngine.Events;
 
 namespace MToolKit.Runtime.Navigation.DataStructures
 {
-
   [Serializable]
   public struct ModalButtonConfig
   {
-    public EModalButtonType type;
-    public string text;
-    public UnityAction action;
+    [SerializeField]
+    private EModalButtonType type;
+
+    [SerializeField]
+    private string text;
+
+    private UnityAction action;
+
+    public EModalButtonType Type => type;
+    public string Text => text;
+    // ReSharper disable once ConvertToAutoPropertyWithPrivateSetter
+    public UnityAction Action => action;
 
     public ModalButtonConfig(EModalButtonType type, string text, UnityAction action)
     {

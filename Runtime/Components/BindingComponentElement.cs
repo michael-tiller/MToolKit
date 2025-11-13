@@ -200,8 +200,8 @@ namespace MToolKit.Runtime.Components
         textComponent.text = displayString;
 
         // Try to get device layout and control path for icon display
-        string deviceLayoutName = default;
-        string controlPath = default;
+        string deviceLayoutName;
+        string controlPath;
         bindingComponent.Action.GetBindingDisplayString(slot.BindingIndex, out deviceLayoutName, out controlPath, DisplayStringOptions);
 
         // Update display with icons if available
@@ -247,6 +247,7 @@ namespace MToolKit.Runtime.Components
         slot = bindingComponent.Slots.FirstOrDefault(s => !s.IsGamepad);
       else if (slotIndex == 1) // Secondary - prefer other non-gamepad
         slot = bindingComponent.Slots.Skip(1).FirstOrDefault(s => !s.IsGamepad);
+      // ReSharper disable once ConditionIsAlwaysTrueOrFalse
       else if (slotIndex == 2) // Gamepad
         slot = bindingComponent.Slots.FirstOrDefault(s => s.IsGamepad);
 

@@ -2,9 +2,6 @@
 {
   public interface ISettingsElement
   {
-
     string Name { get; }
-        
   }
-
 }
