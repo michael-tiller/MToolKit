@@ -489,9 +489,9 @@ namespace MToolKit.Runtime.Components
 
       // Use the appropriate icon set based on device layout
       if (InputSystem.IsFirstLayoutBasedOnSecond(deviceLayoutName, "DualShockGamepad"))
-        return GamepadIconsData.ps4Icons.GetSprite(controlPath);
+        return GamepadIconsData.Ps4Icons.GetSprite(controlPath);
       if (InputSystem.IsFirstLayoutBasedOnSecond(deviceLayoutName, "Gamepad"))
-        return GamepadIconsData.xboxIcons.GetSprite(controlPath);
+        return GamepadIconsData.XboxIcons.GetSprite(controlPath);
 
       return null;
     }

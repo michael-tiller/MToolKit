@@ -1,15 +1,15 @@
 using System;
 using Serilog;
-using ILogger = Serilog.ILogger;
+using Serilog.Core;
 using UnityEngine.Localization.Settings;
+using ILogger = Serilog.ILogger;
 
 namespace MToolKit.Runtime.Localization
 {
   public static class LocalizationHelper
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext(typeof(LocalizationHelper)).ForFeature("Localization"));
-    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
-
+    private static ILogger log => logLazy.Value ?? Logger.None;
 
     public static string GetLocalizedString(string key, params object[] args)
     {
@@ -17,6 +17,5 @@ namespace MToolKit.Runtime.Localization
       log.ForMethod().Verbose("Args: {0}", args);
       return LocalizationSettings.StringDatabase.GetLocalizedString("Default String Table", key, args);
     }
-
   }
 }

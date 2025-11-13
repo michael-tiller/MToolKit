@@ -1,34 +1,47 @@
 using System;
 using System.Threading;
+using Cysharp.Threading.Tasks;
+using MToolKit.Runtime.Utilities;
+using Serilog;
 using UnityEngine;
 using UnityEngine.Audio;
-using Serilog;
 using ILogger = Serilog.ILogger;
-using MToolKit.Runtime.Utilities;
-using Cysharp.Threading.Tasks;
+using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.Music
 {
   /// <summary>
-  /// Singleton music manager that handles continuous playback and smooth crossfading between audio sources.
-  /// Managed by the Bootstrap scene and persists for the application lifetime.
+  ///   Singleton music manager that handles continuous playback and smooth crossfading between audio sources.
+  ///   Managed by the Bootstrap scene and persists for the application lifetime.
   /// </summary>
   /// <remarks>
-  /// <para>This singleton provides persistent music playback across all scenes with seamless transitions.</para>
-  /// <para><strong>Lifespan:</strong> Instantiated in the Bootstrap scene and persists until application shutdown.</para>
-  /// <para><strong>Key Features:</strong></para>
-  /// <list type="bullet">
-  /// <item><description>Cross-scene playback continuity</description></item>
-  /// <item><description>UniTask-based crossfading for smooth transitions</description></item>
-  /// <item><description>Reactive volume settings integration via ISettingsSystem</description></item>
-  /// <item><description>State management (play, pause, resume, stop)</description></item>
-  /// <item><description>Dual AudioSource architecture for seamless crossfading</description></item>
-  /// </list>
+  ///   <para>This singleton provides persistent music playback across all scenes with seamless transitions.</para>
+  ///   <para><strong>Lifespan:</strong> Instantiated in the Bootstrap scene and persists until application shutdown.</para>
+  ///   <para>
+  ///     <strong>Key Features:</strong>
+  ///   </para>
+  ///   <list type="bullet">
+  ///     <item>
+  ///       <description>Cross-scene playback continuity</description>
+  ///     </item>
+  ///     <item>
+  ///       <description>UniTask-based crossfading for smooth transitions</description>
+  ///     </item>
+  ///     <item>
+  ///       <description>Reactive volume settings integration via ISettingsSystem</description>
+  ///     </item>
+  ///     <item>
+  ///       <description>State management (play, pause, resume, stop)</description>
+  ///     </item>
+  ///     <item>
+  ///       <description>Dual AudioSource architecture for seamless crossfading</description>
+  ///     </item>
+  ///   </list>
   /// </remarks>
-  public class MusicManager : Singleton<MusicManager> 
+  public class MusicManager : Singleton<MusicManager>
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<MusicManager>().ForFeature("Music"));
-    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
+    private static ILogger log => logLazy.Value ?? Logger.None;
 
     protected override bool selfCreate => true;
     protected override bool dontDestroyOnLoad => true;
@@ -40,24 +53,24 @@ namespace MToolKit.Runtime.Music
 
     [SerializeField]
     private AudioClip defaultMusicClip;
-    
+
     [SerializeField]
     private AudioMixerGroup musicMixerGroup;
 
     protected override void Awake()
     {
       base.Awake();
-      
+
       // Initialize audio sources
       audioSource1 = gameObject.AddComponent<AudioSource>();
       audioSource2 = gameObject.AddComponent<AudioSource>();
-      
+
       // Set default properties
       audioSource1.loop = true;
       audioSource2.loop = true;
       audioSource1.volume = 0f;
       audioSource2.volume = 0f;
-      
+
       // Assign mixer group if configured
       if (musicMixerGroup != null)
       {
@@ -69,7 +82,7 @@ namespace MToolKit.Runtime.Music
       {
         log.Warning("MusicManager has no mixer group assigned - volume controls may not work");
       }
-      
+
       currentSource = audioSource1;
       nextSource = audioSource2;
     }
@@ -93,14 +106,14 @@ namespace MToolKit.Runtime.Music
       currentCrossfadeCts?.Cancel();
       currentCrossfadeCts?.Dispose();
       currentCrossfadeCts = null;
-      
+
       base.OnDestroy();
     }
 
     #region Static Public API
 
     /// <summary>
-    /// Plays music with optional crossfade duration. Returns immediately.
+    ///   Plays music with optional crossfade duration. Returns immediately.
     /// </summary>
     /// <param name="audioClip">The audio clip to play</param>
     /// <param name="duration">Crossfade duration in seconds (default: 2f)</param>
@@ -110,35 +123,47 @@ namespace MToolKit.Runtime.Music
     }
 
     /// <summary>
-    /// Pauses the currently playing music.
+    ///   Pauses the currently playing music.
     /// </summary>
-    public static void Pause() => Instance.PauseInternal();
+    public static void Pause()
+    {
+      Instance.PauseInternal();
+    }
 
     /// <summary>
-    /// Resumes the paused music.
+    ///   Resumes the paused music.
     /// </summary>
-    public static void Resume() => Instance.ResumeInternal();
+    public static void Resume()
+    {
+      Instance.ResumeInternal();
+    }
 
     /// <summary>
-    /// Stops the currently playing music and cancels any ongoing crossfade.
+    ///   Stops the currently playing music and cancels any ongoing crossfade.
     /// </summary>
-    public static void Stop() => Instance.StopInternal();
+    public static void Stop()
+    {
+      Instance.StopInternal();
+    }
 
     /// <summary>
-    /// Gets whether music is currently playing.
+    ///   Gets whether music is currently playing.
     /// </summary>
-    public static bool IsPlaying => Instance != null && Instance.IsPlayingInternal;
+    public static bool IsPlaying => Instance != null && Instance.isPlayingInternal;
 
     /// <summary>
-    /// Gets whether music is currently paused.
+    ///   Gets whether music is currently paused.
     /// </summary>
-    public static bool IsPaused => Instance != null && Instance.IsPausedInternal;
+    public static bool IsPaused => Instance != null && Instance.isPausedInternal;
 
     #endregion
 
     #region Instance Implementation
 
-    private void PlayMusicInternal(AudioClip audioClip, float duration) => PlayMusicAsync(audioClip, duration).Forget();
+    private void PlayMusicInternal(AudioClip audioClip, float duration)
+    {
+      PlayMusicAsync(audioClip, duration).Forget();
+    }
 
     private async UniTask PlayMusicAsync(AudioClip audioClip, float duration)
     {
@@ -157,7 +182,7 @@ namespace MToolKit.Runtime.Music
 
       // Create new cancellation token source
       currentCrossfadeCts = new CancellationTokenSource();
-      var ct = currentCrossfadeCts.Token;
+      CancellationToken ct = currentCrossfadeCts.Token;
 
       // If nothing is playing, just play the new clip
       if (!currentSource.isPlaying && !nextSource.isPlaying)
@@ -171,7 +196,7 @@ namespace MToolKit.Runtime.Music
 
       // Determine which source is currently active
       AudioSource activeSource = currentSource.isPlaying ? currentSource : nextSource;
-      AudioSource inactiveSource = (activeSource == currentSource) ? nextSource : currentSource;
+      AudioSource inactiveSource = activeSource == currentSource ? nextSource : currentSource;
 
       // Setup the new clip on the inactive source
       inactiveSource.clip = audioClip;
@@ -184,9 +209,7 @@ namespace MToolKit.Runtime.Music
         await CrossfadeAsync(activeSource, inactiveSource, duration, ct);
 
         // Swap references for next time
-        var temp = currentSource;
-        currentSource = nextSource;
-        nextSource = temp;
+        (currentSource, nextSource) = (nextSource, currentSource);
       }
       catch (OperationCanceledException)
       {
@@ -233,9 +256,7 @@ namespace MToolKit.Runtime.Music
         log.Information("Music paused");
       }
       if (nextSource.isPlaying)
-      {
         nextSource.Pause();
-      }
     }
 
     private void ResumeInternal()
@@ -246,9 +267,7 @@ namespace MToolKit.Runtime.Music
         log.Information("Music resumed");
       }
       if (nextSource.time > 0f)
-      {
         nextSource.UnPause();
-      }
     }
 
     private void StopInternal()
@@ -262,20 +281,16 @@ namespace MToolKit.Runtime.Music
       }
 
       if (currentSource.isPlaying)
-      {
         currentSource.Stop();
-      }
       if (nextSource.isPlaying)
-      {
         nextSource.Stop();
-      }
-      
+
       log.Information("Music stopped");
     }
 
-    private bool IsPlayingInternal => currentSource.isPlaying || nextSource.isPlaying;
+    private bool isPlayingInternal => currentSource.isPlaying || nextSource.isPlaying;
 
-    private bool IsPausedInternal => (currentSource.time > 0f && !currentSource.isPlaying) || (nextSource.time > 0f && !nextSource.isPlaying);
+    private bool isPausedInternal => (currentSource.time > 0f && !currentSource.isPlaying) || (nextSource.time > 0f && !nextSource.isPlaying);
 
     #endregion
   }

@@ -1,23 +1,24 @@
 using System;
-using Serilog;
-using ILogger = Serilog.ILogger;
 using MToolKit.Runtime.ErrorSystem.Interface;
-using UnityEngine;
-using Sirenix.OdinInspector;
 using MToolKit.Runtime.ErrorSystem.Messages;
 using MToolKit.Runtime.ErrorSystem.Views;
+using Serilog;
+using Sirenix.OdinInspector;
+using UnityEngine;
+using ILogger = Serilog.ILogger;
+using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.ErrorSystem
 {
   /// <summary>
-  /// Service implementation for displaying error messages to the user.
-  /// Manages the error view and canvas group to show/hide error dialogs.
+  ///   Service implementation for displaying error messages to the user.
+  ///   Manages the error view and canvas group to show/hide error dialogs.
   /// </summary>
   [Serializable]
   public class ErrorService : IErrorService
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<ErrorService>().ForFeature("Core.ErrorSystem.Service"));
-    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
+    private static ILogger log => logLazy.Value ?? Logger.None;
 
     private readonly ErrorView errorView;
     private readonly CanvasGroup errorCanvasGroup;
@@ -25,7 +26,7 @@ namespace MToolKit.Runtime.ErrorSystem
 
     [ReadOnly]
     [ShowInInspector]
-    public ErrorRequestMessage? LastErrorMessage { get; private set; } = null;
+    public ErrorRequestMessage? LastErrorMessage { get; private set; }
 
     public ErrorService(ErrorView errorView, CanvasGroup errorCanvasGroup)
     {
@@ -39,15 +40,15 @@ namespace MToolKit.Runtime.ErrorSystem
     {
       // ErrorRequestMessage is a struct, so null checks are not needed
       log.Information("Showing error message: {Message}", message.Message);
-      
+
       // Defensive: Check for null references before using
       if (errorView == null || errorCanvasGroup == null)
       {
-        log.Error("ErrorService has null references - cannot display error. Missing view: {MissingView}, missing group: {MissingGroup}", 
+        log.Error("ErrorService has null references - cannot display error. Missing view: {MissingView}, missing group: {MissingGroup}",
           errorView == null, errorCanvasGroup == null);
         return;
       }
-      
+
       try
       {
         errorView.SetMessage(message.Message);
@@ -65,14 +66,14 @@ namespace MToolKit.Runtime.ErrorSystem
     public void HideError()
     {
       log.Debug("Hiding error message");
-      
+
       // Defensive: Check for null references
       if (errorView == null || errorCanvasGroup == null)
       {
         log.Warning("ErrorService has null references - cannot hide error");
         return;
       }
-      
+
       try
       {
         errorView.SetMessage(string.Empty);
@@ -88,4 +89,3 @@ namespace MToolKit.Runtime.ErrorSystem
     }
   }
 }
-

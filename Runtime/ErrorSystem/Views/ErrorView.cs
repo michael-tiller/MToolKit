@@ -11,18 +11,24 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using VContainer;
 using ILogger = Serilog.ILogger;
+using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.ErrorSystem.Views
 {
   public class ErrorView : View
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<ErrorView>().ForFeature("ErrorSystem.Views"));
-    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
+    private static ILogger log => logLazy.Value ?? Logger.None;
 
     private CancellationTokenSource cts;
 
-    [SerializeField][Required] private TextMeshProUGUI errorText;
-    [SerializeField][Required] private Button closeButton;
+    [SerializeField]
+    [Required]
+    private TextMeshProUGUI errorText;
+
+    [SerializeField]
+    [Required]
+    private Button closeButton;
 
     [Inject]
     public void Construct()

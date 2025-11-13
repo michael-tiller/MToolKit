@@ -1,33 +1,35 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using MessagePipe;
 using Serilog;
+using Serilog.Core;
 using VContainer;
 using ILogger = Serilog.ILogger;
 
 namespace MToolKit.Runtime.MessageBus
 {
   /// <summary>
-  /// Game message broker that handles game-specific communication within the game scene.
-  /// This broker is managed by GameInstaller and provides game-scoped message publishing/subscription.
+  ///   Game message broker that handles game-specific communication within the game scene.
+  ///   This broker is managed by GameInstaller and provides game-scoped message publishing/subscription.
   /// </summary>
   public static class GameMessageBroker
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext(typeof(GameMessageBroker)).ForFeature("MessageBus"));
-    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
+    private static ILogger log => logLazy.Value ?? Logger.None;
 
     private static IObjectResolver gameResolver;
-    private static bool isInitialized = false;
+    private static bool isInitialized;
 
     // Dictionary to store pending async requests with their expected response types
     // Using ConcurrentQueue to maintain FIFO order for proper request/response matching
     private static readonly ConcurrentDictionary<Type, ConcurrentQueue<(string RequestId, TaskCompletionSource<object> Tcs)>> pendingRequestsByType = new();
 
     /// <summary>
-    /// Initialize the game message broker with the resolver from GameInstaller
+    ///   Initialize the game message broker with the resolver from GameInstaller
     /// </summary>
     public static void Initialize(IObjectResolver resolver)
     {
@@ -43,7 +45,7 @@ namespace MToolKit.Runtime.MessageBus
     }
 
     /// <summary>
-    /// Get a publisher for the specified message type
+    ///   Get a publisher for the specified message type
     /// </summary>
     public static IPublisher<T> GetPublisher<T>()
     {
@@ -55,7 +57,7 @@ namespace MToolKit.Runtime.MessageBus
 
       try
       {
-        var publisher = gameResolver.Resolve<IPublisher<T>>();
+        IPublisher<T> publisher = gameResolver.Resolve<IPublisher<T>>();
         return publisher;
       }
       catch (Exception ex)
@@ -66,7 +68,7 @@ namespace MToolKit.Runtime.MessageBus
     }
 
     /// <summary>
-    /// Get a subscriber for the specified message type
+    ///   Get a subscriber for the specified message type
     /// </summary>
     public static ISubscriber<T> GetSubscriber<T>()
     {
@@ -90,13 +92,12 @@ namespace MToolKit.Runtime.MessageBus
     }
 
     /// <summary>
-    /// Publish a message using the game broker
+    ///   Publish a message using the game broker
     /// </summary>
     public static void Publish<T>(T message)
     {
-      var publisher = GetPublisher<T>();
+      IPublisher<T> publisher = GetPublisher<T>();
       if (publisher != null)
-      {
         try
         {
           publisher.Publish(message);
@@ -106,15 +107,12 @@ namespace MToolKit.Runtime.MessageBus
         {
           log.ForMethod().Fatal(ex, "Failed to publish {0} - publisher threw exception: {Exception}", typeof(T).Name, ex.Message);
         }
-      }
       else
-      {
         log.ForMethod().Warning("Failed to publish {0} - publisher not available", typeof(T).Name);
-      }
     }
 
     /// <summary>
-    /// Async request/response pattern for request/response message pairs
+    ///   Async request/response pattern for request/response message pairs
     /// </summary>
     public static async UniTask<TResponse> RequestAsync<TRequest, TResponse>(TRequest request, CancellationToken cancellationToken = default)
     {
@@ -128,40 +126,35 @@ namespace MToolKit.Runtime.MessageBus
       {
         // Create a unique request ID
         string requestId = Guid.NewGuid().ToString();
-        var tcs = new TaskCompletionSource<object>();
+        TaskCompletionSource<object> tcs = new();
 
         // Store the pending request with its expected response type
-        var responseType = typeof(TResponse);
-        var queue = pendingRequestsByType.GetOrAdd(responseType, _ => new ConcurrentQueue<(string RequestId, TaskCompletionSource<object> Tcs)>());
+        Type responseType = typeof(TResponse);
+        ConcurrentQueue<(string RequestId, TaskCompletionSource<object> Tcs)> queue = pendingRequestsByType.GetOrAdd(responseType,
+          _ => new ConcurrentQueue<(string RequestId, TaskCompletionSource<object> Tcs)>());
         queue.Enqueue((requestId, tcs));
 
         // Set up cancellation
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.Token.Register(() =>
         {
           // Remove the request from the queue if it's still pending
-          if (pendingRequestsByType.TryGetValue(responseType, out var queue))
+          if (pendingRequestsByType.TryGetValue(responseType, out ConcurrentQueue<(string RequestId, TaskCompletionSource<object> Tcs)> existingQueue))
           {
             // Create a new queue without the cancelled request
-            var newQueue = new ConcurrentQueue<(string RequestId, TaskCompletionSource<object> Tcs)>();
-            while (queue.TryDequeue(out var item))
-            {
+            ConcurrentQueue<(string RequestId, TaskCompletionSource<object> Tcs)> newQueue = new();
+            while (existingQueue.TryDequeue(out (string RequestId, TaskCompletionSource<object> Tcs) item))
               if (item.RequestId != requestId)
-              {
                 newQueue.Enqueue(item);
-              }
               else
-              {
                 item.Tcs.TrySetCanceled();
-              }
-            }
             // Replace the old queue with the new one
             pendingRequestsByType[responseType] = newQueue;
           }
         });
 
         // Publish the request
-        var publisher = GetPublisher<TRequest>();
+        IPublisher<TRequest> publisher = GetPublisher<TRequest>();
         if (publisher != null)
         {
           publisher.Publish(request);
@@ -174,14 +167,12 @@ namespace MToolKit.Runtime.MessageBus
         }
 
         // Wait for response
-        var result = await tcs.Task;
+        object result = await tcs.Task;
 
         // Clean up - the request should already be removed by CompleteRequest
 
         if (result is TResponse response)
-        {
           return response;
-        }
 
         log.ForMethod().Error("Response type mismatch for request {0}", typeof(TRequest).Name);
         return default;
@@ -199,32 +190,30 @@ namespace MToolKit.Runtime.MessageBus
     }
 
     /// <summary>
-    /// Complete a pending async request with a response
+    ///   Complete a pending async request with a response
     /// </summary>
     public static void CompleteRequest<TResponse>(TResponse response)
     {
-      var responseType = typeof(TResponse);
+      Type responseType = typeof(TResponse);
 
       // Get the queue for this response type
-      if (pendingRequestsByType.TryGetValue(responseType, out var queue))
-      {
+      if (pendingRequestsByType.TryGetValue(responseType, out ConcurrentQueue<(string RequestId, TaskCompletionSource<object> Tcs)> queue))
         // Try to dequeue the first pending request (FIFO order)
-        if (queue.TryDequeue(out var request))
+        if (queue.TryDequeue(out (string RequestId, TaskCompletionSource<object> Tcs) request))
         {
-          var (requestId, tcs) = request;
+          (string requestId, TaskCompletionSource<object> tcs) = request;
           if (tcs.TrySetResult(response))
           {
             log.ForMethod().Verbose("Completed async request with response {0} for request ID {1}", responseType.Name, requestId);
             return;
           }
         }
-      }
 
       log.ForMethod().Warning("No pending request found for response {0}", responseType.Name);
     }
 
     /// <summary>
-    /// Check if the game broker is available
+    ///   Check if the game broker is available
     /// </summary>
     public static bool IsAvailable()
     {
@@ -232,24 +221,22 @@ namespace MToolKit.Runtime.MessageBus
     }
 
     /// <summary>
-    /// Reset the game broker (useful for testing or scene transitions)
+    ///   Reset the game broker (useful for testing or scene transitions)
     /// </summary>
     public static void Reset()
     {
       gameResolver = null;
       isInitialized = false;
-      
+
       // Cancel all pending requests
-      foreach (var kvp in pendingRequestsByType)
+      foreach (KeyValuePair<Type, ConcurrentQueue<(string RequestId, TaskCompletionSource<object> Tcs)>> kvp in pendingRequestsByType)
       {
-        var queue = kvp.Value;
-        while (queue.TryDequeue(out var request))
-        {
+        ConcurrentQueue<(string RequestId, TaskCompletionSource<object> Tcs)> queue = kvp.Value;
+        while (queue.TryDequeue(out (string RequestId, TaskCompletionSource<object> Tcs) request))
           request.Tcs.TrySetCanceled();
-        }
       }
       pendingRequestsByType.Clear();
-      
+
       log.ForMethod().Verbose("GameMessageBroker reset");
     }
   }

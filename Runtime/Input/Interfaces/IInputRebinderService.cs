@@ -4,8 +4,8 @@ using UnityEngine.InputSystem;
 
 namespace MToolKit.Runtime.Input.Interfaces
 {
-public interface IInputRebinderService
-{
+  public interface IInputRebinderService
+  {
     Subject<string> OnBindingConflictDetected { get; }
     Subject<(InputAction action, int bindingIndex)> OnRebindingStarted { get; }
     Subject<(InputAction action, int bindingIndex, bool completed)> OnRebindingCompleted { get; }
@@ -22,5 +22,5 @@ public interface IInputRebinderService
     bool ResolveBindingConflict(InputAction conflictingAction, int conflictingBindingIndex);
     List<(InputAction action, int bindingIndex)> GetActionsUsingBindingPath(string bindingPath);
     IReadOnlyCollection<InputAction> RegisteredActions { get; }
-}
+  }
 }

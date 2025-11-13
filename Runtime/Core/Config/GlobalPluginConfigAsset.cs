@@ -6,8 +6,8 @@ using UnityEngine;
 namespace MToolKit.Runtime.Core.Config
 {
   /// <summary>
-  /// Configuration asset for global plugins that persist across all scenes.
-  /// These plugins are instantiated by GlobalInstaller and provide core services.
+  ///   Configuration asset for global plugins that persist across all scenes.
+  ///   These plugins are instantiated by GlobalInstaller and provide core services.
   /// </summary>
   [CreateAssetMenu(menuName = "_MTools/Core/GlobalPluginConfigAsset", fileName = "GlobalPluginConfig")]
   [InlineEditor]

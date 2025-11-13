@@ -4,68 +4,66 @@ using Serilog;
 using UnityEngine;
 using VContainer;
 using ILogger = Serilog.ILogger;
+using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.Core.Abstractions
 {
-    public abstract class AbstractGamePlugin : MonoBehaviour, IGamePlugin
+  public abstract class AbstractGamePlugin : MonoBehaviour, IGamePlugin
+  {
+    private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<AbstractGamePlugin>().ForFeature("Core.Abstractions"));
+    protected static ILogger log => logLazy.Value ?? Logger.None;
+
+    protected bool isShutdown;
+    protected bool isStarted;
+
+    public bool IsStarted => isStarted;
+    public bool IsShutdown => isShutdown;
+
+    /// <summary>
+    ///   Virtual Start method with lifecycle guard. Override in derived classes if needed.
+    /// </summary>
+    public virtual void Start()
     {
-        private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<AbstractGamePlugin>().ForFeature("Core.Abstractions"));
-        protected static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
+      if (isStarted)
+      {
+        log.ForGameObject(gameObject).ForMethod().Verbose("{0} already started, skipping.", GetType().Name);
+        return;
+      }
 
-        
-        protected bool isStarted = false;
-        protected bool isShutdown = false;
+      // Check if the object is still valid before accessing gameObject
+      if (this == null || gameObject == null)
+        throw new MissingReferenceException($"GameObject for {GetType().Name} has been destroyed");
 
-        public bool IsStarted => isStarted;
-        public bool IsShutdown => isShutdown;
-
-        public virtual void Register(IContainerBuilder builder) { }
-
-        /// <summary>
-        /// Virtual Start method with lifecycle guard. Override in derived classes if needed.
-        /// </summary>
-        public virtual void Start()
-        {
-            if (isStarted)
-            {
-                log.ForGameObject(gameObject).ForMethod(nameof(Start)).Verbose("{0} already started, skipping.", GetType().Name);
-                return;
-            }
-
-            // Check if the object is still valid before accessing gameObject
-            if (this == null || gameObject == null)
-            {
-                throw new MissingReferenceException($"GameObject for {GetType().Name} has been destroyed");
-            }
-
-            log.ForGameObject(gameObject).ForMethod(nameof(Start)).Verbose("{0} started", GetType().Name);
-            isStarted = true;
-        }
-
-        /// <summary>
-        /// Virtual Shutdown method with lifecycle guard. Override in derived classes if needed.
-        /// </summary>
-        public virtual void Shutdown()
-        {
-            // Always set isStarted to false, even if already shutdown
-            isStarted = false;
-
-            if (isShutdown)
-            {
-                log.ForMethod(nameof(Shutdown)).Verbose("{0} already shut down, skipping.", GetType().Name);
-                return;
-            }
-
-            // Check if the object is still valid before accessing gameObject
-            if (this == null || gameObject == null)
-            {
-                log.ForMethod(nameof(Shutdown)).Warning("{0} is null or destroyed during shutdown, skipping.", GetType().Name);
-                return;
-            }
-
-            log.ForGameObject(gameObject).ForMethod(nameof(Shutdown)).Verbose("Shutting down {0}", GetType().Name);
-            isShutdown = true;
-            log.ForGameObject(gameObject).ForMethod(nameof(Shutdown)).Debug("{0} shutdown completed", GetType().Name);
-        }
+      log.ForGameObject(gameObject).ForMethod().Verbose("{0} started", GetType().Name);
+      isStarted = true;
     }
+
+    public virtual void Register(IContainerBuilder builder) { }
+
+    /// <summary>
+    ///   Virtual Shutdown method with lifecycle guard. Override in derived classes if needed.
+    /// </summary>
+    public virtual void Shutdown()
+    {
+      // Always set isStarted to false, even if already shutdown
+      isStarted = false;
+
+      if (isShutdown)
+      {
+        log.ForMethod().Verbose("{0} already shut down, skipping.", GetType().Name);
+        return;
+      }
+
+      // Check if the object is still valid before accessing gameObject
+      if (this == null || gameObject == null)
+      {
+        log.ForMethod().Warning("{0} is null or destroyed during shutdown, skipping.", GetType().Name);
+        return;
+      }
+
+      log.ForGameObject(gameObject).ForMethod().Verbose("Shutting down {0}", GetType().Name);
+      isShutdown = true;
+      log.ForGameObject(gameObject).ForMethod().Debug("{0} shutdown completed", GetType().Name);
+    }
+  }
 }
