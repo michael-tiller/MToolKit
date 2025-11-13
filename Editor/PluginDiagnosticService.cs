@@ -198,16 +198,12 @@ namespace MToolKit.Runtime.Editor
           }
           catch
           {
-            return new Type[0];
+            return Type.EmptyTypes;
           }
         })
-        .Where(type =>
-        {
-          // Look for LifetimeScope subclasses that have an Instance property
-          return IsLifetimeScope(type) &&
-                 type.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static) != null &&
-                 !type.Name.Contains("Global"); // Exclude GlobalInstaller
-        })
+        .Where(type => IsLifetimeScope(type) &&
+                       type.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static) != null &&
+                       !type.Name.Contains("Global"))
         .ToArray();
 
       foreach (var installerType in lifetimeScopeTypes)
@@ -291,7 +287,7 @@ namespace MToolKit.Runtime.Editor
       try
       {
         // Check if plugin GameObject is active
-        if (plugin is MonoBehaviour mb && !mb.gameObject.activeInHierarchy)
+        if (plugin is MonoBehaviour{gameObject: {activeInHierarchy: false } })
         {
           return EPluginStatus.Stopped;
         }
