@@ -22,12 +22,12 @@ namespace MToolKit.Runtime.Utilities
     /// <summary>
     ///   True if the application is quitting; used to prevent new instance creation.
     /// </summary>
-    protected static bool applicationIsQuitting;
+    protected static bool isApplicationQuitting;
 
     /// <summary>
     ///   Readonly property indicating whether we have a valid instance.
     /// </summary>
-    public static bool HasInstance => instance != null && !applicationIsQuitting;
+    public static bool HasInstance => instance != null && !isApplicationQuitting;
 
     /// <summary>
     ///   Access point for the Singleton instance.
@@ -39,7 +39,7 @@ namespace MToolKit.Runtime.Utilities
       get
       {
         // Guard clause: if the application is quitting, don't create anything.
-        if (applicationIsQuitting)
+        if (isApplicationQuitting)
         {
           log.ForMethod(typeof(T).Name).Information("Singleton<{0}> requested after quit. Returning null.", typeof(T).Name);
           return null;
@@ -126,7 +126,7 @@ namespace MToolKit.Runtime.Utilities
     protected virtual void OnApplicationQuit()
     {
       log.ForGameObject(gameObject).ForMethod(typeof(T).Name).Verbose("{0}: {1}", typeof(T).Name, nameof(OnApplicationQuit));
-      applicationIsQuitting = true;
+      isApplicationQuitting = true;
     }
   }
 }

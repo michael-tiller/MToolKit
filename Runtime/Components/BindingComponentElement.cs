@@ -1,32 +1,37 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using MToolKit.Runtime.Input;
+using MToolKit.Runtime.Input.Config;
+using MToolKit.Runtime.Localization;
+using R3;
+using Serilog;
 using Sirenix.OdinInspector;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using Serilog;
 using ILogger = Serilog.ILogger;
-using MToolKit.Runtime.Input;
-using R3;
-using MToolKit.Runtime.Localization;
-using MToolKit.Runtime.Input.Config;
+using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.Components
 {
   /// <summary>
-  /// UI element for displaying and rebinding a single component of a composite binding
+  ///   UI element for displaying and rebinding a single component of a composite binding
   /// </summary>
   public class BindingComponentElement : MonoBehaviour
   {
+    private const string EMPTY_BINDING_DISPLAY = "-";
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<BindingComponentElement>().ForFeature("Components.BindingComponentElement"));
-    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
+    private static List<BindingComponentElement> bindingComponentElements;
+    private static ILogger log => logLazy.Value ?? Logger.None;
 
     [field: SerializeField]
     public InputBinding.DisplayStringOptions DisplayStringOptions { get; private set; } = InputBinding.DisplayStringOptions.DontUseShortDisplayNames;
 
-    [field: SerializeField] [Required]
+    [field: SerializeField]
+    [Required]
     public GamepadIconsData GamepadIconsData { get; private set; }
 
     [field: SerializeField]
@@ -36,9 +41,11 @@ namespace MToolKit.Runtime.Components
     [field: SerializeField]
     [Required]
     public Button ButtonPrimary { get; private set; }
+
     [field: SerializeField]
     [Required]
     public TextMeshProUGUI TextPrimary { get; private set; }
+
     [field: SerializeField]
     [Required]
     public Image IconPrimary { get; private set; }
@@ -46,9 +53,11 @@ namespace MToolKit.Runtime.Components
     [field: SerializeField]
     [Required]
     public Button ButtonSecondary { get; private set; }
+
     [field: SerializeField]
     [Required]
     public TextMeshProUGUI TextSecondary { get; private set; }
+
     [field: SerializeField]
     [Required]
     public Image IconSecondary { get; private set; }
@@ -56,12 +65,15 @@ namespace MToolKit.Runtime.Components
     [field: SerializeField]
     [Required]
     public Button ButtonGamepad { get; private set; }
+
     [field: SerializeField]
     [Required]
     public TextMeshProUGUI TextGamepad { get; private set; }
+
     [field: SerializeField]
     [Required]
     public Image IconGamepad { get; private set; }
+
     [field: SerializeField]
     public TextMeshProUGUI TextRebindingHint { get; private set; }
 
@@ -77,48 +89,9 @@ namespace MToolKit.Runtime.Components
     [field: SerializeField]
     public Color ConflictButtonColor { get; private set; } = Color.red;
 
-    public Subject<(BindingComponentElement element, int slotIndex, string newPath)> OnBindingChanged { get; } = new();
-    public Subject<(BindingComponentElement element, int slotIndex)> OnRebindingStarted { get; } = new();
-    public Subject<(BindingComponentElement element, int slotIndex, bool completed)> OnRebindingCompleted { get; } = new();
+    private CompositeBindingHelper.BindingComponent bindingComponent;
 
     private InputRebinderService rebinderService;
-    private CompositeBindingHelper.BindingComponent bindingComponent;
-    private static List<BindingComponentElement> s_BindingComponentElements;
-
-    public const string EMPTY_BINDING_DISPLAY = "-";
-
-    public void Initialize(CompositeBindingHelper.BindingComponent component, InputRebinderService rebinderService = null)
-    {
-      bindingComponent = component;
-      this.rebinderService = rebinderService;
-      RefreshDisplay();
-    }
-
-    public void Start()
-    {
-      ButtonPrimary.onClick.AddListener(() => StartRebinding(0));
-      ButtonSecondary.onClick.AddListener(() => StartRebinding(1));
-      ButtonGamepad.onClick.AddListener(() => StartRebinding(2));
-    }
-
-    protected void OnEnable()
-    {
-      if (s_BindingComponentElements == null)
-        s_BindingComponentElements = new List<BindingComponentElement>();
-      s_BindingComponentElements.Add(this);
-      if (s_BindingComponentElements.Count == 1)
-        InputSystem.onActionChange += OnActionChange;
-    }
-
-    protected void OnDisable()
-    {
-      s_BindingComponentElements.Remove(this);
-      if (s_BindingComponentElements.Count == 0)
-      {
-        s_BindingComponentElements = null;
-        InputSystem.onActionChange -= OnActionChange;
-      }
-    }
 
     // When the action system re-resolves bindings, we want to update our UI in response
     private static void OnActionChange(object obj, InputActionChange change)
@@ -126,14 +99,13 @@ namespace MToolKit.Runtime.Components
       if (change != InputActionChange.BoundControlsChanged)
         return;
 
-      var action = obj as InputAction;
-      var actionMap = action?.actionMap ?? obj as InputActionMap;
-      var actionAsset = actionMap?.asset ?? obj as InputActionAsset;
+      InputAction action = obj as InputAction;
+      InputActionMap actionMap = action?.actionMap ?? obj as InputActionMap;
+      InputActionAsset actionAsset = actionMap?.asset ?? obj as InputActionAsset;
 
-      for (var i = 0; i < s_BindingComponentElements.Count; ++i)
+      foreach (BindingComponentElement component in bindingComponentElements)
       {
-        var component = s_BindingComponentElements[i];
-        var referencedAction = component.bindingComponent?.Action;
+        InputAction referencedAction = component.bindingComponent?.Action;
         if (referencedAction == null)
           continue;
 
@@ -144,7 +116,50 @@ namespace MToolKit.Runtime.Components
       }
     }
 
-    public void RefreshDisplay()
+    public Subject<(BindingComponentElement element, int slotIndex, string newPath)> OnBindingChanged { get; } = new();
+    public Subject<(BindingComponentElement element, int slotIndex)> OnRebindingStarted { get; } = new();
+    public Subject<(BindingComponentElement element, int slotIndex, bool completed)> OnRebindingCompleted { get; } = new();
+
+    public void Start()
+    {
+      ButtonPrimary.onClick.AddListener(() => StartRebinding(0));
+      ButtonSecondary.onClick.AddListener(() => StartRebinding(1));
+      ButtonGamepad.onClick.AddListener(() => StartRebinding(2));
+    }
+
+    protected void OnEnable()
+    {
+      bindingComponentElements ??= new List<BindingComponentElement>();
+      bindingComponentElements.Add(this);
+      if (bindingComponentElements.Count == 1)
+        InputSystem.onActionChange += OnActionChange;
+    }
+
+    protected void OnDisable()
+    {
+      bindingComponentElements.Remove(this);
+      if (bindingComponentElements.Count == 0)
+      {
+        bindingComponentElements = null;
+        InputSystem.onActionChange -= OnActionChange;
+      }
+    }
+
+    private void OnDestroy()
+    {
+      OnBindingChanged?.Dispose();
+      OnRebindingStarted?.Dispose();
+      OnRebindingCompleted?.Dispose();
+    }
+
+    public void Initialize(CompositeBindingHelper.BindingComponent component, InputRebinderService rebinderService = null)
+    {
+      bindingComponent = component;
+      this.rebinderService = rebinderService;
+      RefreshDisplay();
+    }
+
+    private void RefreshDisplay()
     {
       if (bindingComponent?.Action == null) return;
 
@@ -152,9 +167,9 @@ namespace MToolKit.Runtime.Components
       TextComponentName.text = LocalizationHelper.GetLocalizedString(bindingComponent.DisplayName);
 
       // Update individual binding displays based on grouped slots
-      UpdateSlotDisplay(0, TextPrimary);   // Primary slot
+      UpdateSlotDisplay(0, TextPrimary); // Primary slot
       UpdateSlotDisplay(1, TextSecondary); // Secondary slot  
-      UpdateSlotDisplay(2, TextGamepad);   // Gamepad slot
+      UpdateSlotDisplay(2, TextGamepad); // Gamepad slot
     }
 
     private void UpdateSlotDisplay(int slotIndex, TextMeshProUGUI textComponent)
@@ -163,40 +178,32 @@ namespace MToolKit.Runtime.Components
 
       // Find the appropriate slot for this index
       CompositeBindingHelper.BindingSlot slot = null;
-      
+
       if (slotIndex < bindingComponent.Slots.Count)
       {
         // Try to find the right slot based on device type
         if (slotIndex == 0) // Primary - prefer keyboard/mouse
-        {
           slot = bindingComponent.Slots.FirstOrDefault(s => !s.IsGamepad);
-        }
         else if (slotIndex == 1) // Secondary - prefer other non-gamepad
-        {
           slot = bindingComponent.Slots.Skip(1).FirstOrDefault(s => !s.IsGamepad);
-        }
         else if (slotIndex == 2) // Gamepad
-        {
           slot = bindingComponent.Slots.FirstOrDefault(s => s.IsGamepad);
-        }
-        
+
         // Fallback to slot by index if not found by type
         if (slot == null && slotIndex < bindingComponent.Slots.Count)
-        {
           slot = bindingComponent.Slots[slotIndex];
-        }
       }
 
       if (slot != null)
       {
-        var displayString = bindingComponent.Action.GetBindingDisplayString(slot.BindingIndex, DisplayStringOptions);
+        string displayString = bindingComponent.Action.GetBindingDisplayString(slot.BindingIndex, DisplayStringOptions);
         textComponent.text = displayString;
-        
+
         // Try to get device layout and control path for icon display
-        var deviceLayoutName = default(string);
-        var controlPath = default(string);
+        string deviceLayoutName = default;
+        string controlPath = default;
         bindingComponent.Action.GetBindingDisplayString(slot.BindingIndex, out deviceLayoutName, out controlPath, DisplayStringOptions);
-        
+
         // Update display with icons if available
         UpdateBindingDisplayWithIcons(slotIndex, textComponent, deviceLayoutName, controlPath);
       }
@@ -204,11 +211,9 @@ namespace MToolKit.Runtime.Components
       {
         textComponent.text = EMPTY_BINDING_DISPLAY;
         // Hide any existing icons
-        var imageGO = textComponent.transform.parent.Find("ActionBindingIcon");
-        if (imageGO != null)
-        {
-          imageGO.gameObject.SetActive(false);
-        }
+        Transform iconTransform = textComponent.transform.parent.Find("ActionBindingIcon");
+        if (iconTransform != null)
+          iconTransform.gameObject.SetActive(false);
       }
     }
 
@@ -233,29 +238,21 @@ namespace MToolKit.Runtime.Components
         return;
       }
 
-      var action = bindingComponent.Action;
-      
+      InputAction action = bindingComponent.Action;
+
       // Find the appropriate slot for this index
       CompositeBindingHelper.BindingSlot slot = null;
-      
+
       if (slotIndex == 0) // Primary - prefer keyboard/mouse
-      {
         slot = bindingComponent.Slots.FirstOrDefault(s => !s.IsGamepad);
-      }
       else if (slotIndex == 1) // Secondary - prefer other non-gamepad
-      {
         slot = bindingComponent.Slots.Skip(1).FirstOrDefault(s => !s.IsGamepad);
-      }
       else if (slotIndex == 2) // Gamepad
-      {
         slot = bindingComponent.Slots.FirstOrDefault(s => s.IsGamepad);
-      }
-      
+
       // Fallback to slot by index if not found by type
       if (slot == null && slotIndex < bindingComponent.Slots.Count)
-      {
         slot = bindingComponent.Slots[slotIndex];
-      }
 
       // If no existing slot, create a new binding
       if (slot == null)
@@ -281,7 +278,7 @@ namespace MToolKit.Runtime.Components
       rebinderService.RegisterAction(action);
 
       // Find which slot this binding index corresponds to
-      var slotIndex = GetSlotIndexForBindingIndex(bindingIndex);
+      int slotIndex = GetSlotIndexForBindingIndex(bindingIndex);
 
       // Start interactive rebinding
       if (rebinderService.StartInteractiveRebinding(action, bindingIndex, new[] { "Mouse" }))
@@ -303,99 +300,82 @@ namespace MToolKit.Runtime.Components
     }
 
     /// <summary>
-    /// Get the slot index (0=Primary, 1=Secondary, 2=Gamepad) for a given binding index
+    ///   Get the slot index (0=Primary, 1=Secondary, 2=Gamepad) for a given binding index
     /// </summary>
     /// <param name="bindingIndex">The binding index to find</param>
     /// <returns>The slot index, or -1 if not found</returns>
     private int GetSlotIndexForBindingIndex(int bindingIndex)
     {
       for (int i = 0; i < bindingComponent.Slots.Count; i++)
-      {
         if (bindingComponent.Slots[i].BindingIndex == bindingIndex)
         {
           // Determine which UI slot this corresponds to
-          var slot = bindingComponent.Slots[i];
-          
+          CompositeBindingHelper.BindingSlot slot = bindingComponent.Slots[i];
+
           if (slot.IsGamepad)
             return 2; // Gamepad slot
-          
+
           // For non-gamepad slots, determine if it's primary or secondary
-          var nonGamepadSlots = bindingComponent.Slots.Where(s => !s.IsGamepad).OrderBy(s => s.BindingIndex).ToList();
-          var slotPosition = nonGamepadSlots.IndexOf(slot);
-          
+          List<CompositeBindingHelper.BindingSlot> nonGamepadSlots = bindingComponent.Slots.Where(s => !s.IsGamepad).OrderBy(s => s.BindingIndex).ToList();
+          int slotPosition = nonGamepadSlots.IndexOf(slot);
+
           if (slotPosition == 0)
             return 0; // Primary slot
-          else if (slotPosition == 1)
+          if (slotPosition == 1)
             return 1; // Secondary slot
-          else
-            return 0; // Default to primary for additional slots
+          return 0; // Default to primary for additional slots
         }
-      }
-      
+
       return -1; // Not found
     }
 
     /// <summary>
-    /// Remove currently applied binding overrides for all slots
+    ///   Remove currently applied binding overrides for all slots
     /// </summary>
     public void ResetToDefault()
     {
       if (bindingComponent?.Action == null) return;
 
-      var action = bindingComponent.Action;
+      InputAction action = bindingComponent.Action;
 
       // Reset all slots for this component
-      foreach (var slot in bindingComponent.Slots)
-      {
+      foreach (CompositeBindingHelper.BindingSlot slot in bindingComponent.Slots)
         if (slot.BindingIndex < action.bindings.Count)
-        {
           action.RemoveBindingOverride(slot.BindingIndex);
-        }
-      }
       RefreshDisplay();
     }
 
     /// <summary>
-    /// Remove currently applied binding overrides for a specific slot
+    ///   Remove currently applied binding overrides for a specific slot
     /// </summary>
     /// <param name="slotIndex">0=Primary, 1=Secondary, 2=Gamepad</param>
     public void ResetSlotToDefault(int slotIndex)
     {
       if (bindingComponent?.Action == null) return;
 
-      var action = bindingComponent.Action;
-      
+      InputAction action = bindingComponent.Action;
+
       // Find the appropriate slot for this index
       CompositeBindingHelper.BindingSlot slot = null;
-      
+
       if (slotIndex == 0) // Primary - prefer keyboard/mouse
-      {
         slot = bindingComponent.Slots.FirstOrDefault(s => !s.IsGamepad);
-      }
       else if (slotIndex == 1) // Secondary - prefer other non-gamepad
-      {
         slot = bindingComponent.Slots.Skip(1).FirstOrDefault(s => !s.IsGamepad);
-      }
       else if (slotIndex == 2) // Gamepad
-      {
         slot = bindingComponent.Slots.FirstOrDefault(s => s.IsGamepad);
-      }
-      
+
       // Fallback to slot by index if not found by type
       if (slot == null && slotIndex < bindingComponent.Slots.Count)
-      {
         slot = bindingComponent.Slots[slotIndex];
-      }
 
       if (slot != null && slot.BindingIndex < action.bindings.Count)
-      {
         action.RemoveBindingOverride(slot.BindingIndex);
-      }
       RefreshDisplay();
     }
 
     /// <summary>
-    /// Show or hide rebinding state UI
+    ///   Show or hide rebinding state UI
     /// </summary>
     /// <param name="isRebinding">Whether rebinding is in progress</param>
     /// <param name="slotIndex">The slot index being rebound (0=Primary, 1=Secondary, 2=Gamepad)</param>
@@ -406,24 +386,23 @@ namespace MToolKit.Runtime.Components
       {
         // Show rebinding overlay
         if (RebindingOverlay != null)
-        {
           RebindingOverlay.SetActive(true);
-        }
 
         // Update rebinding hint text
         if (TextRebindingHint != null)
         {
           TextRebindingHint.gameObject.SetActive(true);
 
-          var slotName = slotIndex switch
+          string slotName = slotIndex switch
           {
             0 => "Primary",
             1 => "Secondary",
             2 => "Gamepad",
             _ => "Unknown"
-          };
+            };
 
-          TextRebindingHint.text = $"{LocalizationHelper.GetLocalizedString("Press any key to rebind")} {bindingComponent.DisplayName} {LocalizationHelper.GetLocalizedString(slotName)} {LocalizationHelper.GetLocalizedString("slot")}...";
+          TextRebindingHint.text =
+            $"{LocalizationHelper.GetLocalizedString("Press any key to rebind")} {bindingComponent.DisplayName} {LocalizationHelper.GetLocalizedString(slotName)} {LocalizationHelper.GetLocalizedString("slot")}...";
         }
 
         // Highlight the button being rebound
@@ -438,15 +417,11 @@ namespace MToolKit.Runtime.Components
       {
         // Hide rebinding overlay
         if (RebindingOverlay != null)
-        {
           RebindingOverlay.SetActive(false);
-        }
 
         // Hide rebinding hint
         if (TextRebindingHint != null)
-        {
           TextRebindingHint.gameObject.SetActive(false);
-        }
 
         // Reset button highlights
         SetButtonHighlight(-1, false);
@@ -470,13 +445,13 @@ namespace MToolKit.Runtime.Components
     }
 
     /// <summary>
-    /// Set visual highlight on a specific button
+    ///   Set visual highlight on a specific button
     /// </summary>
     /// <param name="slotIndex">The slot index to highlight (-1 for none): 0=Primary, 1=Secondary, 2=Gamepad</param>
     /// <param name="highlight">Whether to highlight or reset</param>
     private void SetButtonHighlight(int slotIndex, bool highlight)
     {
-      var targetColor = highlight ? RebindingButtonColor : NormalButtonColor;
+      Color targetColor = highlight ? RebindingButtonColor : NormalButtonColor;
 
       switch (slotIndex)
       {
@@ -499,10 +474,10 @@ namespace MToolKit.Runtime.Components
     }
 
     /// <summary>
-    /// Hide conflict message after a delay
+    ///   Hide conflict message after a delay
     /// </summary>
     /// <param name="delay">Delay in seconds</param>
-    private System.Collections.IEnumerator HideConflictMessageAfterDelay(float delay)
+    private IEnumerator HideConflictMessageAfterDelay(float delay)
     {
       yield return new WaitForSeconds(delay);
       if (TextRebindingHint != null)
@@ -512,15 +487,8 @@ namespace MToolKit.Runtime.Components
       }
     }
 
-    private void OnDestroy()
-    {
-      OnBindingChanged?.Dispose();
-      OnRebindingStarted?.Dispose();
-      OnRebindingCompleted?.Dispose();
-    }
-
     /// <summary>
-    /// Update binding display with gamepad icons when available
+    ///   Update binding display with gamepad icons when available
     /// </summary>
     /// <param name="slotIndex">The slot index (0=Primary, 1=Secondary, 2=Gamepad)</param>
     /// <param name="textComponent">The text component to update</param>
@@ -537,13 +505,13 @@ namespace MToolKit.Runtime.Components
         1 => IconSecondary,
         2 => IconGamepad,
         _ => null
-      };
+        };
 
       if (iconComponent == null) return;
 
       // Try to get gamepad icon
-      var icon = GetGamepadIcon(deviceLayoutName, controlPath);
-      
+      Sprite icon = GetGamepadIcon(deviceLayoutName, controlPath);
+
       if (icon != null)
       {
         // Hide text and show icon
@@ -560,7 +528,7 @@ namespace MToolKit.Runtime.Components
     }
 
     /// <summary>
-    /// Get gamepad icon for a given device layout and control path
+    ///   Get gamepad icon for a given device layout and control path
     /// </summary>
     /// <param name="deviceLayoutName">The device layout name</param>
     /// <param name="controlPath">The control path</param>
@@ -573,11 +541,10 @@ namespace MToolKit.Runtime.Components
       // Use the appropriate icon set based on device layout
       if (InputSystem.IsFirstLayoutBasedOnSecond(deviceLayoutName, "DualShockGamepad"))
         return GamepadIconsData.ps4Icons.GetSprite(controlPath);
-      else if (InputSystem.IsFirstLayoutBasedOnSecond(deviceLayoutName, "Gamepad"))
+      if (InputSystem.IsFirstLayoutBasedOnSecond(deviceLayoutName, "Gamepad"))
         return GamepadIconsData.xboxIcons.GetSprite(controlPath);
 
       return null;
     }
-
   }
 }

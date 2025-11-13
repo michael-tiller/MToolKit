@@ -4,14 +4,13 @@ using Cysharp.Threading.Tasks;
 
 namespace MToolKit.Runtime.Analytics.Interfaces
 {
+  /// <summary>
+  ///   Interface for analytics backend.
+  /// </summary>
+  public interface IAnalyticsBackend
+  {
+    bool IsStarted { get; }
 
-/// <summary>
-/// Interface for analytics backend.
-/// </summary>
-public interface IAnalyticsBackend
-{
-    bool Started { get; }
-    
     UniTask InitializeAsync(CancellationToken ct);
     UniTask StartSessionAsync(CancellationToken ct);
     UniTask EndSessionAsync(CancellationToken ct);
@@ -28,5 +27,5 @@ public interface IAnalyticsBackend
     void TrackError(string message, string severity);
 
     UniTask FlushAsync(CancellationToken ct);
-}
+  }
 }

@@ -1,29 +1,27 @@
 using System;
 using MToolKit.Runtime.Utilities.SerializableDictionary;
-using UnityEngine;
 
-namespace MToolKit.Runtime.VisualGraphs
+namespace MToolKit.Runtime.VisualGraphs.Runtime.DTOs
 {
-    /// <summary>
-    /// Concrete implementation of SerializableDictionary for node parameters.
-    /// </summary>
-    [Serializable]
-    public sealed class NodeParametersDictionary : SerializableDictionary<string, object> { }
+  /// <summary>
+  ///   Concrete implementation of SerializableDictionary for node parameters.
+  /// </summary>
+  [Serializable]
+  public sealed class NodeParametersDictionary : SerializableDictionary<string, object> { }
 
-    /// <summary>
-    /// Serializable runtime node definition.
-    /// </summary>
-    [Serializable]
-    public sealed class RuntimeNodeDefinition
-    {
-        /// <summary>Unique stable node ID (from authoring GUID)</summary>
-        [SerializeField] public string NodeId;
+  /// <summary>
+  ///   Serializable runtime node definition.
+  /// </summary>
+  [Serializable]
+  public sealed class RuntimeNodeDefinition
+  {
+    /// <summary>Unique stable node ID (from authoring GUID)</summary>
+    public string NodeId;
 
-        /// <summary>Node type name (matches executor)</summary>
-        [SerializeField] public string NodeType;
+    /// <summary>Node type name (matches executor)</summary>
+    public string NodeType;
 
-        /// <summary>Extracted parameters from authoring node</summary>
-        [SerializeField] public NodeParametersDictionary Parameters = new();
-    }
+    /// <summary>Extracted parameters from authoring node</summary>
+    public NodeParametersDictionary Parameters = new();
+  }
 }
-

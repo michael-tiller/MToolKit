@@ -1,12 +1,11 @@
-namespace MToolKit.Runtime.VisualGraphs
+namespace MToolKit.Runtime.VisualGraphs.Runtime.Interfaces
 {
     /// <summary>
-    /// Interface for emitting events from graph executors.
+    ///   Interface for emitting events from graph executors.
     /// </summary>
     public interface IEventEmitter
-    {
-        /// <summary>Emit an event</summary>
-        void Emit(IEventMessage message);
-    }
+  {
+    /// <summary>Emit an event</summary>
+    void Emit(IEventMessage message);
+  }
 }
-

@@ -1,71 +1,50 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine.InputSystem;
 using Serilog;
+using Serilog.Core;
+using UnityEngine.InputSystem;
 using ILogger = Serilog.ILogger;
 
 namespace MToolKit.Runtime.Components
 {
   /// <summary>
-  /// Helper class for breaking down composite bindings into individual components
+  ///   Helper class for breaking down composite bindings into individual components
   /// </summary>
   public static class CompositeBindingHelper
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext(typeof(CompositeBindingHelper)).ForFeature("Components.CompositeBindingHelper"));
-    private static ILogger log => logLazy.Value ?? Serilog.Core.Logger.None;
+    private static ILogger log => logLazy.Value ?? Logger.None;
 
     /// <summary>
-    /// Represents a single component of a composite binding
-    /// </summary>
-    public class BindingComponent
-    {
-      public string Name { get; set; }
-      public string DisplayName { get; set; }
-      public InputAction Action { get; set; }
-      public List<BindingSlot> Slots { get; set; } = new List<BindingSlot>();
-    }
-
-    /// <summary>
-    /// Represents a single binding slot (Primary/Secondary/Gamepad)
-    /// </summary>
-    public class BindingSlot
-    {
-      public int BindingIndex { get; set; }
-      public InputBinding Binding { get; set; }
-      public string DeviceType { get; set; }
-      public bool IsGamepad { get; set; }
-    }
-
-    /// <summary>
-    /// Break down an action's bindings into grouped components by logical name
+    ///   Break down an action's bindings into grouped components by logical name
     /// </summary>
     /// <param name="action">The input action to analyze</param>
     /// <returns>List of binding components grouped by name</returns>
     public static List<BindingComponent> GetGroupedBindingComponents(InputAction action)
     {
-      var components = new List<BindingComponent>();
-      
+      List<BindingComponent> components = new();
+
       if (action == null) return components;
 
       // Group bindings by their logical name (the part before the colon)
-      var bindingGroups = new Dictionary<string, List<BindingSlot>>();
+      Dictionary<string, List<BindingSlot>> bindingGroups = new();
 
       for (int i = 0; i < action.bindings.Count; i++)
       {
-        var binding = action.bindings[i];
-        
+        InputBinding binding = action.bindings[i];
+
         // Skip composite bindings themselves, only process their parts
         if (binding.isComposite) continue;
 
         // Extract the logical name (e.g., "Up" from "Up: W [Keyboard]")
-        var logicalName = GetLogicalNameFromBinding(binding, action);
+        string logicalName = GetLogicalNameFromBinding(binding, action);
         if (string.IsNullOrEmpty(logicalName)) continue;
 
         // Determine device type and if it's a gamepad
-        var deviceType = GetDeviceTypeFromBinding(binding);
-        var isGamepad = IsGamepadBinding(binding);
+        string deviceType = GetDeviceTypeFromBinding(binding);
+        bool isGamepad = IsGamepadBinding(binding);
 
-        var slot = new BindingSlot
+        BindingSlot slot = new()
         {
           BindingIndex = i,
           Binding = binding,
@@ -74,19 +53,19 @@ namespace MToolKit.Runtime.Components
         };
 
         // Debug logging to help troubleshoot control scheme detection
-        log.Debug("Binding {Index}: Name='{Name}', Path='{Path}', Groups='{Groups}', DeviceType='{DeviceType}', IsGamepad={IsGamepad}", 
+        log.Debug("Binding {Index}: Name='{Name}', Path='{Path}', Groups='{Groups}', DeviceType='{DeviceType}', IsGamepad={IsGamepad}",
           i, logicalName, binding.path, binding.groups, deviceType, isGamepad);
 
         if (!bindingGroups.ContainsKey(logicalName))
           bindingGroups[logicalName] = new List<BindingSlot>();
-        
+
         bindingGroups[logicalName].Add(slot);
       }
 
       // Convert grouped bindings into components
-      foreach (var group in bindingGroups)
+      foreach (KeyValuePair<string, List<BindingSlot>> group in bindingGroups)
       {
-        var component = new BindingComponent
+        BindingComponent component = new()
         {
           Name = group.Key,
           DisplayName = GetDisplayNameForComponent(group.Key),
@@ -109,7 +88,7 @@ namespace MToolKit.Runtime.Components
     }
 
     /// <summary>
-    /// Extract the logical name from a binding (e.g., "Up" from "Up: W [Keyboard]")
+    ///   Extract the logical name from a binding (e.g., "Up" from "Up: W [Keyboard]")
     /// </summary>
     /// <param name="binding">The input binding</param>
     /// <param name="action">The input action this binding belongs to</param>
@@ -122,14 +101,12 @@ namespace MToolKit.Runtime.Components
 
       // For regular bindings, we need to determine the logical action name
       // This is tricky because we need to map individual bindings back to their logical action
-      
+
       // Check if this is a stick binding - exclude these from the list
-      var path = binding.path?.ToLower() ?? "";
+      string path = binding.path?.ToLower() ?? "";
       if (path.Contains("leftstick") || path.Contains("rightstick"))
-      {
         // Skip stick bindings - don't include them in the list
         return null;
-      }
 
       // For actions like Jump, Sprint, etc., we need to determine if this is a directional binding
       // or a general action binding
@@ -156,7 +133,7 @@ namespace MToolKit.Runtime.Components
       if (string.IsNullOrEmpty(path)) return binding.name;
 
       // If the path contains a colon, use the part before it
-      var colonIndex = path.IndexOf(':');
+      int colonIndex = path.IndexOf(':');
       if (colonIndex > 0)
         return path.Substring(0, colonIndex).Trim();
 
@@ -164,7 +141,7 @@ namespace MToolKit.Runtime.Components
     }
 
     /// <summary>
-    /// Determine the device type from a binding using control schemes
+    ///   Determine the device type from a binding using control schemes
     /// </summary>
     /// <param name="binding">The input binding</param>
     /// <returns>Device type string</returns>
@@ -173,10 +150,10 @@ namespace MToolKit.Runtime.Components
       // First check control schemes - this is the most reliable method
       if (!string.IsNullOrEmpty(binding.groups))
       {
-        var groups = binding.groups.Split(';');
-        foreach (var group in groups)
+        string[] groups = binding.groups.Split(';');
+        foreach (string group in groups)
         {
-          var trimmedGroup = group.Trim();
+          string trimmedGroup = group.Trim();
           if (trimmedGroup.Contains("Gamepad") || trimmedGroup.Contains("Xbox") || trimmedGroup.Contains("PS4") || trimmedGroup.Contains("PS5"))
             return "Gamepad";
           if (trimmedGroup.Contains("Keyboard") || trimmedGroup.Contains("Mouse"))
@@ -185,7 +162,7 @@ namespace MToolKit.Runtime.Components
       }
 
       // Fallback to path parsing if no control scheme info
-      var path = binding.path;
+      string path = binding.path;
       if (string.IsNullOrEmpty(path)) return "Unknown";
 
       // Check for common device types in the path
@@ -204,7 +181,7 @@ namespace MToolKit.Runtime.Components
     }
 
     /// <summary>
-    /// Check if a binding is for a gamepad device using control schemes
+    ///   Check if a binding is for a gamepad device using control schemes
     /// </summary>
     /// <param name="binding">The input binding</param>
     /// <returns>True if it's a gamepad binding</returns>
@@ -213,22 +190,22 @@ namespace MToolKit.Runtime.Components
       // First check control schemes - this is the most reliable method
       if (!string.IsNullOrEmpty(binding.groups))
       {
-        var groups = binding.groups.Split(';');
-        foreach (var group in groups)
+        string[] groups = binding.groups.Split(';');
+        foreach (string group in groups)
         {
-          var trimmedGroup = group.Trim();
+          string trimmedGroup = group.Trim();
           if (trimmedGroup.Contains("Gamepad") || trimmedGroup.Contains("Xbox") || trimmedGroup.Contains("PS4") || trimmedGroup.Contains("PS5"))
             return true;
         }
       }
 
       // Fallback to device type check
-      var deviceType = GetDeviceTypeFromBinding(binding);
+      string deviceType = GetDeviceTypeFromBinding(binding);
       return deviceType.Contains("Gamepad") || deviceType.Contains("Controller") || deviceType.Contains("Xbox") || deviceType.Contains("PS4") || deviceType.Contains("PS5");
     }
 
     /// <summary>
-    /// Get a user-friendly display name for a binding component
+    ///   Get a user-friendly display name for a binding component
     /// </summary>
     /// <param name="componentName">The internal component name</param>
     /// <returns>Display name</returns>
@@ -246,11 +223,11 @@ namespace MToolKit.Runtime.Components
         "trigger" => "Trigger",
         "grip" => "Grip",
         _ => componentName ?? "Unknown"
-      };
+        };
     }
 
     /// <summary>
-    /// Check if an action has bindings that should be grouped by logical name
+    ///   Check if an action has bindings that should be grouped by logical name
     /// </summary>
     /// <param name="action">The input action to check</param>
     /// <returns>True if the action has bindings that can be grouped</returns>
@@ -259,33 +236,58 @@ namespace MToolKit.Runtime.Components
       if (action == null) return false;
 
       // Check if there are any non-composite bindings that can be grouped
-      for (int i = 0; i < action.bindings.Count; i++)
-      {
-        var binding = action.bindings[i];
+      foreach (InputBinding binding in action.bindings)
         if (!binding.isComposite && !string.IsNullOrEmpty(GetLogicalNameFromBinding(binding, action)))
           return true;
-      }
 
       return false;
     }
 
     /// <summary>
-    /// Get control scheme names from an InputActionAsset for debugging
+    ///   Get control scheme names from an InputActionAsset for debugging
     /// </summary>
     /// <param name="actionAsset">The input action asset</param>
     /// <returns>List of control scheme names</returns>
     public static List<string> GetControlSchemeNames(InputActionAsset actionAsset)
     {
-      var schemes = new List<string>();
-      
+      List<string> schemes = new();
+
       if (actionAsset == null) return schemes;
 
-      foreach (var controlScheme in actionAsset.controlSchemes)
-      {
+      foreach (InputControlScheme controlScheme in actionAsset.controlSchemes)
         schemes.Add(controlScheme.name);
-      }
 
       return schemes;
     }
+
+    #region Nested type: BindingComponent
+
+    /// <summary>
+    ///   Represents a single component of a composite binding
+    /// </summary>
+    public class BindingComponent
+    {
+      public string Name { get; set; }
+      public string DisplayName { get; set; }
+      public InputAction Action { get; set; }
+      public List<BindingSlot> Slots { get; set; } = new();
+    }
+
+    #endregion
+
+    #region Nested type: BindingSlot
+
+    /// <summary>
+    ///   Represents a single binding slot (Primary/Secondary/Gamepad)
+    /// </summary>
+    public class BindingSlot
+    {
+      public int BindingIndex { get; set; }
+      public InputBinding Binding { get; set; }
+      public string DeviceType { get; set; }
+      public bool IsGamepad { get; set; }
+    }
+
+    #endregion
   }
 }

@@ -7,35 +7,66 @@ namespace MToolKit.Runtime.Components
 {
   public class TweenAnimatedButton : Button
   {
-    [Header("Button Settings")] [SerializeField]
+    [Header("Button Settings")]
+    [SerializeField]
     private Color normalButtonColor = Color.white;
 
-    [SerializeField] private Color highlightedButtonColor = Color.gray;
-    [SerializeField] private Color pressedButtonColor = Color.black;
-    [SerializeField] private Color selectedButtonColor = Color.black;
-    [SerializeField] private Color disabledButtonColor = Color.grey;
-    [SerializeField] private float tweenDuration = 0.2f;
+    [SerializeField]
+    private Color highlightedButtonColor = Color.gray;
 
-    [Header("Border Settings")] [SerializeField]
+    [SerializeField]
+    private Color pressedButtonColor = Color.black;
+
+    [SerializeField]
+    private Color selectedButtonColor = Color.black;
+
+    [SerializeField]
+    private Color disabledButtonColor = Color.grey;
+
+    [SerializeField]
+    private float tweenDuration = 0.2f;
+
+    [Header("Border Settings")]
+    [SerializeField]
     private Graphic border; // Image
 
-    [SerializeField] private Color normalBorderColor = Color.white;
-    [SerializeField] private Color highlightedBorderColor = Color.gray;
-    [SerializeField] private Color pressedBorderColor = Color.black;
-    [SerializeField] private Color selectedBorderColor = Color.black;
-    [SerializeField] private Color disabledBorderColor = Color.grey;
+    [SerializeField]
+    private Color normalBorderColor = Color.white;
 
-    [Header("Label Settings")] [SerializeField]
+    [SerializeField]
+    private Color highlightedBorderColor = Color.gray;
+
+    [SerializeField]
+    private Color pressedBorderColor = Color.black;
+
+    [SerializeField]
+    private Color selectedBorderColor = Color.black;
+
+    [SerializeField]
+    private Color disabledBorderColor = Color.grey;
+
+    [Header("Label Settings")]
+    [SerializeField]
     private Graphic label; // TMP_Text or Text
 
-    [SerializeField] private Color normalLabelColor = Color.black;
-    [SerializeField] private Color highlightedLabelColor = Color.black;
-    [SerializeField] private Color pressedLabelColor = Color.white;
-    [SerializeField] private Color selectedLabelColor = Color.white;
-    [SerializeField] private Color disabledLabelColor = Color.gray;
+    [SerializeField]
+    private Color normalLabelColor = Color.black;
+
+    [SerializeField]
+    private Color highlightedLabelColor = Color.black;
+
+    [SerializeField]
+    private Color pressedLabelColor = Color.white;
+
+    [SerializeField]
+    private Color selectedLabelColor = Color.white;
+
+    [SerializeField]
+    private Color disabledLabelColor = Color.gray;
+
+    private Tweener borderColorTween;
 
     private Tweener buttonColorTween;
-    private Tweener borderColorTween;
     private Tweener labelColorTween;
 
     protected override void Awake()
@@ -45,47 +76,55 @@ namespace MToolKit.Runtime.Components
         label = GetComponentInChildren<TMP_Text>() as Graphic ?? GetComponentInChildren<Text>();
     }
 
+    protected override void OnDestroy()
+    {
+      buttonColorTween?.Kill();
+      borderColorTween?.Kill();
+      labelColorTween?.Kill();
+      base.OnDestroy();
+    }
+
     protected override void DoStateTransition(SelectionState state, bool instant)
     {
       Color targetButtonColor;
-      Color targerBorderColor;
+      Color targetBorderColor;
       Color targetLabelColor;
 
       switch (state)
       {
         case SelectionState.Normal:
           targetButtonColor = normalButtonColor;
-          targerBorderColor = normalBorderColor;
+          targetBorderColor = normalBorderColor;
           targetLabelColor = normalLabelColor;
           break;
         case SelectionState.Highlighted:
           targetButtonColor = highlightedButtonColor;
-          targerBorderColor = highlightedBorderColor;
+          targetBorderColor = highlightedBorderColor;
           targetLabelColor = highlightedLabelColor;
           break;
         case SelectionState.Selected:
           targetButtonColor = selectedButtonColor;
-          targerBorderColor = selectedBorderColor;
+          targetBorderColor = selectedBorderColor;
           targetLabelColor = selectedLabelColor;
           break;
         case SelectionState.Pressed:
           targetButtonColor = pressedButtonColor;
-          targerBorderColor = pressedBorderColor;
+          targetBorderColor = pressedBorderColor;
           targetLabelColor = pressedLabelColor;
           break;
         case SelectionState.Disabled:
           targetButtonColor = disabledButtonColor;
-          targerBorderColor = disabledBorderColor;
+          targetBorderColor = disabledBorderColor;
           targetLabelColor = disabledLabelColor;
           break;
         default:
           targetButtonColor = normalButtonColor;
-          targerBorderColor = normalBorderColor;
+          targetBorderColor = normalBorderColor;
           targetLabelColor = normalLabelColor;
           break;
       }
 
-      if (targetGraphic != null)
+      if (targetGraphic is not null)
       {
         buttonColorTween?.Kill();
         if (instant)
@@ -97,31 +136,31 @@ namespace MToolKit.Runtime.Components
             tweenDuration,
             c =>
             {
-              if (targetGraphic != null)
+              if (targetGraphic is not null)
                 targetGraphic.color = c;
             }
-          ).SetUpdate(true);
+            ).SetUpdate(true);
       }
 
-      if (border != null)
+      if (border is not null)
       {
         borderColorTween?.Kill();
         if (instant)
-          border.color = targerBorderColor;
+          border.color = targetBorderColor;
         else
           borderColorTween = DOVirtual.Color(
             border.color,
-            targerBorderColor,
+            targetBorderColor,
             tweenDuration,
             c =>
             {
-              if (border != null)
+              if (border is not null)
                 border.color = c;
             }
-          ).SetUpdate(true);
+            ).SetUpdate(true);
       }
 
-      if (label != null)
+      if (label is not null)
       {
         labelColorTween?.Kill();
 
@@ -134,14 +173,10 @@ namespace MToolKit.Runtime.Components
               tmpText.color,
               targetLabelColor,
               tweenDuration,
-              c =>
-              {
-                if (tmpText != null)
-                  tmpText.color = c;
-              }
-            ).SetUpdate(true);
+              c => { tmpText.color = c; }
+              ).SetUpdate(true);
         }
-        else if (label is Graphic graphic)
+        else if (label is { } graphic)
         {
           if (instant)
             graphic.color = targetLabelColor;
@@ -155,17 +190,9 @@ namespace MToolKit.Runtime.Components
                 if (graphic != null)
                   graphic.color = c;
               }
-            ).SetUpdate(true);
+              ).SetUpdate(true);
         }
       }
-    }
-
-    protected override void OnDestroy()
-    {
-      buttonColorTween?.Kill();
-      borderColorTween?.Kill();
-      labelColorTween?.Kill();
-      base.OnDestroy();
     }
 
 #if UNITY_EDITOR

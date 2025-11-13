@@ -7,11 +7,12 @@ namespace MToolKit.Runtime.Components
   [RequireComponent(typeof(TextMeshProUGUI))]
   public class VersionLabel : MonoBehaviour
   {
-    [SerializeField, Required]
+    [SerializeField]
+    [Required]
     private TextMeshProUGUI label;
 
-
-    [SerializeField] private string prefix = "V";
+    [SerializeField]
+    private string prefix = "V";
 
     private void Reset()
     {

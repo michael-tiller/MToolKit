@@ -1,16 +1,14 @@
 using UnityEngine;
-using static UnityEngine.GameObject;
 
 namespace MToolKit.Runtime.Slog
 {
   public static class SlogLoader
   {
+    private static SlogConfig loggerConfig;
     public static bool Initialized { get; private set; }
 
-    private static SlogConfig loggerConfig;
-
     /// <summary>
-    /// Load Serilog first thing
+    ///   Load Serilog first thing
     /// </summary>
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void OnApplicationStart()
@@ -19,7 +17,7 @@ namespace MToolKit.Runtime.Slog
     }
 
     /// <summary>
-    /// Initializes the Serilog logger
+    ///   Initializes the Serilog logger
     /// </summary>
     private static void InitializeSerilog()
     {
@@ -30,7 +28,7 @@ namespace MToolKit.Runtime.Slog
     }
 
     /// <summary>
-    /// Only runs once, opens the Serilog config
+    ///   Only runs once, opens the Serilog config
     /// </summary>
     private static void TryInitializeSerilog()
     {
@@ -49,11 +47,11 @@ namespace MToolKit.Runtime.Slog
     }
 
     /// <summary>
-    /// Creates the flush object
+    ///   Creates the flush object
     /// </summary>
     private static void CreateFlushSlogOnQuit()
     {
-      GameObject flush = new GameObject("FlushSlogOnQuit");
+      GameObject flush = new("FlushSlogOnQuit");
       flush.AddComponent<FlushSlogOnQuit>();
     }
   }

@@ -1,72 +1,69 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using UnityEngine;
+using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 
-namespace MToolKit.Runtime.VisualGraphs
+namespace MToolKit.Runtime.VisualGraphs.Runtime.DTOs
 {
-    /// <summary>
-    /// Serializable runtime graph definition with lookup caches.
-    /// </summary>
-    [Serializable]
-    public sealed class RuntimeGraphDefinition : IRuntimeGraphDefinition
+  /// <summary>
+  ///   Serializable runtime graph definition with lookup caches.
+  /// </summary>
+  [Serializable]
+  public sealed class RuntimeGraphDefinition : IRuntimeGraphDefinition
+  {
+    public string GraphId;
+    public string GraphDomain;
+    public List<RuntimeSubscriptionDefinition> Subscriptions = new();
+    public List<RuntimeNodeDefinition> Nodes = new();
+    public List<RuntimeConnectionDefinition> Connections = new();
+    private Dictionary<string, List<RuntimeConnectionDefinition>> connectionsByFrom;
+
+    // Cached lookups (not serialized)
+    private Dictionary<string, RuntimeNodeDefinition> nodeById;
+
+    string IRuntimeGraphDefinition.GraphId => GraphId;
+    string IRuntimeGraphDefinition.GraphDomain => GraphDomain;
+    IReadOnlyList<RuntimeSubscriptionDefinition> IRuntimeGraphDefinition.Subscriptions => Subscriptions;
+    IReadOnlyList<RuntimeNodeDefinition> IRuntimeGraphDefinition.Nodes => Nodes;
+    IReadOnlyList<RuntimeConnectionDefinition> IRuntimeGraphDefinition.Connections => Connections;
+
+    public RuntimeNodeDefinition GetNodeById(string nodeId)
     {
-        [SerializeField] public string GraphId;
-        [SerializeField] public string GraphDomain;
-        [SerializeField] public List<RuntimeSubscriptionDefinition> Subscriptions = new();
-        [SerializeField] public List<RuntimeNodeDefinition> Nodes = new();
-        [SerializeField] public List<RuntimeConnectionDefinition> Connections = new();
-
-        // Cached lookups (not serialized)
-        private Dictionary<string, RuntimeNodeDefinition> _nodeById;
-        private Dictionary<string, List<RuntimeConnectionDefinition>> _connectionsByFrom;
-
-        string IRuntimeGraphDefinition.GraphId => GraphId;
-        string IRuntimeGraphDefinition.GraphDomain => GraphDomain;
-        IReadOnlyList<RuntimeSubscriptionDefinition> IRuntimeGraphDefinition.Subscriptions => Subscriptions;
-        IReadOnlyList<RuntimeNodeDefinition> IRuntimeGraphDefinition.Nodes => Nodes;
-        IReadOnlyList<RuntimeConnectionDefinition> IRuntimeGraphDefinition.Connections => Connections;
-
-        /// <summary>
-        /// Build or rebuild lookup caches for efficient queries.
-        /// Call this after deserialization or after modifying nodes/connections.
-        /// </summary>
-        public void BuildLookupCaches()
-        {
-            _nodeById = new Dictionary<string, RuntimeNodeDefinition>(Nodes.Count);
-            foreach (var n in Nodes)
-            {
-                if (!string.IsNullOrEmpty(n.NodeId))
-                    _nodeById[n.NodeId] = n;
-            }
-
-            _connectionsByFrom = new Dictionary<string, List<RuntimeConnectionDefinition>>();
-            foreach (var c in Connections)
-            {
-                if (string.IsNullOrEmpty(c.FromNodeId)) continue;
-                
-                if (!_connectionsByFrom.TryGetValue(c.FromNodeId, out var list))
-                {
-                    list = new List<RuntimeConnectionDefinition>();
-                    _connectionsByFrom[c.FromNodeId] = list;
-                }
-                list.Add(c);
-            }
-        }
-
-        public RuntimeNodeDefinition GetNodeById(string nodeId)
-        {
-            if (_nodeById == null) BuildLookupCaches();
-            return _nodeById != null && _nodeById.TryGetValue(nodeId, out var n) ? n : null;
-        }
-
-        public IEnumerable<RuntimeConnectionDefinition> GetConnectionsFrom(string nodeId)
-        {
-            if (_connectionsByFrom == null) BuildLookupCaches();
-            return _connectionsByFrom != null && _connectionsByFrom.TryGetValue(nodeId, out var list) 
-                ? list 
-                : Enumerable.Empty<RuntimeConnectionDefinition>();
-        }
+      if (nodeById == null) BuildLookupCaches();
+      return nodeById != null && nodeById.TryGetValue(nodeId, out var n) ? n : null;
     }
-}
 
+    public IEnumerable<RuntimeConnectionDefinition> GetConnectionsFrom(string nodeId)
+    {
+      if (connectionsByFrom == null) BuildLookupCaches();
+      return connectionsByFrom != null && connectionsByFrom.TryGetValue(nodeId, out var list)
+        ? list
+        : Enumerable.Empty<RuntimeConnectionDefinition>();
+    }
+
+    /// <summary>
+    ///   Build or rebuild lookup caches for efficient queries.
+    ///   Call this after deserialization or after modifying nodes/connections.
+    /// </summary>
+    public void BuildLookupCaches()
+    {
+      nodeById = new Dictionary<string, RuntimeNodeDefinition>(Nodes.Count);
+      foreach (var n in Nodes)
+        if (!string.IsNullOrEmpty(n.NodeId))
+          nodeById[n.NodeId] = n;
+
+      connectionsByFrom = new Dictionary<string, List<RuntimeConnectionDefinition>>();
+      foreach (var c in Connections)
+      {
+        if (string.IsNullOrEmpty(c.FromNodeId)) continue;
+
+        if (!connectionsByFrom.TryGetValue(c.FromNodeId, out var list))
+        {
+          list = new List<RuntimeConnectionDefinition>();
+          connectionsByFrom[c.FromNodeId] = list;
+        }
+        list.Add(c);
+      }
+    }
+  }
+}

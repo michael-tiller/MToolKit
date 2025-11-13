@@ -2,17 +2,18 @@ using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 
-/// <summary>
-/// Namespace for analytics service interfaces.
-/// </summary>
 namespace MToolKit.Runtime.Analytics.Interfaces
 {
+  /// <summary>
+  ///   Namespace for analytics service interfaces.
+  /// </summary>
+  internal sealed class NameSpaceDoc { }
 
-/// <summary>
-/// Interface for analytics service.
-/// </summary>
-public interface IAnalyticsService
-{
+  /// <summary>
+  ///   Interface for analytics service.
+  /// </summary>
+  public interface IAnalyticsService
+  {
     UniTask InitializeAsync(CancellationToken ct);
     UniTask StartSessionAsync(CancellationToken ct);
     UniTask EndSessionAsync(CancellationToken ct);
@@ -29,5 +30,5 @@ public interface IAnalyticsService
     void TrackError(string message, string severity = "warning"); // debug, info, warning, error, critical
 
     UniTask FlushAsync(CancellationToken ct);
-}
+  }
 }
