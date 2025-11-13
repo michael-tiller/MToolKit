@@ -9,29 +9,34 @@ MToolKit provides essential systems required for shipped game titles. It's a mod
 ## Modules
 
 ### Core System
-- **Core** - Dependency injection, plugin architecture, configuration
+- **Core** - Dependency injection, plugin architecture, build/env configuration (dev/stage/prod)
 - **MessageBus** - Decoupled message publishing/subscription
-- **Bootstrapper** - Game bootstrapping with dependency preloading
+- **Bootstrapper** - Scene bootstrapping with dependency preloading, timeout handling
 - **Installer** - DI registration and service configuration
 
 ### UI & Interaction
 - **Navigation** - View management, modals, subviews, canvas management
 - **Components** - Reusable UI components (buttons, inputs, spinners, etc.)
 - **Localization** - Multi-language support via Unity Localization
+- **Accessibility** - (In Progress) Screen reader support, high-contrast mode, scalable text
 
 ### Data & Persistence
-- **Persistence** - Save system with ES3 integration, profiles, cloud backup
-- **Settings** - Reactive settings system with UI binding
+- **Persistence** - Save system with ES3 integration, multiple slots, autosave, cloud backup
+- **Settings** - Reactive settings system with UI binding, volume control, graphics settings
+- **Save Migrations** - (Planned) Save data versioning for post-launch updates
 
 ### Media & Content
-- **Audio** - Audio playback service with mixer integration
-- **Music** - Cross-scene music playback with crossfading
-- **AssetLoader** - Addressables integration with parallel loading
+- **Audio** - Audio playback service with mixer integration, volume persistence
+- **Music** - Cross-scene music playback with crossfading, looping
+- **AssetLoader** - Addressables integration with parallel loading, lifecycle management, caching, dependency tracking
 
 ### Services
 - **Input** - Input abstraction with rebinding and device fallback
-- **Analytics** - GameAnalytics integration with event tracking
-- **ErrorSystem** - Global error handling with graceful degradation
+- **Analytics** - GameAnalytics integration with event tracking, revenue tracking
+- **ErrorSystem** - Global error handling with graceful degradation, diagnostics, analytics integration
+
+### Game Systems
+- **VisualGraphs** - Event-driven visual graph system for quests/dialogue with xNode authoring
 
 ### Infrastructure
 - **Slog** - Structured logging with Serilog
@@ -51,18 +56,35 @@ MToolKit provides essential systems required for shipped game titles. It's a mod
 - **MessagePipe** - Async messaging
 - **R3** - Reactive properties
 - **Serilog** - Structured logging
-- **ES3** - Save system
-- **DOTween Pro** - Animation
-- **Sirenix Odin Inspector** - Editor enhancements
+- **xNode** - Visual graph authoring
 - **Unity Input System** - Input handling
 - **Unity Addressables** - Asset loading
 - **Unity Localization** - Localization
 - **GameAnalytics** - Analytics
+- **DOTween Pro** - Animation
+- **Sirenix Odin Inspector** - Editor enhancements
+- **ES3** - Save system
 
 ## Current Status
 
-**Status**: 15/17 core systems complete (93%)
+**Status**: 15/18 core systems complete (84%)
 - ✅ Complete: 15 systems
-- 🚧 In Progress: 2 systems (Settings 95%, Accessibility)
-- ❌ Missing: 0 critical gaps
+- 🚧 In Progress: 3 systems (Settings 95%, Visual Graph Subsystem 87%, Accessibility)
+- 🔜 Planned (Post-Launch): Save Migrations (for post-launch updates with save structure changes)
+- ❌ Missing: 0 critical gaps for initial launch
+
+**Visual Graph Subsystem Details (87%):**
+- ✅ Runtime infrastructure complete (POCO, DI-aware, event-driven)
+- ✅ xNode authoring with stable GUIDs
+- ✅ O(1) event routing, state management
+- 🚧 TODO: R3 event bus integration, ES3 save integration, UI service interfaces
+
+## Foundation Systems Included
+
+✅ **Build/Environment Configuration** - Dev/stage/prod environment support with config overrides (IBuildEnvironment formalization in Phase 2)  
+✅ **Scene Management** - Bootstrapping with dependency preloading and timeout handling  
+✅ **Crash/Diagnostics** - Error handling with graceful degradation and analytics integration  
+🔧 **Deferred** - Time management (Unity's timeScale sufficient), Platform abstractions (Unity APIs sufficient)  
+🎯 **Phase 2 Planned** - Build environment formalization (eliminate static reads, DI-injected IBuildEnvironment)  
+🎯 **Phase 3 Planned** - Telemetry abstraction, Content versioning, Performance profiling
 
