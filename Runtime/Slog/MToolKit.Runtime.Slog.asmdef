@@ -1,22 +1,22 @@
 {
-  "name": "MToolKit.Runtime.Slog",
-  "rootNamespace": "",
-  "references": [
-    "GUID:f51ebe6a0ceec4240a699833d6309b23"
-  ],
-  "includePlatforms": [],
-  "excludePlatforms": [],
-  "allowUnsafeCode": false,
-  "overrideReferences": true,
-  "precompiledReferences": [
-    "Serilog.dll",
-    "Serilog.Sinks.Unity3D.dll",
-    "Serilog.Sinks.File.dll",
-    "Serilog.Formatting.Compact.dll",
-    "Serilog.Enrichers.GlobalLogContext.dll"
-  ],
-  "autoReferenced": true,
-  "defineConstraints": [],
-  "versionDefines": [],
-  "noEngineReferences": false
+    "name": "MToolKit.Runtime.Slog",
+    "rootNamespace": "MToolKit.Runtime.Slog",
+    "references": [
+        "GUID:f51ebe6a0ceec4240a699833d6309b23"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "Serilog.dll",
+        "Serilog.Sinks.Unity3D.dll",
+        "Serilog.Sinks.File.dll",
+        "Serilog.Formatting.Compact.dll",
+        "Serilog.Enrichers.GlobalLogContext.dll"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
 }

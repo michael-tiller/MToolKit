@@ -1,25 +1,25 @@
 {
-  "name": "MToolKit.Editor",
-  "rootNamespace": "",
-  "references": [
-    "GUID:391b5c9e709fd0e40a4f1df12ee7bb9c",
-    "GUID:682f1069baedf074d861fcc1e9c957cb",
-    "GUID:df1f34049e0e6a84994cae0eda81ce8e",
-    "GUID:f51ebe6a0ceec4240a699833d6309b23",
-    "GUID:f507f7af064857e4d8f65ddbbb8d9a87",
-    "GUID:ad968d605628d06499b62cdc30f11cf8",
-    "GUID:9e49d76f04098074a8129f5541d246f6",
-    "GUID:33327f3e9fd6acc46b7a8bde1b62449c",
-    "GUID:1cf07584d46d6254eb7a502b48e62f16",
-    "GUID:31ac342179e461743b8a89168656374d"
-  ],
-  "includePlatforms": [],
-  "excludePlatforms": [],
-  "allowUnsafeCode": false,
-  "overrideReferences": false,
-  "precompiledReferences": [],
-  "autoReferenced": true,
-  "defineConstraints": [],
-  "versionDefines": [],
-  "noEngineReferences": false
+    "name": "MToolKit.Editor",
+    "rootNamespace": "MToolKit.Editor",
+    "references": [
+        "GUID:391b5c9e709fd0e40a4f1df12ee7bb9c",
+        "GUID:682f1069baedf074d861fcc1e9c957cb",
+        "GUID:df1f34049e0e6a84994cae0eda81ce8e",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "GUID:f507f7af064857e4d8f65ddbbb8d9a87",
+        "GUID:ad968d605628d06499b62cdc30f11cf8",
+        "GUID:9e49d76f04098074a8129f5541d246f6",
+        "GUID:33327f3e9fd6acc46b7a8bde1b62449c",
+        "GUID:1cf07584d46d6254eb7a502b48e62f16",
+        "GUID:31ac342179e461743b8a89168656374d"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
 }

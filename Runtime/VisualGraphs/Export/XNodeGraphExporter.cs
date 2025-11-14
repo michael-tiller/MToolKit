@@ -11,6 +11,10 @@ using UnityEngine;
 using XNode;
 using Object = UnityEngine.Object;
 
+#if UNITY_ADDRESSABLES
+using UnityEngine.AddressableAssets;
+#endif
+
 namespace MToolKit.Runtime.VisualGraphs.Export
 {
   /// <summary>
@@ -179,11 +183,24 @@ namespace MToolKit.Runtime.VisualGraphs.Export
 
             var value = field.GetValue(node);
 
+#if UNITY_ADDRESSABLES
+            // Handle AssetReference types (they're NOT UnityEngine.Object)
+            if (value != null && value.GetType().IsSubclassOf(typeof(AssetReference)))
+            {
+              var assetRef = value as AssetReference;
+              dict[field.Name] = SerializableAssetReference.FromAssetReference(assetRef);
+            }
+            else
+#endif
             // Normalize UnityEngine.Object references
             if (value is Object unityObj)
+            {
               dict[field.Name] = NormalizeUnityObject(unityObj);
+            }
             else
+            {
               dict[field.Name] = value;
+            }
           }
           catch (Exception ex)
           {
@@ -200,15 +217,20 @@ namespace MToolKit.Runtime.VisualGraphs.Export
 
     /// <summary>
     ///   Normalize UnityEngine.Object references to IDs/keys/names for runtime serialization.
-    ///   Override or extend this method for project-specific addressable key extraction.
+    ///   Handles AssetReferences by extracting their GUID for proper addressable loading at runtime.
     /// </summary>
     private object NormalizeUnityObject(Object obj)
     {
       if (obj == null) return null;
 
-      // TODO: Add addressable key extraction if needed
-      // For now, use name as a simple identifier
-      return obj.name;
+      // For regular Unity objects, return the instance ID or name
+      // These would need to be scene references or resources
+      return new
+      {
+        Name = obj.name,
+        InstanceId = obj.GetInstanceID(),
+        Type = obj.GetType().Name
+      };
     }
   }
 
