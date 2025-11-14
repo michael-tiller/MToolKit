@@ -280,6 +280,74 @@ if (!string.IsNullOrEmpty(questDef.AddressableKey)) {
 
 ---
 
+## Phase 1.2: Save System Integration ✅ **COMPLETE**
+
+**Current:** Full save/load with quest state persistence working  
+**Target:** ✅ ACHIEVED - Production-ready save/load integration
+
+**What Was Built:**
+
+1. **`GraphStateSaveController : ISaveDomainController`** - Full save/load controller
+   - Implements `ISaveDomainController` with `ESaveDomain.Graphs`
+   - Saves all graph states via `IGraphRunner.ExportState()`
+   - Saves `QuestManager` state (active, completed, claimed quests)
+   - Loads quest state first, then graph states
+   - Handles late registration (save system loads before plugin initialization)
+
+2. **Quest State Persistence**
+   - `QuestManager.GetSaveData()` - Serializes quest state
+   - `QuestManager.RestoreSaveDataAsync()` - Restores quest state
+   - `QuestManager.FinalizeCompletedQuestRestoration()` - Marks completed quests after graph state restoration
+   - Proper ordering: Quest restoration → Graph state restoration → Quest finalization
+
+3. **Graph State Persistence**
+   - Filters out `ScriptableObject` references (can't be serialized by ES3)
+   - Uses domain-prefixed keys (`graphs_graph_states`, `graphs_quest_manager_state`)
+   - Waits for quest runners to be registered before restoring graph state
+   - Handles missing runners gracefully
+
+4. **Plugin Integration**
+   - Auto-registers `GraphStateSaveController` with `SaveSystemCoordinator`
+   - Handles late registration (manually triggers load if save system loaded first)
+   - Auto-start quest logic checks for existing quests (prevents duplicates)
+   - Proper cleanup on shutdown
+
+**Key Features:**
+- ✅ Saves all graph states (quest objective graphs, dialogue graphs, etc.)
+- ✅ Saves quest manager state (active, completed-unclaimed, claimed quests)
+- ✅ Restores quest state before graph state (ensures runners exist)
+- ✅ Waits for runners to be registered before restoring graph state
+- ✅ Handles completed quests correctly (restores state, then marks as completed)
+- ✅ Filters out non-serializable types (ScriptableObject references)
+- ✅ Handles late registration (save system loads before plugin)
+- ✅ Auto-start skips quests that are already active/completed/claimed
+
+**Files Created:**
+- ✅ `Runtime/VisualGraphs/Persistence/GraphStateSaveController.cs` - Full implementation (322 lines)
+
+**Files Modified:**
+- ✅ `Runtime/VisualGraphs/VisualGraphPlugin.cs` - Registers controller, handles late registration, auto-start checks
+- ✅ `Runtime/VisualGraphs/Quest/QuestManager.cs` - Added save/load methods, finalization method
+- ✅ `Runtime/VisualGraphs/Quest/IQuestManager.cs` - Added save/load interface methods
+- ✅ `Runtime/VisualGraphs/Runtime/GraphRunner.cs` - Filters ScriptableObject references in ExportState
+
+**Files Removed:**
+- ✅ `Runtime/VisualGraphs/Persistence/GraphStateSaveProvider.cs` - Replaced by GraphStateSaveController
+
+**Architecture:**
+- ✅ Uses `ESaveDomain.Graphs` domain for all graph-related save data
+- ✅ Domain-prefixed keys prevent conflicts with other save domains
+- ✅ Proper async/await throughout (no blocking operations)
+- ✅ Comprehensive logging at Information level for debugging
+
+**Testing:**
+- ✅ Verified quest state persists across game loads
+- ✅ Verified graph state (objective progress) persists correctly
+- ✅ Verified completed quests restore with correct completion percentage
+- ✅ Verified auto-start doesn't duplicate restored quests
+
+---
+
 ## Phase 1.3: MessagePipe Event Bus Integration ✅ **COMPLETE**
 
 **Current:** Full bidirectional plugin-to-plugin communication working  

@@ -590,7 +590,7 @@ if (state.TryGet<int>("questStage", out var stage))
 
 ### Save/Restore
 
-State is automatically saved/restored through the save system integration (Phase 1.2 - in progress). The framework provides `GraphStateSnapshot` for serialization.
+State is automatically saved/restored through the save system integration (Phase 1.2 - complete!). The framework provides `GraphStateSnapshot` for serialization.
 
 ## File Structure
 
@@ -659,7 +659,7 @@ VisualGraphs/
 - [x] Message data flow nodes ✅ (MessageFieldCheck, MessageFieldGet, MessageTypeCheck)
 - [x] Quest system ✅ (full lifecycle with QuestManager)
 - [x] Quest rewards pattern ✅ (message-based, game-agnostic)
-- [ ] Save system integration (Phase 1.2 - ISaveDomainController implementation)
+- [x] Save system integration (Phase 1.2 - complete!)
 - [ ] Dialogue UI service (Phase 3.1 - IDialogueUIService interface)
 - [ ] Test coverage (Phase 5 - target: 100%)
 
@@ -667,7 +667,6 @@ VisualGraphs/
 
 ### Known Issues
 
-- **Save System**: Graph state persistence not yet integrated with MToolKit save system (Phase 1.2)
 - **Dialogue UI**: Dialogue nodes have TODOs for `IDialogueUIService` (Phase 3.1)
 - **Test Coverage**: No automated tests yet (Phase 5)
 - **General Visual Scripting**: Core programming constructs (variables, math, logic) planned for Phase 9+
