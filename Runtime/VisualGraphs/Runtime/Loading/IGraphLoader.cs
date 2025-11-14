@@ -1,3 +1,4 @@
+#nullable enable
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
@@ -10,8 +11,8 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
   /// </summary>
   public interface IGraphLoader
   {
-    /// <summary>Load a graph by its ID (from registry), returns the initialized runner</summary>
-    UniTask<IGraphRunner> LoadGraphAsync(string graphId, CancellationToken ct = default);
+    /// <summary>Load a graph by its ID (from registry), returns the initialized runner. Returns null if quest-level graph is optional and not assigned.</summary>
+    UniTask<IGraphRunner?> LoadGraphAsync(string graphId, CancellationToken ct = default);
 
     /// <summary>Unload a graph and cleanup resources</summary>
     void UnloadGraph(string graphId);
@@ -20,7 +21,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
     bool IsLoaded(string graphId);
 
     /// <summary>Get a loaded graph runner by ID</summary>
-    IGraphRunner GetRunner(string graphId);
+    IGraphRunner? GetRunner(string graphId);
   }
 }
 

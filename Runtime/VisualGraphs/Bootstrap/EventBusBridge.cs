@@ -58,7 +58,7 @@ namespace MToolKit.Runtime.VisualGraphs.Bootstrap
 
       if (messageTypes.Count == 0)
       {
-        log.Warning("No graph subscriptions found - graphs may not receive MessagePipe events");
+        log.Debug("No graph subscriptions found - graphs may not receive MessagePipe events");
         return;
       }
 

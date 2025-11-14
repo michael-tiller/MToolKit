@@ -48,6 +48,53 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Definitions
       var hidden = Hidden ? " [Hidden]" : "";
       return $"{DisplayName} (0/{RequiredProgress}){optional}{hidden}";
     }
+
+#if UNITY_EDITOR
+    [BoxGroup("Graph")]
+    [Button("Create & Link Objective Graph", ButtonSizes.Medium)]
+    [GUIColor(0.3f, 0.8f, 0.3f)]
+    [ShowIf("@ObjectiveGraph == null")]
+    [Tooltip("Links to existing QuestGraphAsset if found, otherwise creates a new one in the same folder with '_Graph' suffix")]
+    private void CreateAndLinkObjectiveGraph()
+    {
+      var assetPath = UnityEditor.AssetDatabase.GetAssetPath(this);
+      if (string.IsNullOrEmpty(assetPath))
+      {
+        UnityEngine.Debug.LogError("Cannot create graph: Asset must be saved to disk first.");
+        return;
+      }
+
+      var folderPath = System.IO.Path.GetDirectoryName(assetPath).Replace('\\', '/');
+      var assetName = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+      var graphName = $"{assetName}_Graph";
+      var graphPath = $"{folderPath}/{graphName}.asset";
+
+      // Check if graph already exists - if so, just link it
+      var existingGraph = UnityEditor.AssetDatabase.LoadAssetAtPath<QuestGraphAsset>(graphPath);
+      if (existingGraph != null)
+      {
+        ObjectiveGraph = existingGraph;
+        UnityEditor.EditorUtility.SetDirty(this);
+        UnityEngine.Debug.Log($"Linked to existing objective graph: {graphPath}");
+        return;
+      }
+
+      // Create new graph asset
+      var graphAsset = ScriptableObject.CreateInstance<QuestGraphAsset>();
+      graphAsset.name = graphName;
+      graphAsset.Description = $"Objective graph for {DisplayName}";
+
+      UnityEditor.AssetDatabase.CreateAsset(graphAsset, graphPath);
+      UnityEditor.AssetDatabase.SaveAssets();
+      UnityEditor.AssetDatabase.Refresh();
+
+      // Link it
+      ObjectiveGraph = graphAsset;
+      UnityEditor.EditorUtility.SetDirty(this);
+
+      UnityEngine.Debug.Log($"Created and linked objective graph: {graphPath}");
+    }
+#endif
   }
 }
 

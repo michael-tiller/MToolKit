@@ -13,9 +13,9 @@
 **MessagePipe Integration: 100%** ✅ - Bidirectional pub/sub working (1.3 complete!)  
 **Message Data Flow: 100%** ✅ - Field checks, extraction, type branching (2.1 bonus!)  
 **Quest System: 100%** ✅ - Full lifecycle orchestration with Quest Manager (Phase 2.1 complete!)  
+**Quest Rewards: 100%** ✅ - Message-based reward pattern implemented and documented (Phase 2.3 complete!)  
 **Save System Integration: 0%** ⚠️ - Save/load controller not yet implemented (Phase 1.2)  
 **Quest Conditions: 0%** ⚠️ - Rearchitected as generic state system (game-agnostic approach)  
-**Quest Rewards: 0%** ⚠️ - Rearchitected as message-based pattern (game-agnostic approach)  
 **Test Coverage: 0%** ❌ - No tests written (target: 100%)
 
 ---
@@ -26,277 +26,13 @@
 
 ### 1.0 Core Architecture Fixes ✅ **COMPLETE**
 
-**Foundation is solid - ready for integration!**
-
-#### 1.0.1 Asset Reference System ✅ **COMPLETE**
-
-**Implementation:** Modern `AssetReference` approach (superior to meta GUID extraction)
-
-**What Was Built:**
-
-1. **`SerializableAssetReference`** - Runtime DTO storing GUID, AssetType, RuntimeKey
-2. **`IGraphAssetLoader` + `GraphAssetLoader`** - Addressables-based asset loading service
-3. **Export validation** - Validates AssetReferences at export time via `XNodeGraphExporter`
-4. **Runtime warnings** - Detects missing/invalid assets during parameter extraction
-
-**Key Files Created:**
-- `Runtime/DTOs/SerializableAssetReference.cs`
-- `Runtime/AssetLoading/IGraphAssetLoader.cs`
-- `Runtime/AssetLoading/GraphAssetLoader.cs`
-
-**Validation Features:**
-- ✅ Detects unassigned AssetReferences
-- ✅ Validates GUID exists via `RuntimeKeyIsValid()`
-- ✅ Checks assets are marked as Addressable
-- ✅ Throws `InvalidGraphException` on critical errors
-- ✅ Provides detailed error messages with node/field/GUID info
-
-**Usage in Nodes:**
-```csharp
-public class MyNode : VisualGraphNodeBase {
-    public AssetReferenceGameObject Prefab;  // Auto-validated & serialized
-    public AssetReferenceAudioClip Sound;
-}
-```
-
-**Why This Is Better Than Meta GUID Extraction:**
-- Type-safe (use `AssetReferenceGameObject`, `AssetReferenceAudioClip`, etc.)
-- No need to parse `.meta` files - GUIDs already in `AssetReference`
-- Native Addressables integration
-- Production-ready Unity pattern
-
----
-
-#### 1.0.2 Explicit Graph Subscriptions ✅ **COMPLETE** (Exceeded Spec!)
-
-**What Was Built:**
-
-```csharp
-// Type-based subscriptions (better than original string-based spec!)
-public class QuestGraphAsset : NodeGraph {
-    [BoxGroup("Event Subscriptions")]
-    [ValidateInput(nameof(ValidateSubscriptions))]
-    public List<MessageSubscription> Subscriptions = new();
-    
-    [Button("Auto-Populate from Entry Nodes")]
-    private void AutoPopulateSubscriptions() { }
-    
-    [Button("Validate Graph")]
-    private void ValidateGraph() { }
-}
-
-[Serializable]
-public class MessageSubscription {
-    public MessageTypeReference MessageType; // ✅ Type (not string!)
-    public bool Required;
-    public string DomainFilter; // Optional
-}
-```
-
-**Features Delivered:**
-- ✅ **Explicit graph-level subscriptions** - No inference from nodes
-- ✅ **Type-safe** - Uses `MessageTypeReference` with Odin dropdown (better than string-based spec)
-- ✅ **Real-time validation** - `[ValidateInput]` shows errors in inspector immediately
-- ✅ **One-click migration** - "Auto-Populate from Entry Nodes" button
-- ✅ **Manual validation** - "Validate Graph" button with dialog
-- ✅ **Entry nodes as entry points** - Deleted `IEventSubscribedNode`, nodes don't declare subscriptions
-- ✅ **Export from graph.Subscriptions** - Not inferred from nodes
-
-**Validation Checks:**
-- ✅ Required subscriptions must have matching entry nodes (compile-time via Odin)
-- ✅ Entry nodes without subscriptions show warnings (will never execute)
-- ✅ Invalid message types show errors
-- ✅ Domain filter matching validated
-
-**What We Built vs. Original Spec:**
-
-Original spec wanted string-based:
-```csharp
-public string eventType;  // ❌ Fragile, no validation
-```
-
-We built type-based:
-```csharp
-public MessageTypeReference MessageType; // ✅ Type-safe, compiler validated
-```
-
-**Additional Benefits:**
-- ✅ IntelliSense support (see all message types)
-- ✅ Find References works (see all graphs using a message)
-- ✅ Refactor support (rename updates everywhere)
-- ✅ Direct MessagePipe integration (no wrapper)
-
-**Files Modified:**
-- ✅ `Authoring/Graphs/QuestGraphAsset.cs` - Added type-based subscriptions with Odin validation
-- ✅ `Export/XNodeGraphExporter.cs` - Exports from graph.Subscriptions, not nodes
-- ✅ `Runtime/DTOs/RuntimeSubscriptionDefinition.cs` - Uses MessageTypeReference
-- ✅ Deleted `Authoring/IEventSubscribedNode.cs` - No longer needed
-
----
-
-#### 1.0.3 Per-Graph Execution Limits ✅ **COMPLETE**
-
-**What Was Built:**
-
-```csharp
-// Authoring (per-graph configuration)
-public class QuestGraphAsset : NodeGraph {
-    [BoxGroup("Performance")]
-    [Range(64, 4096)]
-    [InfoBox("Default: 1024. Increase for complex graphs.")]
-    public int MaxExecutionSteps = 1024;
-}
-
-// Runtime
-public class RuntimeGraphDefinition {
-    public int MaxExecutionSteps = 1024;
-}
-
-// GraphRunner uses it
-var maxSteps = Definition.MaxExecutionSteps;
-if (++steps > maxSteps) { break; }
-```
-
-**Features Delivered:**
-- ✅ Per-graph execution limits (Odin `[Range(64, 4096)]` slider)
-- ✅ Visible in authoring (Performance box group with InfoBox)
-- ✅ Exported to runtime definition
-- ✅ GraphRunner reads from definition
-- ✅ Applies to both QuestGraphAsset and DialogueGraphAsset
-- ✅ InfoBox explains purpose and default
-
-**Benefits:**
-- ✅ Simple graphs can use fewer steps (e.g., 128)
-- ✅ Complex graphs can use more (e.g., 2048)
-- ✅ Per-graph tuning for performance
-- ✅ Prevents infinite loops with configurable safety
-
-**Files Modified:**
-- ✅ `Authoring/Graphs/QuestGraphAsset.cs` - Added MaxExecutionSteps field
-- ✅ `Authoring/Graphs/DialogueGraphAsset.cs` - Added MaxExecutionSteps field
-- ✅ `Runtime/DTOs/RuntimeGraphDefinition.cs` - Added MaxExecutionSteps property
-- ✅ `Export/XNodeGraphExporter.cs` - Copies MaxExecutionSteps to runtime
-- ✅ `Runtime/GraphRunner.cs` - Uses definition.MaxExecutionSteps
-
-**Note:** Skipped global `VisualGraphConfig` for now - not needed since each graph has sensible defaults. Can add later if needed.
-
----
-
-#### 1.0.4 Addressables Loading Implementation ✅ **COMPLETE**
-
-**What Was Built:**
-
-```csharp
-// IGraphLoader service
-public interface IGraphLoader {
-    UniTask<IGraphRunner> LoadGraphAsync(string graphId, CancellationToken ct);
-    void UnloadGraph(string graphId);
-    bool IsLoaded(string graphId);
-}
-
-// Bootstrap with lazy loading support
-public class VisualGraphBootstrap : MonoBehaviour {
-    public bool LoadAllOnStartup = true; // Toggle eager/lazy loading
-    
-    public async UniTask<IGraphRunner> LoadGraphAsync(string graphId) {
-        return await graphLoader.LoadGraphAsync(graphId, cts.Token);
-    }
-    
-    public void UnloadGraph(string graphId) {
-        graphLoader.UnloadGraph(graphId);
-    }
-}
-
-// GraphLoader checks AddressableKey
-if (!string.IsNullOrEmpty(questDef.AddressableKey)) {
-    // Load via Addressables
-    var handle = Addressables.LoadAssetAsync<QuestGraphAsset>(questDef.AddressableKey);
-    graphAsset = await handle.ToUniTask(ct);
-    loadedHandles[questDef.QuestId] = handle; // Track for cleanup
-} else {
-    // Use direct reference
-    graphAsset = questDef.GraphAsset;
-}
-```
-
-**Features Delivered:**
-- ✅ **IGraphLoader service** - Async graph loading with cancellation support
-- ✅ **Addressables support** - Uses `QuestDefinition.AddressableKey` if present
-- ✅ **Fallback to direct refs** - Works with or without Addressables
-- ✅ **Lazy loading mode** - `LoadAllOnStartup` toggle in inspector
-- ✅ **Proper cleanup** - Unloads Addressables handles on graph unload
-- ✅ **Both graph types** - Works for Quest and Dialogue graphs
-- ✅ **Registered in DI** - `IGraphLoader` available via VContainer
-
-**Benefits:**
-- ✅ Dynamic loading - Load graphs only when needed
-- ✅ Memory efficient - Unload unused graphs
-- ✅ Hot updates - Graphs can be updated via Addressables
-- ✅ Flexible - Mix direct refs and Addressables
-
-**Files Created:**
-- ✅ `Runtime/Loading/IGraphLoader.cs` - Service interface
-- ✅ `Runtime/Loading/GraphLoader.cs` - Full implementation (220 lines)
-
-**Files Modified:**
-- ✅ `Bootstrap/VisualGraphBootstrap.cs` - Uses `IGraphLoader`, added LoadAllOnStartup toggle
-- ✅ `Installer/VisualGraphInstaller.cs` - Registers `IGraphLoader`
-- ✅ `Definitions/DialogueDefinition.cs` - Already had AddressableKey
-
-**Note:** Asset references in nodes (1.0.1) already handles loading assets referenced BY graphs. This handles loading the graph assets themselves!
+**See `CHANGELOG.md` for details.**
 
 ---
 
 ### 1.1 Plugin Architecture Integration ✅ **COMPLETE**
 
-**Current:** Full plugin lifecycle with proper initialization  
-**Target:** ✅ COMPLETED - Production-ready plugin with config system
-
-- [x] Create `VisualGraphPlugin : DomainPlugin<GraphEventRouter, IGraphEventRouter>`
-  - ✅ Implement plugin lifecycle (Setup → RuntimeInit → Tick → Shutdown)
-  - ✅ Move bootstrap logic from `VisualGraphBootstrapMB` to plugin
-  - ✅ Register with `PluginRegistry`
-  - ✅ Add dependency validation via `IDependencyDeclaration`
-  
-- [x] Create `IGraphEventRouter` interface
-  - ✅ Extract interface from `GraphEventRouter` concrete class
-  - ✅ Expose `RegisterRunner`, `RouteAsync`, `GetRunners`, `Clear`, `GetSubscribedMessageTypes`
-  - ✅ Update installer to register as interface
-
-- [x] Add `VisualGraphConfig` ScriptableObject
-  - ✅ `bool EnableVerboseLogging`
-  - ✅ `int MaxExecutionStepsPerGraph = 1024`
-  - ✅ `bool ValidateGraphsOnStartup = true`
-  - ✅ `bool AutoInitializeFromRegistry = true`
-  - ✅ `VisualGraphRegistry DefaultRegistry`
-  - ✅ `bool LoadAllOnStartup = true`
-  - ✅ `CreateAssetMenu` at `MToolKit/Visual Graphs/Config`
-
-**Files Created:**
-- ✅ `Runtime/VisualGraphs/VisualGraphPlugin.cs`
-- ✅ `Runtime/VisualGraphs/Runtime/Interfaces/IGraphEventRouter.cs`
-- ✅ `Runtime/VisualGraphs/Config/VisualGraphConfig.cs`
-
-**Files Modified:**
-- ✅ `Runtime/VisualGraphs/VisualGraphPlugin.cs` - Override Register() to handle all DI registration
-- ✅ `Runtime/VisualGraphs/Runtime/GraphEventRouter.cs` - Implements IGraphEventRouter
-- ✅ `Runtime/VisualGraphs/Definitions/VisualGraphRegistry.cs` - Updated documentation
-- ✅ `Runtime/VisualGraphs/README.md` - Updated to reflect plugin architecture
-
-**Files Removed:**
-- ✅ `Runtime/VisualGraphs/Bootstrap/VisualGraphBootstrap.cs` - Replaced by VisualGraphPlugin
-- ✅ `Runtime/VisualGraphs/Installer/VisualGraphInstaller.cs` - Functionality moved into plugin
-
-**Architecture:**
-- ✅ Plugin handles its own DI registration via `Register()` override
-- ✅ All services registered internally: GraphEventRouter, NodeExecutorRegistry, GraphLoader, EventEmitter, Executors
-- ✅ Config injected via `Construct()` and registered as instance
-- ✅ Plugin added to VisualGraphsPlugin.prefab and GlobalPluginConfigAsset
-
-**Public API:**
-- ✅ `VisualGraphPlugin.LoadGraphAsync(string graphId)` - Load graphs dynamically
-- ✅ `VisualGraphPlugin.UnloadGraph(string graphId)` - Unload graphs
-- ✅ `VisualGraphPlugin.IsGraphLoaded(string graphId)` - Check graph status
+**See `CHANGELOG.md` for details.**
 
 ---
 
@@ -339,234 +75,7 @@ if (!string.IsNullOrEmpty(questDef.AddressableKey)) {
 
 ### 1.3 MessagePipe Event Bus Integration ✅ **COMPLETE**
 
-**Current:** Full bidirectional plugin-to-plugin communication working  
-**Target:** ✅ ACHIEVED
-
-**What Was Built:**
-
-```csharp
-// SimpleEventEmitter - Publishes to MessagePipe
-public void Emit(IGameMessage message, string domain = null)
-{
-    // Uses reflection to call GlobalAsyncMessageBroker.Publish<T>() for concrete type
-    var publishMethod = typeof(GlobalAsyncMessageBroker)
-        .GetMethod(nameof(GlobalAsyncMessageBroker.Publish))
-        ?.MakeGenericMethod(message.GetType());
-    publishMethod.Invoke(null, new object[] { message });
-}
-
-// EventBusBridge - Subscribes from MessagePipe
-public void SubscribeToGraphMessages()
-{
-    // Gets all message types from router.GetSubscribedMessageTypes()
-    // For each type, uses reflection to call GlobalAsyncMessageBroker.GetSubscriber<T>()
-    // Subscribes with OnMessageReceivedGeneric<T>() handler
-    // Routes received messages to GraphEventRouter
-}
-```
-
-**Features Delivered:**
-- ✅ **Architecture** - Complete `IGameMessage` direct integration
-- ✅ **Type-based subscriptions** - Uses `MessageTypeReference` for compile-time safety
-- ✅ **O(1) routing** - `GraphEventRouter` routes by `(Type, domain)` tuples
-- ✅ **Bidirectional** - Graphs can publish AND subscribe via MessagePipe
-- ✅ **Dynamic subscription** - EventBusBridge auto-subscribes to types graphs care about
-- ✅ **Reflection-based** - Works with any `IGameMessage` type (no code generation)
-- ✅ **Uses existing messages** - Works with `SceneLoadedMessage`, `NavigationRequestMessage`, `ErrorRequestMessage`, etc.
-- ✅ **Proper cleanup** - Disposable subscriptions, cancellation tokens
-
-**How It Works:**
-1. **Graphs load** → `GraphLoader` exports definitions and registers runners with `GraphEventRouter`
-2. **Bootstrap calls** → `EventBusBridge.SubscribeToGraphMessages()` after all graphs load
-3. **Bridge subscribes** → Gets unique message types from router, subscribes to each via `GlobalAsyncMessageBroker`
-4. **Messages arrive** → MessagePipe → EventBusBridge → GraphEventRouter → IGraphRunner → Node executors
-5. **Graphs emit** → Node executor → `IEventEmitter` → `GlobalAsyncMessageBroker.Publish<T>()`
-
-**Setup Requirements:**
-- `EventBusBridge` MonoBehaviour must be in scene (e.g., on same GameObject as `VisualGraphBootstrap`)
-- `GlobalAsyncMessageBroker.Initialize()` must be called before graph system starts
-- Graphs must have explicit subscriptions defined in `QuestGraphAsset.Subscriptions` or `DialogueGraphAsset.Subscriptions`
-
-**Files Modified:**
-- ✅ `Installer/VisualGraphInstaller.cs` - SimpleEventEmitter now publishes to MessagePipe
-- ✅ `Bootstrap/EventBusBridge.cs` - Now subscribes to MessagePipe dynamically
-- ✅ `Bootstrap/VisualGraphBootstrap.cs` - Calls `SubscribeToGraphMessages()` after loading
-- ✅ `Runtime/GraphEventRouter.cs` - Added `GetSubscribedMessageTypes()` for bridge
-
-**Note:** Quest/Dialogue-specific message types (e.g., `QuestStageSetMessage`) will be defined later in Phase 2-3 when implementing those features. For now, the system works with existing `IGameMessage` types from other MToolKit subsystems!
-
-#### Plugin Communication Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      MessagePipe Event Bus                   │
-│         (Cross-plugin communication backbone)                │
-└─────────────────────────────────────────────────────────────┘
-         ▲              ▲              ▲              ▲
-         │              │              │              │
-    [Publish]      [Publish]      [Subscribe]    [Subscribe]
-         │              │              │              │
-         │              │              │              │
-    ┌────┴───┐    ┌────┴───┐    ┌────┴───┐    ┌────┴───┐
-    │ Quest  │    │Dialogue│    │ Player │    │   UI   │
-    │ Graph  │    │ Graph  │    │ Plugin │    │ Plugin │
-    └────────┘    └────────┘    └────────┘    └────────┘
-         │              │              │              │
-    [Subscribe]    [Subscribe]    [Publish]      [Publish]
-         │              │              │              │
-         ▼              ▼              ▼              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      MessagePipe Event Bus                   │
-└─────────────────────────────────────────────────────────────┘
-```
-
-#### Example Communication Flows
-
-**Quest → Player → UI:**
-```
-QuestGraph emits Quest.TaskComplete
-    ↓ (MessagePipe)
-PlayerPlugin subscribes → Updates player stats
-    ↓ (MessagePipe)
-UIPlugin subscribes → Updates quest tracker UI
-```
-
-**Player → Quest:**
-```
-PlayerPlugin emits Player.EnteredZone
-    ↓ (MessagePipe)
-QuestGraph subscribes → Advances quest stage
-    ↓ (MessagePipe)
-QuestGraph emits Quest.StageAdvanced
-    ↓ (MessagePipe)
-UIPlugin subscribes → Shows notification
-```
-
-**Combat → Quest → Inventory:**
-```
-CombatPlugin emits Enemy.Defeated
-    ↓ (MessagePipe)
-QuestGraph subscribes → Increments kill count (3/5)
-    ↓ (when 5/5 reached)
-QuestGraph emits Quest.TaskComplete
-    ↓ (MessagePipe)
-QuestGraph emits Quest.Complete
-    ↓ (MessagePipe)
-InventoryPlugin subscribes → Grants quest reward items
-PlayerPlugin subscribes → Grants experience points
-UIPlugin subscribes → Shows quest complete popup
-```
-
-#### Implementation Tasks
-
-- [ ] **Create graph-specific message types**
-  - `GraphEventMessage` - Base for all graph events
-  - `QuestStateChangedMessage` - Quest stage/task changes
-  - `QuestCompletedMessage` - Quest completion with rewards
-  - `DialogueStateChangedMessage` - Dialogue state
-  - `DialogueChoiceSelectedMessage` - Player choice with metadata
-  - `GraphExecutionEventMessage` - Debug/diagnostic events
-  - Register all brokers in installer
-
-- [ ] **Connect `EventBusBridgeMB` to R3** (Graphs RECEIVE from other plugins)
-  - Remove TODO, implement actual subscription
-  - Subscribe to `IPublisher<IEventMessage>` from MessagePipe
-  - Filter events by graph subscriptions
-  - Route matching events to `GraphEventRouter`
-  - Handle disposal properly on destroy
-
-- [ ] **Replace `SimpleEventEmitter`** (Graphs SEND to other plugins)
-  - Create `MessagePipeEventEmitter : IEventEmitter`
-  - Inject `IPublisher<GraphEventMessage>`
-  - Emit graph events to MessagePipe
-  - Other plugins subscribe to `ISubscriber<GraphEventMessage>`
-  - Support filtering by graph ID / domain
-
-- [ ] **Add R3 reactive observables for graph state**
-  - `ReactiveProperty<Dictionary<string, QuestState>> ActiveQuests`
-  - `ReactiveProperty<string> CurrentDialogueId`
-  - `Subject<QuestTaskProgress>` for task updates (0/5 → 1/5)
-  - Expose via `IGraphStateObserver` interface
-  - Other plugins can bind UI to these observables
-
-- [ ] **Create plugin communication examples**
-  - Example: PlayerPlugin + QuestGraph integration
-  - Example: CombatPlugin triggers quest objectives
-  - Example: InventoryPlugin checks quest requirements
-  - Example: DialogueGraph affects RelationshipPlugin
-  - Document message contracts between plugins
-
-#### Message Type Examples
-
-```csharp
-// Quest messages
-public sealed class QuestStateChangedMessage {
-    public string QuestId { get; set; }
-    public string StageKey { get; set; }
-    public int StageValue { get; set; }
-}
-
-public sealed class QuestTaskProgressMessage {
-    public string QuestId { get; set; }
-    public string TaskId { get; set; }
-    public int Current { get; set; }
-    public int Required { get; set; }
-}
-
-public sealed class QuestCompletedMessage {
-    public string QuestId { get; set; }
-    public List<QuestReward> Rewards { get; set; }
-    public DateTime CompletionTime { get; set; }
-}
-
-// Dialogue messages
-public sealed class DialogueStartedMessage {
-    public string DialogueId { get; set; }
-    public string NpcId { get; set; }
-}
-
-public sealed class DialogueChoiceSelectedMessage {
-    public string DialogueId { get; set; }
-    public string ChoiceId { get; set; }
-    public int ChoiceIndex { get; set; }
-    public Dictionary<string, object> Metadata { get; set; }
-}
-
-// Events other plugins emit that graphs listen for
-public sealed class PlayerEnteredZoneMessage {
-    public string ZoneId { get; set; }
-    public Vector3 Position { get; set; }
-}
-
-public sealed class EnemyDefeatedMessage {
-    public string EnemyId { get; set; }
-    public string EnemyType { get; set; }
-    public int ExperienceGranted { get; set; }
-}
-
-public sealed class ItemAcquiredMessage {
-    public string ItemId { get; set; }
-    public int Quantity { get; set; }
-    public string Source { get; set; } // "Loot", "Quest", "Craft", etc.
-}
-```
-
-**Files to Create:**
-- `Runtime/VisualGraphs/Messages/GraphEventMessage.cs`
-- `Runtime/VisualGraphs/Messages/QuestStateChangedMessage.cs`
-- `Runtime/VisualGraphs/Messages/QuestTaskProgressMessage.cs`
-- `Runtime/VisualGraphs/Messages/QuestCompletedMessage.cs`
-- `Runtime/VisualGraphs/Messages/DialogueStateChangedMessage.cs`
-- `Runtime/VisualGraphs/Messages/DialogueStartedMessage.cs`
-- `Runtime/VisualGraphs/Messages/DialogueChoiceSelectedMessage.cs`
-- `Runtime/VisualGraphs/Integration/MessagePipeEventEmitter.cs`
-- `Runtime/VisualGraphs/Interfaces/IGraphStateObserver.cs`
-- `Runtime/VisualGraphs/Examples/PluginCommunicationExamples.cs`
-
-**Files to Modify:**
-- `Bootstrap/EventBusBridgeMB.cs` - Implement subscription
-- `Installer/VisualGraphInstaller.cs` - Register real emitter, message brokers
-- `Runtime/VisualGraphs/VisualGraphPlugin.cs` - Register message brokers in Setup()
+**See `CHANGELOG.md` for details.**
 
 ---
 
@@ -574,186 +83,30 @@ public sealed class ItemAcquiredMessage {
 
 **Goal:** Add objective progress tracking, state management, and quest orchestration
 
-**Current Phase 2 Status: ~50% Complete**
-- 2.1 Quest Progress Tracking: ✅ **100% COMPLETE!**
+**Current Phase 2 Status:**
+- 2.1 Quest Progress Tracking: ✅ **COMPLETE** (see `CHANGELOG.md`)
 - 2.2 Quest Conditions: ⚠️ 0% (Rearchitected as Generic State System)
-- 2.3 Quest Rewards: ⚠️ 0% (Rearchitected as Message-Based Pattern)
-
-**Key Achievement:** Built a BETTER hierarchy than spec (GUID-based, three-tier, reusable objectives with graphs)
-
-**Major Enhancements Beyond Original Spec:**
-- ✅ GUID-based asset references (no string typo errors!)
-- ✅ Three-tier hierarchy (Campaign → Quest → Objective)
-- ✅ Reusable objectives with their own graphs
-- ✅ Message data flow system (field checks, extraction, type branching)
-- ✅ Desaturated node colors for better UX
-- ✅ Optional graphs at quest/campaign level (objectives ALWAYS have graphs)
-- ✅ **Quest Manager service with full lifecycle orchestration**
-- ✅ **Quest Database with auto-start integration**
-- ✅ **Complete progress event emission system**
-
-**Phase 2.1 Now Complete!**
-- ✅ Quest Manager Service - Full lifecycle orchestration (start/complete/claim/abandon)
-- ✅ Progress Event Messages - All lifecycle messages emitted
-- ✅ Quest Database - Simple campaign registry with auto-start
-
-**Next Steps:**
-→ Build generic state system (Phase 2.2 - enables conditions without game assumptions)
-→ Document reward message patterns (Phase 2.3 - already supported via existing nodes)
+- 2.3 Quest Rewards: ✅ **COMPLETE** (see `CHANGELOG.md`)
 
 ---
 
-### 2.1 Quest Progress Tracking System ✅ **100% COMPLETE!**
+### 2.1 Quest Progress Tracking System ✅ **COMPLETE**
 
-**Current:** ✅ Full three-tier hierarchy with GUID-based references + Quest Manager  
-**Target:** ✅ Track individual objective progress with "X/Y complete" display + lifecycle orchestration
-
-**What Was Actually Built (BETTER than spec!):**
-
-#### ✅ Data Structures (100% - BETTER THAN SPEC!)
-
-**Built: Three-Tier GUID-Based Hierarchy**
-- [x] ✅ `QuestObjective` (GuidScriptableObject) - Reusable objective assets
-- [x] ✅ `QuestDefinition` (GuidScriptableObject) - Contains objectives list
-- [x] ✅ `QuestCampaign` (GuidScriptableObject) - Contains quests list
-- [x] ✅ `QuestObjectiveProgress` - Runtime progress tracking (Current/Required/IsComplete/Percentage)
-
-**Why Better:** GUID-based references (no string typos!), reusable objectives, hierarchical organization
-
-#### ✅ Graph State Support (100%)
-- [x] ✅ `IGraphState` already supports nested data via generic `Set<T>` / `Get<T>`
-- [x] ✅ Progress stored as: `state.Set("objective_{guid}", QuestObjectiveProgress)`
-- [x] ✅ Query helpers in QuestDefinition: `GetObjectiveProgress()`, `GetCompletionPercentage()`, `IsComplete()`
-
-#### ✅ Quest Nodes (100%)
-- [x] ✅ `QuestObjectiveIncrementNode` - Increment objective progress by N
-- [x] ✅ `QuestObjectiveSetNode` - Set objective progress to exact value
-- [x] ✅ `QuestObjectiveCheckNode` - Branch if objective complete/incomplete
-- [x] ✅ `QuestAllObjectivesCompleteNode` - Branch if all required objectives done
-
-**Enhanced:** Nodes reference `QuestObjective` assets directly (GUID-safe!)
-
-#### ✅ Node Executors (100%)
-- [x] ✅ `QuestObjectiveIncrementNodeExecutor` - With debug logging
-- [x] ✅ `QuestObjectiveSetNodeExecutor`
-- [x] ✅ `QuestObjectiveCheckNodeExecutor` - Port-based branching
-- [x] ✅ `QuestAllObjectivesCompleteNodeExecutor`
-
-All registered with DI in `VisualGraphPlugin`
-
-#### ✅ Quest Definitions (100%)
-- [x] ✅ `QuestDefinition.Objectives: List<QuestObjective>` - References objective assets
-- [x] ✅ `QuestObjective.RequiredProgress` - Per-objective required count
-- [x] ✅ `QuestObjective.Optional` - Quest can complete without
-- [x] ✅ `QuestObjective.Hidden` - Revealed dynamically
-- [x] ✅ `QuestObjective.ObjectiveGraph` - Each objective owns its graph! (MAJOR ENHANCEMENT)
-
-**Architecture Decision:** Objectives are ACTIVE (have graphs), Quests/Campaigns are PASSIVE (optional graphs)
-
-#### ✅ Progress Events (100% - COMPLETE!)
-- [x] ✅ `QuestObjectiveProgressMessage` - Emitted by increment/set executors
-- [x] ✅ `QuestStartedMessage` - Emitted when quest starts
-- [x] ✅ `QuestCompletedMessage` - Emitted when quest completes
-- [x] ✅ `QuestClaimedMessage` - Emitted when quest rewards claimed
-- [x] ✅ `QuestAbandonedMessage` - Emitted when quest abandoned
-- [x] ✅ Event emission - All wired up with full context (quest GUID, objective definition, progress)
-
-**Files Created:**
-- ✅ `Runtime/VisualGraphs/Definitions/QuestObjective.cs` (GuidScriptableObject)
-- ✅ `Runtime/VisualGraphs/Definitions/QuestCampaign.cs` (GuidScriptableObject)
-- ✅ `Runtime/VisualGraphs/Quest/QuestObjectiveProgress.cs`
-- ✅ `Runtime/VisualGraphs/Authoring/Nodes/Quest/QuestObjectiveIncrementNode.cs`
-- ✅ `Runtime/VisualGraphs/Authoring/Nodes/Quest/QuestObjectiveSetNode.cs`
-- ✅ `Runtime/VisualGraphs/Authoring/Nodes/Quest/QuestObjectiveCheckNode.cs`
-- ✅ `Runtime/VisualGraphs/Authoring/Nodes/Quest/QuestAllObjectivesCompleteNode.cs`
-- ✅ `Runtime/VisualGraphs/Executors/QuestObjectiveIncrementNodeExecutor.cs`
-- ✅ `Runtime/VisualGraphs/Executors/QuestObjectiveSetNodeExecutor.cs`
-- ✅ `Runtime/VisualGraphs/Executors/QuestObjectiveCheckNodeExecutor.cs`
-- ✅ `Runtime/VisualGraphs/Executors/QuestAllObjectivesCompleteNodeExecutor.cs`
-
-**Files Modified:**
-- ✅ `Runtime/VisualGraphs/Definitions/QuestDefinition.cs` - Extended with GUID, objectives, helper methods
-- ✅ `Runtime/VisualGraphs/VisualGraphPlugin.cs` - Registered new executors
-
-**Bonus: Message Data Flow System** ✅ (Not in original spec!)
-- ✅ `MessageFieldCheckNode` - Branch based on message field values (enables filtering)
-- ✅ `MessageFieldGetNode` - Extract field value to state
-- ✅ `MessageTypeCheckNode` - Branch based on message type
-- ✅ All executors implemented with reflection-based field access
-
-**Files Created (Bonus):**
-- ✅ `Runtime/VisualGraphs/Authoring/Nodes/Message/MessageFieldCheckNode.cs`
-- ✅ `Runtime/VisualGraphs/Authoring/Nodes/Message/MessageFieldGetNode.cs`
-- ✅ `Runtime/VisualGraphs/Authoring/Nodes/Message/MessageTypeCheckNode.cs`
-- ✅ `Runtime/VisualGraphs/Executors/MessageFieldCheckNodeExecutor.cs`
-- ✅ `Runtime/VisualGraphs/Executors/MessageFieldGetNodeExecutor.cs`
-- ✅ `Runtime/VisualGraphs/Executors/MessageTypeCheckNodeExecutor.cs`
-- ✅ `Runtime/VisualGraphs/MESSAGE_DATA_FLOW.md` - Full documentation
-
-#### ✅ Quest Manager / Orchestration (100% - **COMPLETE!**)
-
-**The orchestrator that ties together all quest components! It's game-agnostic and provides essential coordination services.**
-
-**Responsibilities (Framework Level) - ALL IMPLEMENTED:**
-- [x] ✅ **Quest Lifecycle:** `StartQuestAsync()`, `CompleteQuest()`, `ClaimQuest()`, `AbandonQuest()`
-- [x] ✅ **Graph Orchestration:** Auto-load/unload objective + quest graphs when quest becomes active
-- [x] ✅ **State Queries:** `GetActiveQuests()`, `GetCompletedUnclaimedQuests()`, `GetClaimedQuestGuids()`, `IsQuestActive()`, `IsQuestCompleted()`, `IsQuestClaimed()`
-- [x] ✅ **Progress Aggregation:** Query quest completion % from objectives via `GetQuestCompletionPercentage()`
-- [x] ✅ **Message Emission:** Emit all lifecycle messages via MessagePipe
-- [x] ✅ **Persistence Hook:** `GetSaveData()` / `RestoreSaveDataAsync()` for save/load integration
-
-**What Quest Manager DOESN'T Do (Game Responsibility):**
-- ❌ Decide WHICH quests to offer (game logic)
-- ❌ Handle quest rewards (game emits messages, game's reward system handles)
-- ❌ Check unlock conditions (graphs do this via state nodes)
-- ❌ Implement quest UI (game implements, subscribes to manager's messages)
-
-**Key Implementation Details:**
-- Three-state lifecycle: Active → CompletedUnclaimed → Claimed (supports "complete but not claimed" state for reward UIs)
-- Stores quest context in graph state (`__quest_guid`, `__quest_definition`) for executor access
-- Auto-loads/unloads objective graphs via `GraphEventRouter`
-- Full MessagePipe integration for lifecycle events
-- Persistence-ready with `QuestManagerSaveData` DTO
-
-**Files Created:**
-- ✅ `Runtime/VisualGraphs/Quest/IQuestManager.cs` - Interface definition
-- ✅ `Runtime/VisualGraphs/Quest/QuestManager.cs` - Full implementation
-- ✅ `Runtime/VisualGraphs/Quest/QuestRuntimeState.cs` - Runtime quest state tracking
-- ✅ `Runtime/VisualGraphs/Quest/QuestManagerSaveData.cs` - Persistence DTO
-- ✅ `Runtime/VisualGraphs/Quest/Messages/QuestStartedMessage.cs`
-- ✅ `Runtime/VisualGraphs/Quest/Messages/QuestCompletedMessage.cs`
-- ✅ `Runtime/VisualGraphs/Quest/Messages/QuestClaimedMessage.cs`
-- ✅ `Runtime/VisualGraphs/Quest/Messages/QuestAbandonedMessage.cs`
-- ✅ `Runtime/VisualGraphs/Quest/Messages/QuestObjectiveProgressMessage.cs`
-- ✅ `Runtime/VisualGraphs/Quest/QuestDatabase.cs` - Simple campaign registry
-- ✅ `Runtime/VisualGraphs/Config/VisualGraphConfig.cs` - Added quest auto-start settings
-
-**Files Modified:**
-- ✅ `Runtime/VisualGraphs/VisualGraphPlugin.cs` - Registered `IQuestManager` singleton, added auto-start logic
-- ✅ `Runtime/VisualGraphs/Quest/Executors/QuestObjectiveIncrementNodeExecutor.cs` - Added message emission
-- ✅ `Runtime/VisualGraphs/Quest/Executors/QuestObjectiveSetNodeExecutor.cs` - Added message emission
-
-**Actual Time:** ~6 hours (afternoon session #2!) 🚀
+**See `CHANGELOG.md` for details.**
 
 ---
 
-### 2.2 Quest Conditions & Requirements ⚠️ DESIGN EVOLVED
+### 2.2 Quest Conditions & Requirements ⚠️ **DEFERRED**
 
-**Status:** ⚠️ **DEFERRED - Rearchitected as Game-Agnostic State System** (0%)
+**Status:** Rearchitected as Game-Agnostic State System (0%)
 
-**CRITICAL DESIGN DECISION:**
-Original spec assumed game-specific concepts (player level, inventory). This violates MToolKit's game-agnostic philosophy! **Pivoting to graph-based solutions.**
+**Approach:** Framework provides generic state nodes. Games implement their own condition logic.
 
-#### New Approach: Generic State System
-- [x] ✅ **Already Built:** `MessageFieldCheckNode`, `MessageFieldGetNode` - Read game state from messages
-- [ ] ❌ **TODO:** `GenericStateSetNode` - Set arbitrary state keys
-- [ ] ❌ **TODO:** `GenericStateCheckNode` - Branch based on state values
-- [ ] ❌ **TODO:** `GenericStateGetNode` - Read state values for comparisons
-- [ ] ❌ **TODO:** `GraphStateChangedMessage` - Subscribe to state changes
-
-**MToolKit provides the TOOLS, game provides the LOGIC.**
-
-Example: Game emits `PlayerLevelUpMessage`, campaign graph extracts level, stores in state, quest graph checks state to unlock.
+- [x] `MessageFieldCheckNode`, `MessageFieldGetNode` - Already built
+- [ ] `GenericStateSetNode` - Set arbitrary state keys
+- [ ] `GenericStateCheckNode` - Branch based on state values
+- [ ] `GenericStateGetNode` - Read state values for comparisons
+- [ ] `GraphStateChangedMessage` - Subscribe to state changes
 
 **Files to Create:**
 - `Runtime/VisualGraphs/Authoring/Nodes/State/GenericStateSetNode.cs`
@@ -765,34 +118,9 @@ Example: Game emits `PlayerLevelUpMessage`, campaign graph extracts level, store
 
 ---
 
-### 2.3 Quest Rewards System ⚠️ DESIGN EVOLVED
+### 2.3 Quest Rewards System ✅ **COMPLETE**
 
-**Status:** ⚠️ **DEFERRED - Rearchitected as Message-Based** (0%)
-
-**CRITICAL DESIGN DECISION:**
-Original spec assumed hardcoded reward types (XP, currency, items). This is game-specific! **Pivoting to message-based approach.**
-
-#### New Approach: Emit Reward Messages
-- [ ] ❌ **TODO:** `QuestEmitRewardNode` - Emits custom reward messages (already have `QuestEmitEventNode`!)
-- [ ] ❌ **TODO:** Game subscribes to reward messages (e.g., `QuestRewardMessage { QuestGuid, RewardData }`)
-- [ ] ❌ **TODO:** Game's `RewardSystem` handles XP, items, currency based on its own logic
-
-**Example Flow:**
-```markdown
-QuestCompleteNode → QuestEmitEventNode(QuestRewardMessage { QuestGuid: "abc", Gold: 100 })
-                  ↓
-Game's RewardSystem subscribes to QuestRewardMessage
-                  ↓
-RewardSystem.OnQuestReward() → Adds gold to player inventory
-```
-
-**MToolKit provides message emission, game defines reward structure!**
-
-**Files to Modify (MAYBE):**
-- Existing `QuestEmitEventNode` can handle this (it's already generic!)
-- Game creates its own message types: `GoldRewardMessage`, `ItemRewardMessage`, etc.
-
-**Decision:** May not need ANY new framework code! Just documentation on pattern.
+**See `CHANGELOG.md` for details.**
 
 ---
 
@@ -865,94 +193,7 @@ RewardSystem.OnQuestReward() → Adds gold to player inventory
 
 ## Phase 4: Asset Reference System Overhaul ✅ **SUPERSEDED BY PHASE 1.0.1**
 
-**Status:** ✅ **Already Solved with Superior Approach!**
-
-**Original Goal:** Replace `UnityEngine.Object.name` with meta GUID for safe references
-
-**What Actually Happened:** Phase 1.0.1 implemented Unity's native `AssetReference` system, which is **better** than the originally planned meta GUID extraction!
-
-### Why Phase 1.0.1's Approach Is Better:
-
-✅ **No Meta File Parsing** - Unity's `AssetReference` already contains GUIDs  
-✅ **Type-Safe** - `AssetReferenceGameObject`, `AssetReferenceAudioClip`, etc. provide compile-time type checking  
-✅ **Native Addressables** - Seamless integration with Unity's Addressables system  
-✅ **Validation Built-In** - Export-time validation via `XNodeGraphExporter`  
-✅ **Production-Ready** - Unity's recommended pattern, battle-tested  
-
-### Original Problems (All Solved):
-- ✅ Object names can change → GUIDs don't change
-- ✅ Duplicate names possible → GUIDs are unique
-- ✅ No validation if asset is deleted → Export-time validation implemented
-- ✅ Can't differentiate between assets with same name → GUIDs distinguish them
-
-### What Was Built (Phase 1.0.1):
-- ✅ `SerializableAssetReference` - Runtime DTO
-- ✅ `IGraphAssetLoader` + `GraphAssetLoader` - Addressables loader
-- ✅ Export validation in `XNodeGraphExporter`
-- ✅ Runtime asset loading with proper lifecycle
-
-**See Phase 1.0.1 for complete implementation details.**
-
----
-
-### 4.1 Meta GUID Asset Reference System ❌ **NOT NEEDED - OBSOLETE**
-
-**Original Plan (No Longer Relevant):**
-
-~~- [ ] Create `AssetReference` system using Unity meta GUIDs~~
-  ```csharp
-  [Serializable]
-  public sealed class AssetReference {
-      public string guid;          // From .meta file
-      public string path;          // For editor display
-      public string name;          // For fallback
-      public AssetReferenceType type;
-      
-      public bool IsValid => !string.IsNullOrEmpty(guid);
-      public bool Exists => AssetDatabase.GUIDToAssetPath(guid) != null;
-  }
-  
-  public enum AssetReferenceType {
-      Direct,
-      Addressable,
-      Resource
-  }
-  ```
-
-~~- [ ] Update `NormalizeUnityObject` to extract meta GUID~~ ✅ Not needed - Unity's `AssetReference` handles this  
-~~- [ ] Add validation during export~~ ✅ Already implemented in `XNodeGraphExporter`  
-~~- [ ] Add runtime asset resolver~~ ✅ Already implemented as `IGraphAssetLoader` + `GraphAssetLoader`  
-~~- [ ] Support addressables in resolver~~ ✅ Native Addressables support via `AssetReference`  
-~~- [ ] Add migration tool for old graphs~~ ❌ Not needed - using Unity's native system from the start  
-
-**Files Actually Created (Phase 1.0.1):**
-- ✅ `Runtime/VisualGraphs/Runtime/DTOs/SerializableAssetReference.cs` (better than planned AssetReference)
-- ✅ `Runtime/VisualGraphs/Runtime/AssetLoading/IGraphAssetLoader.cs` (better than IAssetReferenceResolver)
-- ✅ `Runtime/VisualGraphs/Runtime/AssetLoading/GraphAssetLoader.cs` (full implementation)
-
-**Files Modified (Phase 1.0.1):**
-- ✅ `Export/XNodeGraphExporter.cs` - Uses Unity's `AssetReference` system with validation
-- ✅ `Runtime/DTOs/RuntimeNodeDefinition.cs` - Stores `SerializableAssetReference`
-- ✅ `Runtime/VisualGraphs/VisualGraphPlugin.cs` - Registered asset loader
-
----
-
-### 4.2 Asset Reference Validation ✅ **ALREADY IMPLEMENTED IN PHASE 1.0.1**
-
-✅ **Pre-export validation** - Implemented in `XNodeGraphExporter`
-  - ✅ Checks all `AssetReference` fields in nodes
-  - ✅ Verifies assets exist via `RuntimeKeyIsValid()`
-  - ✅ Reports missing or invalid references during export
-  - ✅ Throws `InvalidGraphException` if critical references are broken
-
-✅ **Runtime validation** - Implemented in `GraphAssetLoader`
-  - ✅ Validates asset references on load
-  - ✅ Logs warnings for missing assets
-  - ✅ Graceful degradation for missing assets
-
-~~- [ ] Create asset reference inspector~~ ❌ Not needed - Unity's Inspector handles `AssetReference` natively
-
-**Phase 4 Summary:** ✅ **Complete via Phase 1.0.1** - All asset reference functionality implemented with Unity's native system instead of custom meta GUID extraction.
+**See `CHANGELOG.md` for details.**
 
 ---
 
@@ -1019,7 +260,7 @@ RewardSystem.OnQuestReward() → Adds gold to player inventory
   - Start quest, modify state, save, reload, verify
   - Test with multiple graphs active
 
-- [ ] MessagePipe integration tests
+- [] MessagePipe integration tests
   - Send events via MessagePipe
   - Verify graphs receive and handle
   - Verify graphs emit events correctly
@@ -1089,27 +330,9 @@ RewardSystem.OnQuestReward() → Adds gold to player inventory
 
 ---
 
-### 6.2 Runtime Debugging Tools
+### 6.2 Runtime Debugging Tools ✅ **COMPLETE**
 
-- [ ] Create graph execution debugger
-  - Show active graphs in hierarchy
-  - Display current execution state
-  - Show which nodes executed recently
-  - Visualize event flow
-
-- [ ] Add execution history
-  - Record last N node executions
-  - Show execution time per node
-  - Display state changes over time
-
-- [ ] Create state inspector window
-  - Show all active graph states
-  - Allow editing state values at runtime
-  - Trigger events manually for testing
-
-**Files to Create:**
-- `Editor/VisualGraphs/Debugger/GraphExecutionDebugger.cs`
-- `Editor/VisualGraphs/Windows/GraphStateInspectorWindow.cs`
+**See `CHANGELOG.md` for complete implementation details.**
 
 ---
 
@@ -1141,8 +364,7 @@ RewardSystem.OnQuestReward() → Adds gold to player inventory
   - All public methods (100%)
 
 - [ ] Generate API documentation
-  - Use DocFX or similar
-  - Host on GitHub Pages
+  - Use Doxygen
 
 ---
 
@@ -1195,20 +417,11 @@ RewardSystem.OnQuestReward() → Adds gold to player inventory
 
 ---
 
-### 8.2 Multiplayer Support (Pre-requisite for SS14-level complexity)
-
-- [ ] Network-synced graph state
-- [ ] Per-player graph instances
-- [ ] Shared world graph state
-- [ ] Authority/ownership model
-- [ ] State replication and interpolation
-- [ ] Conflict resolution for concurrent modifications
-
----
-
 ## Phase 9: General-Purpose Visual Scripting Foundation
 
-**Goal:** Expand beyond quests/dialogue into general game logic scripting
+**Goal:** Expand beyond quests/dialogue into general game logic scripting and enable systemic/emergent gameplay (RimWorld, Project Zomboid, Space Station 14-style)
+
+**Critical for:** Reactive event-driven systems where multiple game systems interact to create emergent gameplay 
 
 ### 9.1 Core Programming Constructs
 
@@ -1322,6 +535,121 @@ RewardSystem.OnQuestReward() → Adds gold to player inventory
 **Files to Create:**
 - `Runtime/VisualGraphs/Execution/DataFlowExecutor.cs`
 - `Runtime/VisualGraphs/Attributes/PureNodeAttribute.cs`
+
+---
+
+### 9.4 Systemic Gameplay Primitives
+
+**Goal:** Enable reactive, event-driven systems that create emergent gameplay through system interactions
+
+**Why This Matters:**
+Games like RimWorld, Project Zomboid, and SS14 create emergent gameplay through systems reacting to each other. This phase provides the primitives needed for graphs to:
+- React to events with calculations (not just comparisons)
+- Transform data between systems
+- Chain conditional logic for complex reactions
+- Query and manipulate state across system boundaries
+
+**Current Capability:** ✅ Event-driven architecture, ✅ MessagePipe integration, ✅ Conditional branching, ✅ State storage  
+**Missing:** ❌ Math operations, ❌ Complex logic chains, ❌ Data transformation
+
+**Priority Nodes for Systemic Gameplay:**
+
+- [ ] **Math operations (CRITICAL for systemic gameplay)**
+  - `AddNode`, `SubtractNode`, `MultiplyNode`, `DivideNode` - Basic arithmetic
+  - `ClampNode`, `LerpNode` - Value manipulation
+  - `RandomRangeNode` - Procedural variation
+  - **Use Case:** Calculate damage based on weapon + stats, adjust crop growth rate, compute distance-based effects
+
+- [ ] **Logic operations (CRITICAL for complex reactions)**
+  - `AndNode`, `OrNode`, `NotNode` - Chain conditions
+  - `AllTrueNode`, `AnyTrueNode` - Multi-condition checks
+  - **Use Case:** "If health < 50% AND stamina < 25% AND not in safe zone → trigger panic behavior"
+
+- [ ] **State query nodes (ENABLES cross-system queries)**
+  - `GetStateNode<T>` - Read state from any graph by key
+  - `SetStateNode<T>` - Write state to any graph
+  - `HasStateNode` - Check if state key exists
+  - `QueryStateNode` - Query multiple state values at once
+  - **Use Case:** Weather system checks crop growth state, AI checks player inventory state
+
+- [ ] **Data transformation nodes (ENABLES system communication)**
+  - `MapValueNode` - Map value from one range to another
+  - `CombineValuesNode` - Combine multiple values (e.g., Vector3 from x,y,z)
+  - `ExtractValueNode` - Extract components (e.g., x from Vector3)
+  - `FormatStringNode` - Build strings from values
+  - **Use Case:** Convert temperature to crop growth multiplier, format status messages
+
+- [ ] **Conditional math nodes (ENABLES reactive calculations)**
+  - `ConditionalAddNode` - Add if condition true
+  - `ConditionalMultiplyNode` - Multiply if condition true
+  - `SelectNode` - Choose value based on condition (ternary operator)
+  - **Use Case:** "If raining, multiply crop growth by 1.5, else use base rate"
+
+**Systemic Gameplay Patterns Enabled:**
+
+**Pattern 1: Reactive Calculations**
+```
+WeatherSystem emits RainStarted { intensity: 0.8 }
+    ↓
+CropGraph subscribes:
+  MessageFieldGetNode("intensity", "rain_intensity")
+  MultiplyNode(rain_intensity, 1.5) → "growth_multiplier"
+  SetStateNode("growth_multiplier", growth_multiplier)
+```
+
+**Pattern 2: Complex Conditional Reactions**
+```
+PlayerMovement emits PlayerMoved { noise: 0.5, position: Vector3 }
+    ↓
+ZombieGraph subscribes:
+  MessageFieldGetNode("noise", "player_noise")
+  MessageFieldGetNode("position", "player_pos")
+  AndNode(
+    GreaterThanNode(player_noise, 0.3),
+    DistanceCheckNode(player_pos, zombie_pos, 10.0)
+  ) → [True] → Emit ZombieAlerted
+```
+
+**Pattern 3: Cross-System State Queries**
+```
+CropGraph:
+  GetStateNode("weather_temperature") → "temp"
+  GetStateNode("soil_quality") → "soil"
+  MultiplyNode(temp, soil) → "growth_rate"
+  SetStateNode("crop_growth_rate", growth_rate)
+```
+
+**Pattern 4: Emergent Chain Reactions**
+```
+CombatSystem emits EnemyDefeated { xp: 50, itemDrop: "Seed" }
+    ↓
+QuestGraph: Increment objective
+    ↓
+QuestGraph emits QuestComplete
+    ↓
+InventoryGraph: AddItem(Seed)
+    ↓
+InventoryGraph emits ItemAdded { itemId: "Seed" }
+    ↓
+CropGraph: 
+  GetStateNode("has_seeds") → check
+  AndNode(check, GetStateNode("has_soil")) → can_plant
+  [can_plant] → EnableCropPlanting
+```
+
+**Files to Create:**
+- `Runtime/VisualGraphs/Authoring/Nodes/Core/Math/*.cs` (~15 nodes)
+- `Runtime/VisualGraphs/Authoring/Nodes/Core/Logic/*.cs` (~5 nodes)
+- `Runtime/VisualGraphs/Authoring/Nodes/Core/State/*.cs` (~4 nodes)
+- `Runtime/VisualGraphs/Authoring/Nodes/Core/Transform/*.cs` (~5 nodes)
+- `Runtime/VisualGraphs/Executors/Math/*.cs` (~15 executors)
+- `Runtime/VisualGraphs/Executors/Logic/*.cs` (~5 executors)
+- `Runtime/VisualGraphs/Executors/State/*.cs` (~4 executors)
+- `Runtime/VisualGraphs/Executors/Transform/*.cs` (~5 executors)
+
+**Total:** ~58 new files (nodes + executors)
+
+**Note:** This section focuses on the MINIMUM needed for systemic gameplay. Full visual scripting (loops, functions, etc.) comes in Phase 11, but these primitives unlock RimWorld/Zomboid-style emergent gameplay NOW.
 
 ---
 
@@ -1487,11 +815,17 @@ RewardSystem.OnQuestReward() → Adds gold to player inventory
 
 ---
 
-## Phase 12: Complex Game Systems (SS14-Level)
+## Phase 12: Complex Game Systems (SS14-Level Systems)
 
 **Goal:** Support interconnected game systems like Space Station 14 using plugin architecture
 
+**Note:** This phase focuses on **system complexity** (inventory, roles, atmospherics, etc.), NOT multiplayer. For multiplayer support, see Phase 16 (Stretch Goal).
+
+**Prerequisites:** Phase 9 (especially 9.4 Systemic Gameplay Primitives) must be complete for reactive system interactions
+
 **Note:** This uses **traditional Unity GameObjects and MToolKit plugins**, NOT Unity ECS/DOTS.
+
+**Builds on:** Phase 9.4 provides the math/logic primitives needed for complex system interactions. Phase 12 adds game-specific system nodes (inventory, roles, atmospherics, etc.) that USE those primitives.
 
 ### 12.1 Plugin-Based Game System Nodes
 
@@ -1626,35 +960,7 @@ RewardSystem.OnQuestReward() → Adds gold to player inventory
 
 ---
 
-### 12.7 Multiplayer/Networking Nodes
-
-**For multiplayer games with authority models**
-
-- [ ] Network state nodes
-  - `IsServerNode` - Check if running as server
-  - `IsClientNode` - Check if running as client
-  - `GetLocalPlayerNode` - Get local player reference
-  - `GetPlayerCountNode` - Number of connected players
-
-- [ ] Network synchronization nodes
-  - `SyncVariableNode` - Mark variable for network sync
-  - `IsOwnerNode` - Check if local player owns object
-  - `HasAuthorityNode` - Check if can modify object
-  - `TransferAuthorityNode` - Transfer ownership
-
-- [ ] RPC nodes
-  - `CallRPCNode` - Call method on server/client
-  - `BroadcastEventNode` - Send event to all players
-  - `SendToPlayerNode` - Send to specific player
-
-**Files to Create:**
-- `Runtime/VisualGraphs/Authoring/Nodes/Network/*.cs` (~10 nodes)
-
-**Note:** Requires integration with Unity Netcode/Mirror/etc.
-
----
-
-### 12.8 AI/Behavior Nodes
+### 12.7 AI/Behavior Nodes
 
 **For NPC behavior and AI systems**
 
@@ -1873,15 +1179,168 @@ RewardSystem.OnQuestReward() → Adds gold to player inventory
 
 ---
 
+## Phase 16: Multiplayer/Networking Support (Stretch Goal)
+
+**Goal:** Enable multiplayer games with network-synced graph state
+
+**Status:** Future stretch goal - Networking infrastructure coming but not yet implemented
+
+**Prerequisites:** Phase 9 (Systemic Gameplay Primitives) should be complete for reactive system interactions in multiplayer context
+
+- [ ] Network-synced graph state
+  - Sync graph state across network
+  - Handle state conflicts
+  - Optimize state updates (delta compression)
+
+- [ ] Per-player graph instances
+  - Separate graph state per player
+  - Player-specific quest/dialogue progress
+  - Privacy boundaries
+
+- [ ] Shared world graph state
+  - World-level graph state (e.g., weather, time of day)
+  - Authority model for world state
+  - Conflict resolution for concurrent modifications
+
+- [ ] Authority/ownership model
+  - Server authority for critical state
+  - Client prediction for responsive gameplay
+  - Ownership transfer
+
+- [ ] State replication and interpolation
+  - Efficient state synchronization
+  - Interpolation for smooth updates
+  - Bandwidth optimization
+
+- [ ] Network nodes
+  - `IsServerNode` - Check if running as server
+  - `IsClientNode` - Check if running as client
+  - `GetLocalPlayerNode` - Get local player reference
+  - `GetPlayerCountNode` - Number of connected players
+  - `SyncVariableNode` - Mark variable for network sync
+  - `IsOwnerNode` - Check if local player owns object
+  - `HasAuthorityNode` - Check if can modify object
+  - `TransferAuthorityNode` - Transfer ownership
+  - `CallRPCNode` - Call method on server/client
+  - `BroadcastEventNode` - Send event to all players
+  - `SendToPlayerNode` - Send to specific player
+
+**Note:** Requires integration with Unity Netcode/Mirror/etc. This is a stretch goal for future multiplayer support.
+
+**Files to Create:**
+- `Runtime/VisualGraphs/Authoring/Nodes/Network/*.cs` (~10 nodes)
+- `Runtime/VisualGraphs/Executors/Network/*.cs` (~10 executors)
+- `Runtime/VisualGraphs/Networking/NetworkGraphStateSync.cs`
+- `Runtime/VisualGraphs/Networking/NetworkAuthorityManager.cs`
+
+---
+
 ## Long-Term Vision
+
+### Version 1.0: First-Class Visual Scripting Engine
+
+**Final Product:** A first-class visual scripting engine inside MToolKit used for almost all high-level game logic, with C# pushed down into services and "mechanics," not orchestration.
+
+#### 1. Authoring Experience
+
+**Dedicated VisualGraphs Editor:**
+- Create Quest, Dialogue, Tutorial, and generic Logic graphs
+- Drag from a **large node palette**: events, math, comparisons, timers, state, Unity API, inventory, combat, AI, UI, etc.
+- **Type-colored data pins** and white flow pins, with automatic type checking and conversions
+- **Authoring tools**: validation, graph analysis, "go to message type," search, minimap, grouping, bookmarks
+
+**Debugger Layer:**
+- Play mode shows active nodes pulsing, wires animating when they fire, recent execution history
+- Breakpoints on nodes, step/continue, and a watch window for graph state
+- Runtime state inspector window for editing variables on the fly and firing test events
+
+#### 2. Runtime Model
+
+**Graph Execution:**
+- All graphs export to **DTOs with versions**, no xNode or editor code in runtime
+- **GraphRunner + GraphEventRouter** drive execution:
+  - O(1) routing by `(messageType, domain)` with sequence IDs and per-graph execution caps
+  - Parallel execution for independent graphs where safe
+
+**State Management:**
+- Graph state stored per graph instance, with clear separation of global, per-quest, per-player, and per-world variables
+- Fully integrated with the save system via a dedicated save domain; versioned snapshots with migration hooks
+
+**Message Bus:**
+- Every system talks through MessagePipe with strongly typed `IGameMessage`s
+- VisualGraphs subscribes based on explicit graph-level subscriptions and emits events out
+- All major subsystems expose a message surface: Inventory, Combat, Dialogue, UI, Tutorial, World/Environment, AI
+
+#### 3. Node Library
+
+**Core, Stable Node Set:**
+
+**Events:**
+- On message, timers, triggers, input, area/zone entry, health changes, item pickup, enemy defeat, quest lifecycle, dialogue lifecycle, tutorial steps
+
+**Logic and Math:**
+- Branch, switch, loops, arithmetic, comparisons, boolean logic, randoms, value mapping, interpolation
+
+**State:**
+- Get/Set/TryGet state, collections, generic key/value storage, graph-local and global
+
+**Unity Integration:**
+- GameObject/Transform/Prefab/Animator/Audio/UI nodes sufficient to build non-trivial interactions without dropping to C#
+
+**Domain Nodes:**
+- Quest nodes for starting, advancing, checking, claiming, querying
+- Dialogue nodes that call `IDialogueUIService` and branch on choices
+- Inventory, crafting, roles/permissions, interaction, AI, environment – thin wrappers over services, not reimplementations
+
+**Custom Nodes:**
+- Trivial to add: one C# class with attributes generates the node and executor, registered automatically by the plugin
+
+#### 4. Systemic Gameplay
+
+**Reactive Systems (SS14/RimWorld-style):**
+- Weather affecting crops and NPC behavior
+- Power system affecting doors, lights, and life support
+- Faction reputation reacting to quests, kills, theft, dialogue choices
+
+**Cross-Plugin Orchestration:**
+- Most systemic gameplay built as orchestration graphs
+- Subscribe to Combat/Inventory/Environment/AI messages, manipulate state, emit new events for other plugins
+
+**C# Code Remains For:**
+- Mechanics (movement, physics, combat resolution)
+- Data models and invariants (inventory data, quest definitions)
+- Services with non-trivial algorithms or perf constraints
+
+**Graphs Handle:**
+- The "when X happens, under conditions Y, do Z and emit W" layer
+
+#### 5. MToolKit Integration
+
+**Plugin Architecture:**
+- VisualGraphs is just another **MToolKit plugin**, configured through `VisualGraphConfig` and `VisualGraphRegistry`
+- Stable public API surface (interfaces, messages, service accessors)
+- Full test coverage for exporter, runtime core, integrations, and save/load
+- Benchmarks and stress tests verifying it behaves under load
+
+**Default Use Cases:**
+- Quests and campaigns
+- Dialogue trees and conditional conversations
+- Tutorials, hints, and onboarding
+- Dynamic world scripting (events, modifiers, seasonal behavior)
+- UI flows tied to game state
+- One-off content logic that designers or future-you can tweak visually
+
+**That's the "final product":** A mature, tested visual orchestration layer baked into MToolKit, handling most game logic as graphs over a unified message bus, with C# services beneath it and enough tooling that you can trust it in production without thinking about the internals every time.
+
+---
 
 ### Ultimate Goal: "Blueprint-like from UE5"
 
 The VisualGraphs system should eventually:
 
-1. ✅ **Replace C# for most game logic** - Designers create gameplay without programming
-2. ✅ **Support complex systems** - Handle SS14-level complexity (roles, inventory, crafting, atmospherics)
-3. ✅ **Performance competitive with code** - JIT compilation makes graphs as fast as C#
+1. ✅ **Replace C# for orchestration/policy logic** - Designers create high-level gameplay behavior (quests, dialogue, tutorials, cross-system coordination) without programming. Low-level mechanics (physics, rendering, tight loops) remain in C#.
+2. ✅ **Support complex systems** - Handle SS14-level complexity (roles, inventory, crafting, atmospherics) through orchestration graphs that coordinate domain services
+3. ✅ **Performance competitive with code** - JIT compilation makes graphs as fast as C# for orchestration workloads
 4. ✅ **Professional tooling** - Editor UX matches Unreal Blueprints
 5. ✅ **Extensible** - Easy to add custom nodes for project-specific logic
 6. ✅ **Debuggable** - Breakpoints, watch windows, visual execution flow
@@ -1889,9 +1348,14 @@ The VisualGraphs system should eventually:
 8. ✅ **Multiplayer-ready** - State replication and authority built-in
 9. ✅ **Community-driven** - Node marketplace and package ecosystem
 
+**Architectural Principle:** Graphs are for **orchestration and policy** (the "what happens when" layer), not low-level mechanics. See `README.md` "When to Use Graphs vs Code" section for the three-layer architecture pattern.
+
 ### Reference Games Built with Similar Systems
 
 - **Space Station 14** - Complex multiplayer systems with ECS
+- **RimWorld** - Complex story driven simulator
+- **Dwarf Fortress** - Systems master class
+- **Project Zomboid** - 
 - **Unreal Engine Games** - Many AAA games use Blueprints extensively
 - **Unity Visual Scripting** - Asset Store games using Bolt/VS
 - **GameMaker Studio** - Entire games built with visual scripting
@@ -1910,86 +1374,57 @@ This aligns perfectly with MToolKit's mission of shipping production-quality gam
 
 ---
 
-## Estimated Timeline to "Blueprint-like"
-
-**Note:** Original v0.5 system (43 files, production-quality architecture) was built in ~1 afternoon. Timeline adjusted for **full-time development** at proven velocity.
-
-**Phase 1-8 (Quest/Dialogue Production Ready):** 3-5 days (MToolKit integration, save system, MessagePipe, tests)  
-**Phase 9-11 (General Visual Scripting):** 1 week (Core nodes: variables, flow control, math, Unity integration, ~50 types)  
-**Phase 12 (Complex Game Systems):** 1 week (Plugin nodes: inventory, crafting, AI, networking, ~60 types)  
-**Phase 13 (Advanced Editor):** 1-2 weeks (Blueprint-quality UX, debugging, profiling, breakpoints)  
-**Phase 14 (Performance):** 3-5 days (JIT compilation, benchmarking, optimization passes)  
-**Phase 15 (Ecosystem):** 2-3 days (Package system, documentation, examples)  
-
-**Total Timeline (Full-Time Focus):** ~4-6 weeks to v4.0 "Blueprint-like"
-
-**Conservative Estimate (With Interruptions):** 8-10 weeks  
-**Aggressive Estimate (In The Zone™):** 3-4 weeks
-
----
-
-## Why This Timeline Makes Sense
-
-At current velocity (v0.5 in 1 afternoon):
-
-- **Node creation is fast** - Once pattern established, nodes are copy-paste with parameter changes
-- **Architecture is solid** - Core runtime won't need major refactoring, just extension
-- **Integration work is straightforward** - MToolKit patterns already established
-- **Editor tools are incremental** - Can ship v1.0 first, polish editor in v2.0+
-
-**Bottlenecks:**
-- Testing (but you can iterate fast with manual testing first)
-- JIT compilation (complex but bounded scope)
-- Editor UX polish (can ship with basic editor, enhance later)
-
-**Ideal Schedule:**
-- **Week 1:** Phase 1-8 complete, v1.0 shipped (production-ready quest/dialogue)
-- **Week 2:** Phase 9-10 done (general scripting + Unity nodes)
-- **Week 3:** Phase 11-12 done (functions + complex systems)
-- **Week 4-5:** Phase 13 done (editor tools)
-- **Week 6:** Phase 14-15 done (performance + polish)
-- **Week 7:** Buffer for testing, documentation, showcase videos
-
-**Portfolio Impact:**
-
-A Blueprint-like visual scripting system is a **serious** showcase project. This could:
-- Demonstrate architectural skills (event-driven, DI, type systems)
-- Show breadth (editor tools, JIT compilation, networking)
-- Prove velocity (shipped in 6-8 weeks)
-- Stand out vs. typical portfolio projects
-
----
-
 ## Phased Rollout Strategy
 
-### Version 0.5 (Current)
-- Quest and Dialogue graphs
-- Basic event routing
-- xNode authoring
+### Version 0.5 (Current - Mostly Complete)
+- ✅ Quest and Dialogue graphs
+- ✅ Full MessagePipe event routing (bidirectional)
+- ✅ xNode authoring
+- ✅ Production-ready quest system with Quest Manager
+- ✅ Full MToolKit plugin integration
+- ✅ Message-based reward pattern
+- ⚠️ Save system integration (Phase 1.2 - remaining)
+- ⚠️ Dialogue UI service (Phase 3.1 - remaining)
+- ❌ Test coverage (Phase 5 - remaining)
 
-### Version 1.0 (Phase 1-2 Complete)
+### Version 0.6 (Phase 1-2 + 3.1 Complete)
 - Production-ready quest system with task tracking
 - Full MToolKit integration
-- Save system working
-- Test coverage 80%+
+- Save system working (Phase 1.2)
+- Dialogue UI service implemented (Phase 3.1)
+- Test coverage 30%+
 
-### Version 2.0 (Phase 9-10 Complete)
+### Version 0.7 (Phase 9-10 Complete)
 - General-purpose visual scripting
 - Core programming constructs (variables, flow control, math)
 - Unity integration nodes (GameObject, Transform, Physics)
 - Type system with validation
+- Test coverage 60%+
 
-### Version 3.0 (Phase 11-12 Complete)
+### Version 0.8 (Phase 11-12 Complete)
 - Functions and subroutines
 - Complex execution models (coroutines, parallel)
-- Plugin-based game systems (inventory, crafting, roles, AI)
-- "Can build SS14" milestone (using traditional GameObjects + plugins)
+- Plugin-based game systems (inventory, crafting, roles, AI, atmospherics)
+- "Can build SS14-level systems" milestone (using traditional GameObjects + plugins, single-player)
+- Test coverage 90%+
 
-### Version 4.0 (Phase 13-15 Complete)
+### Version 0.9 (Phase 13-15 Complete)
 - Blueprint-quality editor
 - JIT compilation and performance
 - Node marketplace and ecosystem
 - "Blueprint-like from UE5" milestone achieved
+- Test coverage 100%+
+
+### Version 1.0 (Complete Vision - See "Version 1.0: First-Class Visual Scripting Engine" above)
+- All features from Version 0.9 complete
+- Full authoring experience with dedicated editor and debugger
+- Complete node library (events, logic, math, state, Unity, domain nodes)
+- Systemic gameplay support (SS14/RimWorld-style reactive systems)
+- Production-ready with full test coverage, benchmarks, and stress tests
+- **Optional:** Multiplayer/Networking support (Phase 16 - Stretch Goal)
+  - Network-synced graph state
+  - Authority/ownership model
+  - "Full SS14 multiplayer capability" milestone
 
 ---
 
@@ -2015,34 +1450,9 @@ A Blueprint-like visual scripting system is a **serious** showcase project. This
 - Asset reference validation UI
 
 **Future Enhancements (Phase 5+):**
-- Graph versioning
-- Visual Scripting integration
-- Multiplayer support
-
----
-
-## Estimated Timeline
-
-**Phase 1.0 (Core Architecture):** ✅ COMPLETE (1.0.1, 1.0.2, 1.0.3, 1.0.4 done)  
-**Phase 1.3 (MessagePipe Implementation):** ✅ COMPLETE (bidirectional pub/sub done)  
-**Phase 1.1 (Plugin Integration):** 1-2 days  
-**Phase 1.2 (Save System):** 1-2 days  
-**Phase 2 (Quest Enhancements):** 3-4 days  
-**Phase 3 (Dialogue Completion):** 2-3 days  
-**Phase 5 (Testing):** 4-6 days  
-**Phase 6 (Editor Tools):** 1-2 days (Odin validation already done!)  
-**Phase 7 (Documentation):** 2-3 days  
-
-**Total to Production Ready:** ~14-22 days (2-3 weeks)**
-
-**Progress:** 8 of 11 critical milestones complete! ✅
-- ✅ Phase 1.0 (1.0.1-4): Core Architecture
-- ✅ Phase 1.1: Plugin Integration
-- ✅ Phase 1.3: MessagePipe
-- ✅ Phase 2.1: Quest System
-- ⚠️ Phase 1.2: Save System (remaining)
-- ⚠️ Phase 3.1: Dialogue UI (remaining)
-- ❌ Phase 5: Testing (remaining)
+- Graph versioning (Phase 8)
+- Visual Scripting integration (Phase 9+)
+- Multiplayer support (Phase 16 - Stretch Goal)
 
 ---
 
@@ -2074,8 +1484,10 @@ A Blueprint-like visual scripting system is a **serious** showcase project. This
 - [x] Quests track objective progress (X/Y complete) ✅ - Quest Manager implemented
 - [x] Can display quest progress in UI ✅ - Progress messages emitted, UI subscribes
 - [x] Task completion triggers events ✅ - Full lifecycle messages
-- [ ] Quest conditions system - Deferred to generic state nodes (Phase 2.2)
-- [ ] Quest rewards system - Deferred to message-based pattern (Phase 2.3)
+
+**Framework Support:**
+- [ ] Quest conditions support → Framework provides generic state nodes (Phase 2.2: GenericStateSetNode, GenericStateCheckNode) and message field checks. Games implement their own condition logic using these tools.
+- [x] Quest rewards support ✅ → Framework provides `QuestClaimedMessage` emission (Phase 2.3). Games subscribe to handle rewards based on their own `QuestDefinition` data.
 
 ### ✅ System is Production-Ready When:
 - [ ] 100% test coverage for core systems
@@ -2096,9 +1508,656 @@ A Blueprint-like visual scripting system is a **serious** showcase project. This
    
 3. **Performance** - Large graphs may execute slowly
    - Mitigation: Profile early, optimize hot paths, consider parallel execution
-
+   
 4. **xNode Dependency** - Reliance on external package
    - Mitigation: xNode is authoring-only, runtime has no dependency
+
+---
+
+## Event-Based Entry System Hardening
+
+**Current Status:** Event-based entry system is production-ready but has known limitations that should be addressed as the system scales.
+
+### Known Limitations & Risks
+
+#### 1. Sequential Execution (No Parallelism)
+- **Issue:** All matching graphs execute sequentially in `RouteAsync`
+- **Impact:** Latency spikes with many graphs or slow executors
+- **Mitigation:** Consider parallel execution option for independent graphs
+- **Priority:** Medium (only matters at scale)
+
+#### 2. No Execution Order Guarantee
+- **Issue:** Graphs execute in registration order, not priority
+- **Impact:** Race conditions possible if order matters
+- **Mitigation:** Add priority/weighting system for graph execution
+- **Priority:** Low (most games don't need this)
+
+#### 3. Error Isolation Trade-offs
+- **Issue:** Errors in one graph don't stop others (good for resilience, but partial failures can leave inconsistent state)
+- **Impact:** Hard to detect "some graphs failed" scenarios
+- **Mitigation:** Add execution metrics/telemetry to track failures
+- **Priority:** Medium (important for debugging)
+
+#### 4. No Cancellation Propagation
+- **Issue:** If one graph is slow/hanging, others wait
+- **Impact:** One bad graph can block all event processing
+- **Mitigation:** Add timeout per graph execution, better cancellation handling
+- **Priority:** Medium (important for production stability)
+
+#### 5. Reflection Overhead
+- **Issue:** EventBusBridge uses reflection for dynamic subscription
+- **Impact:** Minimal (one-time setup), but adds complexity
+- **Mitigation:** Consider code generation for hot paths (future optimization)
+- **Priority:** Low (already optimized with caching)
+
+#### 6. Runtime Type Safety
+- **Issue:** `MessageTypeReference` validated at authoring, but reflection happens at runtime
+- **Impact:** Runtime failures instead of compile-time errors if message types are renamed/deleted
+- **Mitigation:** Add export-time validation that message types exist
+- **Priority:** High (catches errors earlier)
+
+#### 7. Debugging Complexity
+- **Issue:** Hard to trace which graphs handle which events
+- **Impact:** Difficult to debug event routing issues
+- **Mitigation:** Add visual debugging tools, execution flow visualization (Phase 13)
+- **Priority:** Medium (improves developer experience)
+
+#### 8. Domain Matching Complexity
+- **Issue:** Wildcard (empty domain) vs exact match logic can be confusing
+- **Impact:** Subtle bugs if domain filtering is misunderstood
+- **Mitigation:** Better documentation, validation warnings
+- **Priority:** Low (documentation issue)
+
+#### 9. Missing Message Type Validation
+- **Issue:** If `MessageTypeReference` points to non-existent type, subscription fails silently
+- **Impact:** Runtime failures that could be caught earlier
+- **Mitigation:** Add export-time validation (same as #6)
+- **Priority:** High (catches errors earlier)
+
+#### 10. Performance with Many Graphs
+- **Issue:** O(n) iteration through all matching graphs per event
+- **Impact:** Performance degrades linearly with graph count
+- **Mitigation:** Profile and optimize hot paths, consider batching
+- **Priority:** Low (only matters at very large scale)
+
+### Recommended Hardening Tasks
+
+**High Priority:**
+- [ ] Add export-time validation that message types exist (prevents runtime failures)
+- [ ] Add execution metrics/telemetry (track failures, performance)
+
+**Medium Priority:**
+- [ ] Add timeout per graph execution (prevent hanging)
+- [ ] Consider parallel execution option for independent graphs
+- [ ] Add visual debugging tools (Phase 13 covers this)
+
+**Low Priority:**
+- [ ] Add priority/weighting system for graph execution
+- [ ] Better domain matching documentation/validation
+- [ ] Code generation for hot paths (future optimization)
+
+**Already Mitigated:**
+- ✅ Error handling (try/catch per graph)
+- ✅ Cancellation token support
+- ✅ O(1) lookup by (type, domain)
+- ✅ Proper disposal pattern
+
+---
+
+## Architectural & Systemic Risks
+
+**Current Status:** These risks emerge as the system scales and content accumulates. They require ongoing discipline and tooling to mitigate.
+
+### Known Risks & Mitigations
+
+#### 1. Cross-Graph Coupling on Shared Events ⚠️
+- **Issue:** Multiple graphs can listen to the same message. If any of them start implicitly depending on others' side effects or state (even subtly), you get order-dependent bugs with no guaranteed execution order.
+- **Impact:** Subtle, hard-to-reproduce bugs that depend on graph registration order
+- **Mitigation:** 
+  - Document that graphs should be independent and not rely on execution order
+  - Add tooling to detect potential coupling (graph A modifies state that graph B reads)
+  - Consider explicit dependencies/ordering if needed (but avoid if possible)
+- **Priority:** High (can cause production bugs)
+
+#### 2. Global Behavior Surface is Hard to See ⚠️
+- **Issue:** Per-graph subscriptions are explicit, but "which graphs react to `XMessage`?" is still global. Without an index/trace, the combined behavior of all graphs on a core event is hard to reason about and audit.
+- **Impact:** Difficult to understand system-wide behavior, hard to audit what happens when an event fires
+- **Mitigation:**
+  - Add editor tooling: "Find all graphs subscribing to MessageType X"
+  - Add runtime debugging: "Show all graphs that handled this event"
+  - Consider a "message impact analysis" tool that shows the full graph of reactions
+- **Priority:** Medium (important for maintainability and debugging)
+
+#### 3. Save/Load Lifecycle Ordering 🔴 **CRITICAL**
+- **Issue:** Core services, graph state, and event subscriptions all have to restore in the right order. If events fire before graph state is restored (or vice versa), you get double triggers, missed triggers, or inconsistent state.
+- **Impact:** 
+  - Save/load bugs that corrupt player progress
+  - Duplicate events causing quests to complete twice
+  - Missed events leaving quests stuck
+  - Inconsistent state that's hard to debug
+  - **Game-breaking bugs that only appear after save/load**
+- **Mitigation:**
+  - Define clear save/load phases in `SaveSystemCoordinator`
+  - Ensure graph state restores before event subscriptions are active
+  - Add validation to detect out-of-order restoration
+  - Consider a "restore mode" that suppresses events until fully loaded
+  - **Test save/load extensively with complex graph state**
+- **Priority:** **Critical** - Save/load correctness is fundamental. If this breaks, the system is unusable in production.
+
+#### 4. Message Schema / Taxonomy Drift 🔴 **CRITICAL**
+
+**Goal:** Messages are a stable API. You evolve them, you don't fork them into chaos.
+
+- **Issue:** If you evolve or fork message types (`ItemAcquired` vs `ItemPickedUp`, new enum values, renamed fields), existing graphs can silently become wrong: filters no longer match, or they match more/less than intended.
+- **Impact:** 
+  - **Silent failures** - Graphs stop working but no obvious error
+  - Existing content breaks after refactoring
+  - Hard to detect until players hit the bug
+  - Can affect many graphs at once (cascading failures)
+  - **Production bugs that only appear after message refactoring**
+
+**Hardening Rules:**
+
+1. **Single Source of Truth for Messages**
+   - All `IGameMessage` types live in a dedicated assembly/namespace, owned by the framework:
+     - `MToolKit.Runtime.Messages.*`
+     - Domain subnamespaces: `*.Inventory`, `*.Quest`, `*.World`, etc.
+   - Nobody defines ad-hoc messages in game code without going through that layer.
+
+2. **No Synonyms. No "Helper" Messages.**
+   - One canonical event per semantic thing:
+     - `ItemAcquiredMessage` ✅
+     - Not `ItemPickedUpMessage`, `ItemGrantedMessage`, `ItemGivenToPlayerMessage` ❌
+   - If you need extra nuance, extend the payload, don't add a new message:
+     ```csharp
+     public sealed class ItemAcquiredMessage : IGameMessage
+     {
+         public ItemId ItemId { get; }
+         public EItemAcquiredReason Reason { get; }  // Pickup, Craft, Reward, Scripted
+         public int Quantity { get; }
+         public EntityId? SourceEntity { get; }
+     }
+     ```
+
+3. **Version by Data, Not by Type Name**
+   - Don't do `ItemAcquiredV2Message` ❌
+   - Evolve fields:
+     - Add new fields ✅
+     - Add new enum values ✅
+     - Deprecate old ones with `[Obsolete]` if absolutely necessary ✅
+
+4. **Export-Time Validation of Graph Subscriptions** (Must-Have)
+   - In `XNodeGraphExporter.Validate`:
+     - For each `MessageSubscription`:
+       - Verify the `MessageType` exists and implements `IGameMessage`
+       - **Fail export if not**
+     - For `MessageFieldCheckNode` / `MessageFieldGetNode`:
+       - Resolve the selected `FieldName` against the actual `MessageType` using reflection
+       - If missing or type mismatch: **fail export with a loud error**
+   - That way, changing `EnemyDefeatedMessage` breaks at export time, not silently at runtime.
+
+5. **Central Registry for Message Metadata** (Recommended)
+   - A static registry:
+     ```csharp
+     public static class GameMessageRegistry
+     {
+         public static readonly IReadOnlyList<Type> AllMessageTypes = new[]
+         {
+             typeof(ItemAcquiredMessage),
+             typeof(ItemCraftedMessage),
+             typeof(EnemyDefeatedMessage),
+             typeof(QuestStartedMessage),
+             // ...
+         };
+     }
+     ```
+   - Exporter can validate that all subscribed message types are in this list
+   - Any new `IGameMessage` must be registered here or tests fail
+
+6. **Tests for Schema Lock**
+   - Add a test suite that:
+     - Asserts all `IGameMessage` types live in the expected assembly/namespace
+     - Asserts all `MessageSubscription.MessageType` used in sample graphs exist and are in the registry
+   - When you change a message, tests break and force you to fix graphs or registry
+
+**Implementation Tasks:**
+- [ ] Create `MToolKit.Runtime.Messages` namespace structure
+- [ ] Implement export-time validation in `XNodeGraphExporter` for message types and fields
+- [ ] Create `GameMessageRegistry` with all message types
+- [ ] Add schema lock tests
+- [ ] Document message versioning strategy (evolve payloads, not types)
+- [ ] Add CI/CD validation step for graph exports
+
+- **Priority:** **Critical** - Silent failures are the worst kind. This can break production content without warning.
+
+#### 5. Content Sprawl and Dead Graphs ⚠️
+- **Issue:** Over time you accumulate graphs:
+  - No longer referenced (dead content)
+  - Overlapping responsibility on the same events
+  - That raises maintenance cost and makes "what's actually active?" unclear unless you enforce references/cleanup.
+- **Impact:** Maintenance burden, confusion about what's actually running, potential conflicts
+- **Mitigation:**
+  - Add tooling to detect unreferenced graphs (not in registry, not loaded)
+  - Add analysis tool: "Which graphs subscribe to the same events?"
+  - Consider graph lifecycle management (mark as deprecated, archive old versions)
+  - Document graph ownership and cleanup process
+- **Priority:** Medium (important for long-term maintainability)
+
+#### 6. Graphs Encoding Invariants That Belong in Services 🔴 **CRITICAL**
+
+**Goal:** Graphs orchestrate. Services own invariants and complex rules.
+
+- **Issue:** The architecture encourages orchestration, but it's easy to start pushing business rules (quest validity, inventory constraints, etc.) into graphs instead of services. That makes invariants harder to test and reuse.
+- **Impact:** 
+  - Business logic scattered across graphs instead of centralized services
+  - Hard to test invariants (can't unit test graph logic easily)
+  - Logic duplication across multiple graphs
+  - Violations of single source of truth principle
+
+**Hard Line Definition:**
+
+- **Invariants** = rules that must hold system-wide, regardless of how you call into the system:
+  - Inventory capacity
+  - Item stack limits
+  - Quest completion criteria validity
+  - Dialogue availability conditions
+  - Save/load integrity rules
+
+Those must live in services, not in graphs. **Graphs can assume invariants. They cannot define them.**
+
+**Hardening Rules:**
+
+1. **No Direct Writes to Core Domain State from Graphs**
+   - Graph executors should not be writing directly into domain models:
+     - No `inventory.Items.Add(...)` inside an executor ❌
+     - No `quest.Status = Completed` inside an executor ❌
+   - They should call into services:
+     ```csharp
+     public sealed class CompleteQuestNodeExecutor : IGraphNodeExecutor
+     {
+         readonly IQuestManager _questManager;
+         
+         public CompleteQuestNodeExecutor(IQuestManager questManager) 
+         { 
+             _questManager = questManager; 
+         }
+         
+         public async UniTask ExecuteAsync(...)
+         {
+             var questId = node.Parameters["QuestId"] as Guid;
+             await _questManager.CompleteQuestAsync(questId, ct);
+             // QuestManager enforces invariants
+         }
+     }
+     ```
+
+2. **All "Mutating Nodes" are Thin Adapters Over Services**
+   - For each domain:
+     - Inventory nodes → `IInventoryService`
+     - Crafting nodes → `ICraftingService`
+     - Quest nodes → `IQuestManager`
+     - Dialogue nodes → `IDialogueUIService` / `IDialogueService`
+   - Any invariant must be enforced in those services, written once, tested there
+
+3. **Graphs Only Combine Decisions, They Don't Define Hard Rules**
+
+   **Example of Wrong vs Right:**
+
+   - **Wrong (graph owns invariant):**
+     - Graph: "If inventory is full, drop item on ground instead of adding"
+     - Service: blindly adds to inventory ❌
+
+   - **Right:**
+     ```csharp
+     public interface IInventoryService
+     {
+         bool CanAdd(ItemId id, int qty);
+         InventoryAddResult TryAdd(ItemId id, int qty); // result contains overflow, dropped, etc.
+     }
+     ```
+     - Graph:
+       - Calls `TryAdd`
+       - Branches on the result to decide what *extra* to do:
+         - Show a popup
+         - Trigger a tutorial
+         - Start a quest about backpack upgrades
+
+4. **Promote Logic from Graphs When It Smells Invariant-ish**
+
+   When you find yourself writing the same pattern in graphs:
+   - "If Quest A is complete and Quest B is not started and player has Item X, then allow Y"
+
+   Treat that as a symptom that you need a domain-level predicate:
+   ```csharp
+   public interface IQuestService
+   {
+       bool CanStartQuest(QuestId questId);
+       bool IsQuestChainUnlocked(QuestChainId chainId);
+   }
+   ```
+
+   Then add a small node:
+   ```csharp
+   public sealed class QuestConditionNodeExecutor : IGraphNodeExecutor
+   {
+       readonly IQuestService _questService;
+       
+       public async UniTask ExecuteAsync(...)
+       {
+           var questId = (QuestId)node.Parameters["QuestId"];
+           var canStart = _questService.CanStartQuest(questId);
+           context.EnqueueNext(canStart ? "OnTrue" : "OnFalse");
+       }
+   }
+   ```
+
+   Now the invariant lives in code, and the graph simply branches on it.
+
+5. **Review Rule: Any Node That Changes "Real World" State is Suspect**
+
+   At code review level:
+   - Flag any executor that:
+     - Writes directly to domain objects ❌
+     - Uses ES3 / save system directly ❌
+     - Talks to Unity world in a way that bypasses a known service ❌
+   - Those should almost always be rewritten as calls into an existing service, or force you to factor a service out first
+
+6. **Testing Focus is on Services, Not on Graphs**
+
+   - Unit tests must:
+     - Hit `IInventoryService`, `IQuestManager`, `ICraftingService`, etc.
+     - Assert invariants there
+   - Graph tests:
+     - Only need to confirm "wiring":
+       - Given messages and service mocks, the right service methods are called and the expected graph paths fire
+   - If you find yourself wanting "tests to assert invariant X via a graph," that invariant is in the wrong place
+
+**Implementation Tasks:**
+- [ ] Document architectural principle: "Graphs orchestrate, services enforce invariants" (in README)
+- [ ] Create code review checklist: "Does this executor write directly to domain state?"
+- [ ] Audit all existing executors for direct domain writes
+- [ ] Create examples showing correct patterns (service validates, graph reacts)
+- [ ] Add linting/validation to detect common anti-patterns (complex validation logic in graphs)
+- [ ] Ensure all domain services expose needed APIs so graphs don't need to reimplement logic
+
+**Short Version:**
+- Graphs never own correctness; they only orchestrate services that do
+- Any rule that must always hold goes into a service API and gets tested there
+- Nodes are thin adaptors over services, not reimplementations of business logic
+
+- **Priority:** **Critical** - This is the biggest architectural risk. Once violated, it's hard to fix.
+
+#### 7. Performance Under Broad, Frequent Events ⚠️
+- **Issue:** If you ever introduce high-frequency or overly generic events with many subscribers and weak filtering, routing plus executor overhead can become noticeable. It's controllable, but only if you stay disciplined about what gets put on the bus.
+- **Impact:** Performance degradation with high-frequency events or many subscribers
+- **Mitigation:**
+  - **Discipline:** Keep events specific, not overly generic
+  - **Filtering:** Use domain filters and message field checks to narrow subscriptions
+  - **Profiling:** Add performance metrics to detect hot paths
+  - **Documentation:** Guidelines on what should/shouldn't be an event
+  - **Consider:** Event batching or throttling for high-frequency events
+- **Priority:** Medium (only matters if discipline breaks down)
+
+#### 8. Graph Complexity / Spaghetti Graphs 🔴 **CRITICAL**
+
+**Goal:** Prevent graphs from becoming unreadable "worse code with wires" that defeats the purpose of visual orchestration.
+
+- **Issue:** Graphs will accrete logic until they're unreadable and effectively "worse code with wires." That kills the whole point of visual orchestration.
+- **Impact:**
+  - No one can reason about behavior from the graph
+  - Changes become dangerous
+  - You're incentivized to bypass the system and "just write C#"
+- **Mitigation Rules:**
+  - **Hard cap node count / depth per graph**
+  - **Enforce composition:** Small graphs and function/subgraph calls instead of megagraphs
+  - **Lint for complexity:** Fan-in/fan-out, depth, node count
+
+**Implementation Tasks:**
+- [ ] Define complexity budget: e.g. "≤ N nodes, ≤ D depth, ≤ F outgoing branches per node"
+- [ ] Implement `GraphComplexityAnalyzer` (editor utility):
+  - Compute node count, depth, average branching factor, number of entry points
+  - Tag graphs with "simple / medium / complex / forbidden" category
+- [ ] Add editor warnings for graphs above threshold
+- [ ] Add docs section: "When to split a graph / move logic to C# / move to function graphs"
+
+- **Priority:** **Critical** - If graphs become unreadable, the system loses its value.
+
+#### 9. Generic State Turning Into Global God Table 🔴 **CRITICAL**
+
+**Goal:** Prevent generic state from becoming an unmaintainable global key/value dumping ground.
+
+- **Issue:** The planned `GenericStateSet/Get` and generic state nodes can silently become a global key/value dumping ground used by every graph.
+- **Impact:**
+  - Hidden coupling between unrelated graphs and domains
+  - Impossible to know who owns which piece of state
+  - Bugs that depend on obscure key naming collisions
+- **Mitigation Rules:**
+  - **Namespaced keys** (`domain.subsystem.key`), never bare strings
+  - **Separate state containers per domain** (quests, world, player, etc.)
+  - **No cross-domain state writes** without going through a service
+
+**Implementation Tasks:**
+- [ ] Introduce `StateKey` value object:
+  ```csharp
+  public readonly struct StateKey {
+      public string Domain { get; }
+      public string Name { get; }
+  }
+  ```
+- [ ] Replace raw string keys in state APIs with `StateKey`
+- [ ] Enforce domain scoping: `IStateService` takes a domain or is injected per domain
+- [ ] Add validation: forbid writes to "foreign" domains unless explicitly allowed
+- [ ] Add analyzer listing all used `StateKey`s per graph and per domain
+
+- **Priority:** **Critical** - Global state is a maintenance nightmare. Must be prevented from the start.
+
+#### 10. xNode / Authoring Layer Fragility ⚠️
+
+**Goal:** Treat DTO schema as the stable boundary, not xNode, to prevent editor changes from breaking content.
+
+- **Issue:** xNode is authoring-only, but still a single point of failure for content: package updates, Unity API changes, or your own forks can corrupt graphs or break export.
+- **Impact:**
+  - Editor upgrades break graph editing/export
+  - Subtle serialization changes break GUIDs or connections
+  - You get stuck on a specific xNode/Unity version
+- **Mitigation Rules:**
+  - **Treat DTO schema as the stable boundary, not xNode**
+  - **Keep exporter and DTOs decoupled from xNode internals**
+  - **Have regression tests** that assert exporter behavior independent of editor
+
+**Implementation Tasks:**
+- [ ] Define explicit "Authoring Adapter Layer":
+  - `IAuthoringGraphAdapter`, `IAuthoringNodeAdapter`, `IAuthoringPortAdapter`
+  - xNode implementation lives behind this interface
+- [ ] Refactor exporter to depend only on adapter interfaces, not xNode types
+- [ ] Add tests that feed synthetic adapter graphs into exporter (no xNode dependency)
+- [ ] Pin tested versions of xNode + Unity in `README` + CI config
+- [ ] Add a "migration checklist" for upgrading xNode / Unity (run exporter tests, validate sample graphs)
+
+- **Priority:** High - Prevents being locked to specific versions and protects content from editor changes.
+
+#### 11. Asset / Addressables Integrity 🔴 **CRITICAL**
+
+**Goal:** Ensure all graph-referenced assets are available at runtime, with clear failure modes.
+
+- **Issue:** Graphs reference `QuestDefinition`, dialogue assets, prefabs, etc. via `AssetReference`. Addressables config changes can make those references fail at runtime or in some build variants.
+- **Impact:**
+  - Graphs silently fail because referenced assets aren't in any Addressables group or build
+  - Behavior differs between "play mode in editor" and player builds
+  - Hard to diagnose missing content vs logic bugs
+- **Mitigation Rules:**
+  - **Build-time validation** that all graph-referenced assets are in an Addressables group in the current build profile
+  - **Explicit failure mode** when an asset can't be resolved: no silent nulls
+
+**Implementation Tasks:**
+- [ ] Implement `VisualGraphsBuildValidator` running in `IPreprocessBuildWithReport`:
+  - Walk all `RuntimeGraphDefinition`s used in current build
+  - Collect all `AssetReference`s
+  - Ask Addressables API if each is included in build
+  - **Fail build with a clear report if any are missing**
+- [ ] In runtime loader:
+  - **Fail fast with a clear error + log** when an `AssetReference` fails to load for a graph
+  - Optionally emit a `GraphAssetMissingMessage` for debugging hooks
+- [ ] Add editor window "Graph Asset Report" listing:
+  - Each graph → referenced assets → Addressables group / status
+
+- **Priority:** **Critical** - Silent failures at runtime are unacceptable. Must catch at build time.
+
+#### 12. Plugin / Service Availability and Load Order 🔴 **CRITICAL**
+
+**Goal:** Ensure graphs fail fast if required services/plugins are missing, rather than silently failing at runtime.
+
+- **Issue:** Graph executors assume certain services/plugins exist (`IQuestManager`, `IInventoryService`, `IDialogueUIService`, etc.). If plugin load order or configuration changes, graphs may run without required services.
+- **Impact:**
+  - Runtime null references or no-op behavior
+  - Behavior varies by scene or configuration profile
+  - Bugs that only appear when a plugin is disabled or refactored
+- **Mitigation Rules:**
+  - **Explicit capability flags:** Plugin advertises what it provides
+  - **Graphs declare required capabilities** at export time
+  - **System fails early** if a graph requiring a capability is enabled without its plugin
+
+**Implementation Tasks:**
+- [ ] Define `IGraphCapability` and `IGraphCapabilityProvider`:
+  ```csharp
+  public interface IGraphCapabilityProvider {
+      bool HasCapability(string capabilityId);
+  }
+  ```
+- [ ] Give each domain plugin a static capability id set:
+  - `VisualGraphs.Quest`, `VisualGraphs.Dialogue`, `Inventory.Core`, etc.
+- [ ] Extend graph metadata to include `RequiredCapabilities: string[]`
+- [ ] At plugin init:
+  - Check all active graphs against available capabilities
+  - **Fail fast (or hard-warn)** when requirements are not met
+- [ ] Add export-time validation: if a graph uses an executor tied to capability X, add X to `RequiredCapabilities`
+
+- **Priority:** **Critical** - Runtime failures due to missing services are unacceptable. Must validate at startup.
+
+#### 13. Observability / Log Noise vs Signal ⚠️
+
+**Goal:** Provide structured, sampled logging that enables debugging without drowning in noise.
+
+- **Issue:** A system like this can either be opaque or drown you in logs. Both states are bad: either you can't see what's happening, or logs are unusable.
+- **Impact:**
+  - Hard to debug event flows and graph execution in real games
+  - Logging overhead in hot paths
+  - No way to answer "what the hell just handled this message?"
+- **Mitigation Rules:**
+  - **Structured, sampled logging** with execution correlation IDs
+  - **Log levels scoped per subsystem**
+  - **Ability to attach a temporary tracer** for one event or one graph
+
+**Current Status:**
+
+✅ **Already Complete:**
+- Serilog structured logging with contextual logging (`ForContext<T>()`, `ForFeature("VisualGraphs")`)
+- Structured properties in log messages (`{GraphId}`, `{MessageType}`, `{NodeId}`, etc.)
+- Appropriate log levels (Debug, Information, Warning, Error)
+- Node-level execution logging (started, completed, errors) in `GraphRunner`
+- Subscription setup and routing error logging in `EventBusBridge`
+- Plugin lifecycle logging in `VisualGraphPlugin`
+
+❌ **Missing:**
+- Correlation IDs / Execution IDs per routed event
+- Graph-level execution tracking (started/finished/failed) - only node-level exists
+- Event routing logs in `GraphEventRouter` (which graphs were targeted)
+- Config knobs for log level and sampling rate
+- Debug session helper for temporary verbosity
+
+**Implementation Tasks:**
+- [ ] Add correlation id per routed event:
+  - `GraphExecutionContext` carries `ExecutionId` (Guid or incrementing id)
+  - Pass `ExecutionId` through routing chain
+- [ ] Add logging to `GraphEventRouter.RouteAsync`:
+  - Log event routed → list of graphs targeted (with ExecutionId)
+- [ ] Add graph-level execution tracking in `GraphRunner`:
+  - Log graph execution started / finished / failed (with ExecutionId)
+- [ ] Add config knobs to `VisualGraphConfig`:
+  - Log level for VisualGraphs subsystem (default: Information)
+  - Sampling rate for "normal" execution vs full trace mode
+  - Enable/disable verbose node-level logging
+- [ ] Implement a "Debug Session" helper:
+  - Temporarily increase verbosity for specific graph id or message type
+  - Auto-revert after N events or seconds
+
+- **Priority:** High - Essential for debugging production issues without performance impact. **Foundation is solid, needs correlation IDs and config/sampling.**
+
+### Recommended Mitigation Tasks
+
+**Critical Priority (Architectural Integrity):**
+
+**Risk #4 - Message Schema / Taxonomy Drift:**
+- [ ] Create `MToolKit.Runtime.Messages` namespace structure
+- [ ] Implement export-time validation in `XNodeGraphExporter` for message types and fields
+- [ ] Create `GameMessageRegistry` with all message types
+- [ ] Add schema lock tests
+- [ ] Document message versioning strategy (evolve payloads, not types)
+- [ ] Add CI/CD validation step for graph exports
+
+**Risk #6 - Graphs Encoding Invariants:**
+- [ ] Document architectural principle: "Graphs orchestrate, services enforce invariants" (in README)
+- [ ] Create code review checklist: "Does this executor write directly to domain state?"
+- [ ] Audit all existing executors for direct domain writes
+- [ ] Create examples showing correct patterns (service validates, graph reacts)
+- [ ] Add linting/validation to detect common anti-patterns (complex validation logic in graphs)
+- [ ] Ensure all domain services expose needed APIs so graphs don't need to reimplement logic
+
+**Risk #3 - Save/Load Lifecycle Ordering:**
+- [ ] Define clear save/load phases in `SaveSystemCoordinator`
+- [ ] Ensure graph state restores before event subscriptions are active
+- [ ] Add validation to detect out-of-order restoration
+- [ ] Consider a "restore mode" that suppresses events until fully loaded
+- [ ] Test save/load extensively with complex graph state
+
+**Risk #8 - Graph Complexity:**
+- [ ] Define complexity budget (node count, depth, branching factor)
+- [ ] Implement `GraphComplexityAnalyzer` editor utility
+- [ ] Add editor warnings for graphs above threshold
+- [x] Add docs section: "When to split a graph / move logic to C# / move to function graphs" ✅ (See README "When to Refactor Graphs")
+
+**Risk #9 - Generic State God Table:**
+- [ ] Introduce `StateKey` value object with domain scoping
+- [ ] Replace raw string keys in state APIs with `StateKey`
+- [ ] Enforce domain scoping in `IStateService`
+- [ ] Add validation to forbid cross-domain writes
+- [ ] Add analyzer listing all used `StateKey`s per graph and domain
+
+**Risk #10 - xNode / Authoring Layer Fragility:**
+- [ ] Define explicit "Authoring Adapter Layer" interfaces
+- [ ] Refactor exporter to depend only on adapter interfaces
+- [ ] Add tests with synthetic adapter graphs (no xNode dependency)
+- [ ] Pin tested versions of xNode + Unity in README + CI
+- [ ] Add migration checklist for upgrading xNode / Unity
+
+**Risk #11 - Asset / Addressables Integrity:**
+- [ ] Implement `VisualGraphsBuildValidator` (IPreprocessBuildWithReport)
+- [ ] Fail build with clear report if referenced assets are missing
+- [ ] Fail fast in runtime loader with clear error when asset fails to load
+- [ ] Add editor window "Graph Asset Report"
+
+**Risk #12 - Plugin / Service Availability:**
+- [ ] Define `IGraphCapability` and `IGraphCapabilityProvider`
+- [ ] Give each domain plugin static capability id set
+- [ ] Extend graph metadata with `RequiredCapabilities`
+- [ ] Validate capabilities at plugin init (fail fast if missing)
+- [ ] Add export-time validation for capability requirements
+
+**Risk #13 - Observability / Log Noise:**
+- [ ] Add correlation id per routed event (`ExecutionId` in context)
+- [ ] Emit structured logs (event routed, graph execution, node errors)
+- [ ] Add config knobs (log level, sampling rate)
+- [ ] Implement "Debug Session" helper (temporary verbosity for specific graph/message)
+
+**High Priority (Tooling & Visibility):**
+- [ ] Add tooling: "Find all graphs subscribing to MessageType X"
+- [ ] Add runtime debugging: "Show all graphs that handled this event"
+- [ ] Add execution metrics/telemetry (track failures, performance)
+
+**Medium Priority:**
+- [ ] Add tooling to detect unreferenced/dead graphs
+- [ ] Add performance metrics for event routing
+- [ ] Create graph lifecycle management process
 
 ---
 

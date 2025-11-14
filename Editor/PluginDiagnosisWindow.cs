@@ -13,11 +13,11 @@ using Object = UnityEngine.Object;
 
 namespace MToolKit.Runtime.Editor
 {
-    /// <summary>
-    ///   Unity Editor window for runtime diagnosis of plugin states.
-    ///   Provides real-time monitoring of the plugin lifecycle, dependencies, and runtime status.
-    /// </summary>
-    public class PluginDiagnosisWindow : EditorWindow
+  /// <summary>
+  ///   Unity Editor window for runtime diagnosis of plugin states.
+  ///   Provides real-time monitoring of the plugin lifecycle, dependencies, and runtime status.
+  /// </summary>
+  public class PluginDiagnosisWindow : EditorWindow
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<PluginDiagnosisWindow>().ForFeature("Editor"));
     private static ILogger log => logLazy.Value ?? Logger.None;
@@ -35,7 +35,7 @@ namespace MToolKit.Runtime.Editor
     private bool showFilters;
     private bool showOnlyActivePlugins;
 
-    [MenuItem("Tools/Plugin Diagnostics")]
+    [MenuItem("Tools/MToolKit/Plugin Diagnostics")]
     public static void ShowWindow()
     {
       PluginDiagnosisWindow window = GetWindow<PluginDiagnosisWindow>("Plugin Diagnostics");
@@ -290,10 +290,10 @@ namespace MToolKit.Runtime.Editor
       EditorGUILayout.Space(2);
     }
 
-        /// <summary>
-        ///   Determines the background color for a plugin based on its type.
-        /// </summary>
-        private Color GetPluginTypeBackgroundColor(PluginStateModel pluginState)
+    /// <summary>
+    ///   Determines the background color for a plugin based on its type.
+    /// </summary>
+    private Color GetPluginTypeBackgroundColor(PluginStateModel pluginState)
     {
       // Check if it's a runtime plugin (pastel pink)
       if (pluginState.Name.Contains("RuntimePlugin"))
@@ -331,7 +331,7 @@ namespace MToolKit.Runtime.Editor
         EPluginStatus.Error => Color.red,
         EPluginStatus.Stopped => Color.gray,
         _ => Color.white
-        };
+      };
     }
 
     private string GetStatusIcon(EPluginStatus status)
@@ -343,7 +343,7 @@ namespace MToolKit.Runtime.Editor
         EPluginStatus.Error => "✗",
         EPluginStatus.Stopped => "○",
         _ => "?"
-        };
+      };
     }
 
     private void RefreshPluginStates()

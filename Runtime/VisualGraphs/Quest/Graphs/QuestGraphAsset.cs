@@ -29,8 +29,9 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Graphs
     [BoxGroup("Event Subscriptions")]
     [InfoBox("Graph will ONLY execute when these MessagePipe events are received.\n" +
              "Entry nodes must exist for 'Required' subscriptions.")]
+    [InfoBox("@GetValidationErrors()", InfoMessageType.Error, VisibleIf = "@!ValidateSubscriptionsForOdin(Subscriptions)")]
     [ListDrawerSettings(ShowIndexLabels = true, DraggableItems = true)]
-    [ValidateInput(nameof(ValidateSubscriptions), "See validation errors above")]
+    [ValidateInput(nameof(ValidateSubscriptionsForOdin))]
     public List<MessageSubscription> Subscriptions = new();
 
 #if UNITY_EDITOR
@@ -78,6 +79,20 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Graphs
           string.Join("\n", errors),
           "OK");
       }
+    }
+
+    private bool ValidateSubscriptionsForOdin(List<MessageSubscription> subscriptions)
+    {
+      var (isValid, _) = ValidateSubscriptions(subscriptions, null);
+      return isValid;
+    }
+
+    private string GetValidationErrors()
+    {
+      var (_, errors) = ValidateSubscriptions(Subscriptions, null);
+      if (errors == null || errors.Length == 0)
+        return null;
+      return string.Join("\n", errors);
     }
 
     private (bool isValid, string[] errors) ValidateSubscriptions(List<MessageSubscription> subscriptions, string memberName)

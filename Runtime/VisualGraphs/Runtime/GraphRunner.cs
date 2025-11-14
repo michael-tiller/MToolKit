@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.MessageBus.Interfaces;
+using MToolKit.Runtime.VisualGraphs.Runtime.Debug;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime.State;
@@ -64,6 +66,13 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
 
       log.ForMethod().Information("Quest: Graph '{GraphId}' received message '{MessageType}' (domain: {Domain})",
         Definition.GraphId, message.GetType().Name, domain ?? "null");
+
+      // Emit debug event for graph execution start
+      NodeDebugEvents.RaiseGraphExecutionChanged(
+        Definition.GraphId,
+        Definition.GraphDomain,
+        isStarting: true,
+        message.GetType().Name);
 
       var queue = new NodeExecutionQueue();
 
@@ -140,19 +149,42 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
         log.ForMethod().Information("Quest: Executing node {NodeId} (type: {NodeType}) in graph '{GraphId}'",
           nodeId, nodeDef.NodeType, Definition.GraphId);
 
+        var stopwatch = Stopwatch.StartNew();
+        string errorMessage = null;
+
         try
         {
           await executor.ExecuteAsync(Definition, nodeDef, state, message, context, ct);
-          log.ForMethod().Information("Quest: Completed execution of node {NodeId} (type: {NodeType})",
-            nodeId, nodeDef.NodeType);
+          log.ForMethod().Information("Quest: Completed execution of node {NodeType} ({NodeId})",
+            nodeDef.NodeType, nodeId);
         }
         catch (Exception ex)
         {
-          log.ForMethod().Error(ex, "Quest: Graph '{GraphId}' - error executing node {NodeId} (type: {NodeType}): {Message}",
-            Definition.GraphId, nodeId, nodeDef.NodeType, ex.Message);
+          errorMessage = ex.Message;
+          log.ForMethod().Error(ex, "Quest: Graph '{GraphId}' - error executing node {NodeType} ({NodeId}): {Message}",
+            Definition.GraphId, nodeDef.NodeType, nodeId, ex.Message);
           // TODO: Emit Graph.ExecutorError message
         }
+        finally
+        {
+          stopwatch.Stop();
+          // Emit debug event for node execution
+          NodeDebugEvents.RaiseNodeExecuted(
+            Definition.GraphId,
+            nodeId,
+            nodeDef.NodeType,
+            stopwatch.Elapsed,
+            payload: message,
+            errorMessage: errorMessage);
+        }
       }
+
+      // Emit debug event for graph execution end
+      NodeDebugEvents.RaiseGraphExecutionChanged(
+        Definition.GraphId,
+        Definition.GraphDomain,
+        isStarting: false,
+        message.GetType().Name);
     }
 
     public GraphStateSnapshot ExportState()

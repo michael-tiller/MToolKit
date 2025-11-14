@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -52,7 +53,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       this.eventEmitter = eventEmitter ?? throw new ArgumentNullException(nameof(eventEmitter));
     }
 
-    public async UniTask<IGraphRunner> LoadGraphAsync(string graphId, CancellationToken ct = default)
+    public async UniTask<IGraphRunner?> LoadGraphAsync(string graphId, CancellationToken ct = default)
     {
       if (string.IsNullOrEmpty(graphId))
         throw new ArgumentException("Graph ID cannot be null or empty", nameof(graphId));
@@ -64,18 +65,26 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
         return existingRunner;
       }
 
-      // Try quest definitions first
-      var questDef = registry.QuestDefinitions?.Find(q => q.Guid == graphId);
+      // Try self-registered quest definitions first (preferred)
+      var questDef = Runtime.GraphDefinitionRegistry.GetQuestDefinition(graphId);
       if (questDef != null)
       {
         var runner = await LoadQuestGraphAsync(questDef, ct);
-        loadedRunners[graphId] = runner;
-        router.RegisterRunner(runner);
-        return runner;
+        if (runner != null)
+        {
+          loadedRunners[graphId] = runner;
+          router.RegisterRunner(runner);
+          return runner;
+        }
+        // Quest has no graph asset (optional) - this is valid, but can't load a runner
+        // Return null runner - caller should handle this gracefully
+        log.Warning("Quest '{QuestId}' has no quest-level GraphAsset (optional). Returning null runner.",
+          graphId);
+        return null;
       }
 
-      // Try dialogue definitions
-      var dialogueDef = registry.DialogueDefinitions?.Find(d => d.DialogueId == graphId);
+      // Try self-registered dialogue definitions
+      var dialogueDef = Runtime.GraphDefinitionRegistry.GetDialogueDefinition(graphId);
       if (dialogueDef != null)
       {
         var runner = await LoadDialogueGraphAsync(dialogueDef, ct);
@@ -84,7 +93,34 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
         return runner;
       }
 
-      throw new InvalidOperationException($"Graph '{graphId}' not found in registry");
+      // Fallback to registry asset (backward compatibility)
+      questDef = registry.QuestDefinitions?.Find(q => q.Guid == graphId);
+      if (questDef != null)
+      {
+        var runner = await LoadQuestGraphAsync(questDef, ct);
+        if (runner != null)
+        {
+          loadedRunners[graphId] = runner;
+          router.RegisterRunner(runner);
+          return runner;
+        }
+        // Quest has no graph asset (optional) - this is valid, but can't load a runner
+        // Return null runner - caller should handle this gracefully
+        log.Warning("Quest '{QuestId}' has no quest-level GraphAsset (optional). Returning null runner.",
+          graphId);
+        return null;
+      }
+
+      dialogueDef = registry.DialogueDefinitions?.Find(d => d.DialogueId == graphId);
+      if (dialogueDef != null)
+      {
+        var runner = await LoadDialogueGraphAsync(dialogueDef, ct);
+        loadedRunners[graphId] = runner;
+        router.RegisterRunner(runner);
+        return runner;
+      }
+
+      throw new InvalidOperationException($"Graph '{graphId}' not found in registry or self-registered definitions");
     }
 
     public void UnloadGraph(string graphId)
@@ -115,12 +151,12 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       return loadedRunners.ContainsKey(graphId);
     }
 
-    public IGraphRunner GetRunner(string graphId)
+    public IGraphRunner? GetRunner(string graphId)
     {
       return loadedRunners.TryGetValue(graphId, out var runner) ? runner : null;
     }
 
-    private async UniTask<IGraphRunner> LoadQuestGraphAsync(QuestDefinition questDef, CancellationToken ct)
+    private async UniTask<IGraphRunner?> LoadQuestGraphAsync(QuestDefinition questDef, CancellationToken ct)
     {
       await UniTask.WaitForEndOfFrame(ct);
       var graphAsset = questDef.GraphAsset;
@@ -130,26 +166,36 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       if (!string.IsNullOrEmpty(questDef.AddressableKey))
       {
         log.Debug("Loading quest graph '{QuestId}' via Addressables key '{Key}'",
-          questDef.QuestId, questDef.AddressableKey);
+          questDef.Guid, questDef.AddressableKey);
 
         var handle = Addressables.LoadAssetAsync<Authoring.Graphs.QuestGraphAsset>(questDef.AddressableKey);
         graphAsset = await handle.ToUniTask(cancellationToken: ct);
-        loadedHandles[questDef.QuestId] = handle;
+        loadedHandles[questDef.Guid] = handle;
 
         if (graphAsset == null)
-          throw new InvalidOperationException($"Failed to load quest graph '{questDef.QuestId}' from Addressables key '{questDef.AddressableKey}'");
+        {
+          log.Warning("Failed to load quest graph '{QuestId}' from Addressables key '{Key}' - quest-level graphs are optional, skipping",
+            questDef.Guid, questDef.AddressableKey);
+          return null;
+        }
       }
 #endif
 
+      // Quest-level graphs are OPTIONAL - return null if not assigned
       if (graphAsset == null)
-        throw new InvalidOperationException($"Quest graph '{questDef.Guid}' has no GraphAsset assigned");
+      {
+        log.Debug("Quest '{QuestId}' has no quest-level GraphAsset (optional) - skipping graph load",
+          questDef.Guid);
+        return null;
+      }
 
       // Export and initialize
       var exporter = new XNodeGraphExporter(executorRegistry);
       var runtimeDef = exporter.Export(graphAsset);
       runtimeDef.GraphId = questDef.Guid;
 
-      var state = new InMemoryGraphState();
+      var baseState = new InMemoryGraphState();
+      var state = new DebuggableGraphState(baseState, runtimeDef.GraphId);
 
       // Apply variables
       if (registry.GlobalVariables != null)
@@ -195,7 +241,8 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       var runtimeDef = exporter.Export(graphAsset);
       runtimeDef.GraphId = dialogueDef.DialogueId;
 
-      var state = new InMemoryGraphState();
+      var baseState = new InMemoryGraphState();
+      var state = new DebuggableGraphState(baseState, runtimeDef.GraphId);
 
       // Apply variables
       if (registry.GlobalVariables != null)

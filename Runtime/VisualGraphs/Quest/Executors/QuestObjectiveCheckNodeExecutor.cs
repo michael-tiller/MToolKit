@@ -14,6 +14,7 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
   ///   Executor for QuestObjectiveCheckNode.
   ///   Branches execution based on objective completion status.
   /// </summary>
+
   public sealed class QuestObjectiveCheckNodeExecutor : IGraphNodeExecutor
   {
     public string NodeType => "QuestObjectiveCheckNode";

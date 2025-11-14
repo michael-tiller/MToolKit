@@ -14,6 +14,9 @@ using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime.Loading;
 using MToolKit.Runtime.VisualGraphs.Dialogue.Executors;
+using MToolKit.Runtime.VisualGraphs.Quest.Definitions;
+using MToolKit.Runtime.VisualGraphs.Dialogue.Definitions;
+using System.Linq;
 using Serilog;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -317,18 +320,39 @@ namespace MToolKit.Runtime.VisualGraphs
 
       var loadTasks = new List<UniTask>();
 
-      // Load quest graphs
-      foreach (var questDef in registry.QuestDefinitions)
+      // Use self-registered definitions (preferred) or fallback to registry
+      var questDefs = Runtime.GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
+      if (questDefs.Count == 0 && registry != null && registry.QuestDefinitions != null)
       {
-        if (questDef == null)
+        // Fallback to registry asset for backward compatibility
+        questDefs = registry.QuestDefinitions.Where(q => q != null).ToList();
+      }
+
+      foreach (var questDef in questDefs)
+      {
+        // Quest-level graphs are OPTIONAL - skip if no GraphAsset
+        // Objective graphs are loaded separately when quest starts (they're mandatory per objective)
+        if (questDef.GraphAsset == null)
         {
-          log.ForGameObject(gameObject).Warning("Skipping null quest definition");
+          log.ForGameObject(gameObject).Debug(
+            "Skipping quest '{QuestName}' ({QuestId}) - no quest-level GraphAsset (quest-level graphs are optional)",
+            questDef.DisplayName, questDef.Guid);
           continue;
         }
 
         try
         {
-          loadTasks.Add(graphLoader.LoadGraphAsync(questDef.Guid, cts.Token).AsUniTask());
+          var loadTask = graphLoader.LoadGraphAsync(questDef.Guid, cts.Token);
+          loadTasks.Add(loadTask.ContinueWith(runner =>
+          {
+            if (runner == null)
+            {
+              log.ForGameObject(gameObject).Debug(
+                "Quest '{QuestId}' has no quest-level graph (optional) - skipped",
+                questDef.Guid);
+            }
+            return runner;
+          }).AsUniTask());
         }
         catch (Exception ex)
         {
@@ -338,15 +362,16 @@ namespace MToolKit.Runtime.VisualGraphs
         }
       }
 
-      // Load dialogue graphs
-      foreach (var dialogueDef in registry.DialogueDefinitions)
+      // Use self-registered definitions (preferred) or fallback to registry
+      var dialogueDefs = Runtime.GraphDefinitionRegistry.GetAllDialogueDefinitions().ToList();
+      if (dialogueDefs.Count == 0 && registry != null && registry.DialogueDefinitions != null)
       {
-        if (dialogueDef == null)
-        {
-          log.ForGameObject(gameObject).Warning("Skipping null dialogue definition");
-          continue;
-        }
+        // Fallback to registry asset for backward compatibility
+        dialogueDefs = registry.DialogueDefinitions.Where(d => d != null).ToList();
+      }
 
+      foreach (var dialogueDef in dialogueDefs)
+      {
         try
         {
           loadTasks.Add(graphLoader.LoadGraphAsync(dialogueDef.DialogueId, cts.Token).AsUniTask());
