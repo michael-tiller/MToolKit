@@ -103,6 +103,13 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
     /// Call this during game load before starting any quests.
     /// </summary>
     UniTask RestoreSaveDataAsync(QuestManagerSaveData saveData, CancellationToken ct = default);
+
+    /// <summary>
+    /// Marks quests as completed after graph state restoration.
+    /// This is called by GraphStateSaveController after restoring graph states,
+    /// so that completed quests don't unload their graphs before state is restored.
+    /// </summary>
+    void FinalizeCompletedQuestRestoration(IEnumerable<string> completedQuestGuids);
   }
 }
 

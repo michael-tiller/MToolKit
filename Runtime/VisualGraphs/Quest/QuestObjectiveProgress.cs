@@ -38,8 +38,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
 
     public override string ToString()
     {
-      var status = IsComplete ? "✓" : "";
-      return $"{ObjectiveGuid}: {Current}/{Required} {status}";
+      return $"{Current}/{Required}";
     }
   }
 }

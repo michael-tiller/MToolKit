@@ -16,6 +16,10 @@ using MToolKit.Runtime.VisualGraphs.Runtime.Loading;
 using MToolKit.Runtime.VisualGraphs.Dialogue.Executors;
 using MToolKit.Runtime.VisualGraphs.Quest.Definitions;
 using MToolKit.Runtime.VisualGraphs.Dialogue.Definitions;
+using MToolKit.Runtime.VisualGraphs.Persistence;
+using MToolKit.Runtime.Persistence.Interfaces;
+using MToolKit.Runtime.Persistence;
+using MToolKit.Runtime.Persistence.ES3Integration;
 using System.Linq;
 using Serilog;
 using Sirenix.OdinInspector;
@@ -23,6 +27,7 @@ using UnityEngine;
 using VContainer;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
+using MToolKit.Runtime.VisualGraphs.Quest;
 
 namespace MToolKit.Runtime.VisualGraphs
 {
@@ -44,8 +49,12 @@ namespace MToolKit.Runtime.VisualGraphs
     [Required]
     private EventBusBridge eventBusBridge;
     private CancellationTokenSource cts;
-    private Runtime.GraphEventRouter graphEventRouter;
-    private Quest.IQuestManager questManager;
+    private GraphEventRouter graphEventRouter;
+    private IQuestManager questManager;
+
+    [ShowInInspector]
+    [ReadOnly]
+    public QuestManager QuestManager => questManager as QuestManager;
 
     /// <summary>
     ///   Dependencies required for the Visual Graphs plugin.
@@ -98,6 +107,10 @@ namespace MToolKit.Runtime.VisualGraphs
 
       // Event emitter adapter (registered first, QuestManager will be injected later)
       builder.Register<IEventEmitter, VisualGraphEventEmitter>(Lifetime.Singleton);
+
+      // Save/load controller for graph state persistence
+      // Note: Requires GraphEventRouter (registered above), IES3Service (from GlobalInstaller), and IQuestManager (registered above)
+      builder.Register<Persistence.GraphStateSaveController>(Lifetime.Singleton);
 
       // Register EventBusBridge - try serialized field first, then find on GameObject
       if (eventBusBridge == null)
@@ -261,7 +274,37 @@ namespace MToolKit.Runtime.VisualGraphs
           }
         }
 
-        // Auto-start quest if configured
+        // Register save/load controller with SaveSystemCoordinator FIRST (before auto-start)
+        // This ensures the save controller is registered before any save/load operations
+        // Note: If save system loaded before plugin initialization, the controller won't have been
+        // included in the load, so we need to manually trigger a load after registration
+        var saveControllerRegistered = RegisterSaveController(resolver);
+
+        // If save system already loaded before we registered, manually trigger a load
+        // This ensures quest data is restored even if the save system loaded before plugin initialization
+        if (saveControllerRegistered && questManager != null)
+        {
+          try
+          {
+            if (resolver.TryResolve<SaveSystemCoordinator>(out var saveCoordinator))
+            {
+              // Check if save system has already loaded (by checking if there's a last load time)
+              // If so, manually trigger a load of our controller to restore quest data
+              var saveController = resolver.Resolve<Persistence.GraphStateSaveController>();
+              log.ForGameObject(gameObject).Information("Save controller registered - checking if manual load is needed");
+
+              // Manually trigger load to ensure quest data is restored if save system loaded before registration
+              LoadQuestDataIfNeededAsync(saveController, saveCoordinator).Forget();
+            }
+          }
+          catch (Exception ex)
+          {
+            log.ForGameObject(gameObject).Warning(ex, "Failed to manually load quest data after registration: {Message}", ex.Message);
+          }
+        }
+
+        // Auto-start quest if configured (after save controller is registered)
+        // This allows the save system to restore quests before auto-start runs
         log.ForGameObject(gameObject).Debug("Quest: Checking auto-start conditions - config: {Config}, AutoStartFirstQuest: {AutoStart}, QuestDatabase: {Database}",
           config != null ? "Present" : "NULL",
           config?.AutoStartFirstQuest ?? false,
@@ -282,6 +325,75 @@ namespace MToolKit.Runtime.VisualGraphs
       catch (Exception ex)
       {
         log.ForGameObject(gameObject).Error(ex, "Error during Visual Graphs runtime initialization");
+      }
+    }
+
+    private bool RegisterSaveController(IObjectResolver resolver)
+    {
+      try
+      {
+        // Try to resolve SaveSystemCoordinator
+        if (!resolver.TryResolve<SaveSystemCoordinator>(out var saveCoordinator))
+        {
+          log.ForGameObject(gameObject).Debug("SaveSystemCoordinator not found in DI - graph state persistence will not be available");
+          return false;
+        }
+
+        // Resolve the save controller
+        if (!resolver.TryResolve<Persistence.GraphStateSaveController>(out var saveController))
+        {
+          log.ForGameObject(gameObject).Warning("GraphStateSaveController not found in DI - cannot register with save system");
+          return false;
+        }
+
+        // Register with the save coordinator
+        saveCoordinator.RegisterLocalController(saveController);
+        log.ForGameObject(gameObject).Information("Registered GraphStateSaveController with SaveSystemCoordinator");
+        return true;
+      }
+      catch (Exception ex)
+      {
+        log.ForGameObject(gameObject).Warning(ex, "Failed to register GraphStateSaveController with save system: {Message}", ex.Message);
+        // Don't throw - save system is optional
+        return false;
+      }
+    }
+
+    private async UniTask LoadQuestDataIfNeededAsync(Persistence.GraphStateSaveController saveController, SaveSystemCoordinator saveCoordinator)
+    {
+      try
+      {
+        // Check if save data exists for graphs domain
+        // Use reflection to access private es3Service field
+        var es3ServiceField = saveController.GetType().GetField("es3Service",
+          System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        if (es3ServiceField != null)
+        {
+          var es3Service = es3ServiceField.GetValue(saveController) as IES3Service;
+
+          if (es3Service != null)
+          {
+            var hasQuestData = es3Service.KeyExists("graphs_quest_manager_state");
+            var hasGraphData = es3Service.KeyExists("graphs_graph_states");
+
+            if (hasQuestData || hasGraphData)
+            {
+              log.ForGameObject(gameObject).Information("Save data exists for graphs domain - manually loading after late registration");
+              // Manually trigger load on the controller
+              await saveController.LoadAsync(default);
+              log.ForGameObject(gameObject).Information("Manually loaded quest data after late registration");
+            }
+            else
+            {
+              log.ForGameObject(gameObject).Debug("No save data found for graphs domain - skipping manual load");
+            }
+          }
+        }
+      }
+      catch (Exception ex)
+      {
+        log.ForGameObject(gameObject).Warning(ex, "Error during manual quest data load: {Message}", ex.Message);
       }
     }
 
@@ -430,6 +542,22 @@ namespace MToolKit.Runtime.VisualGraphs
         {
           log.ForGameObject(gameObject).Warning(
             "QuestDatabase has no quests to auto-start");
+          return;
+        }
+
+        // Check if quest is already active (might have been restored from save)
+        if (questManager.IsQuestActive(quest.Guid))
+        {
+          log.ForGameObject(gameObject).Information(
+            "Quest '{QuestName}' is already active (likely restored from save), skipping auto-start", quest.DisplayName);
+          return;
+        }
+
+        // Check if quest is already completed or claimed (might have been restored from save)
+        if (questManager.IsQuestCompleted(quest.Guid) || questManager.IsQuestClaimed(quest.Guid))
+        {
+          log.ForGameObject(gameObject).Information(
+            "Quest '{QuestName}' is already completed or claimed (likely restored from save), skipping auto-start", quest.DisplayName);
           return;
         }
 

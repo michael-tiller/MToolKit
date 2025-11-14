@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using MToolKit.Runtime.VisualGraphs.Quest.Definitions;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
+using Sirenix.OdinInspector;
+using UnityEngine;
 
 namespace MToolKit.Runtime.VisualGraphs.Quest
 {
@@ -9,33 +11,42 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
   /// Runtime state for an active quest.
   /// Tracks when it started, its graph state, and objective progress.
   /// </summary>
+  [Serializable]
   public sealed class QuestRuntimeState
   {
     /// <summary>
     /// GUID of the quest (from QuestDefinition.Guid)
     /// </summary>
-    public string QuestGuid { get; }
+    [field: SerializeField]
+    public string QuestGuid { get; private set; }
 
     /// <summary>
     /// Reference to the quest definition asset
     /// </summary>
-    public QuestDefinition Definition { get; }
+    [field: SerializeField]
+    public QuestDefinition Definition { get; private set; }
 
     /// <summary>
     /// Graph state for this quest (shared across all objective graphs)
     /// </summary>
     public IGraphState GraphState { get; }
 
+
     /// <summary>
     /// When this quest was started
     /// </summary>
     public DateTime StartedAt { get; }
 
+    [ShowInInspector]
+    [ReadOnly]
+    public string StartedAtValue => StartedAt.ToString("yyyy-MM-dd HH:mm:ss");
+
     /// <summary>
     /// List of loaded graph instance IDs for objective graphs.
     /// Used for cleanup when quest completes/abandons.
     /// </summary>
-    public List<string> LoadedGraphInstanceIds { get; }
+    [field: SerializeField]
+    public List<string> LoadedGraphInstanceIds { get; private set; }
 
     public QuestRuntimeState(
         string questGuid,

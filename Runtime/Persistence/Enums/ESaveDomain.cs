@@ -5,6 +5,7 @@ namespace MToolKit.Runtime.Persistence.Enums
     None = 0,
     Settings = 1,
     Player = 2,
-    World = 3
+    World = 3,
+    Graphs = 4
   }
 }

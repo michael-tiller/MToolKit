@@ -189,10 +189,27 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
 
     public GraphStateSnapshot ExportState()
     {
+      var filteredData = new Dictionary<string, object>();
+
+      // Filter out ScriptableObject references - convert to GUIDs or skip
+      foreach (var kv in state.AsReadOnly())
+      {
+        // Skip ScriptableObject references (they can't be serialized by ES3)
+        // QuestDefinition and other ScriptableObjects should be resolved by GUID at load time
+        if (kv.Value is UnityEngine.ScriptableObject)
+        {
+          log.ForMethod().Debug("Skipping ScriptableObject reference in state: {Key} (type: {Type})",
+            kv.Key, kv.Value.GetType().Name);
+          continue;
+        }
+
+        filteredData[kv.Key] = kv.Value;
+      }
+
       return new GraphStateSnapshot
       {
         GraphId = GraphId,
-        Data = new Dictionary<string, object>(state.AsReadOnly())
+        Data = filteredData
       };
     }
 

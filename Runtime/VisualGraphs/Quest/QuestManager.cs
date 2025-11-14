@@ -15,6 +15,7 @@ using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime.State;
 using R3;
 using Serilog;
+using Sirenix.OdinInspector;
 using UnityEngine;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
@@ -25,6 +26,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
   /// Game-agnostic quest lifecycle and state management service.
   /// Manages active quests, objective graph loading, and progress tracking.
   /// </summary>
+  [Serializable]
   public sealed class QuestManager : IQuestManager, IDisposable
   {
     private static readonly Lazy<ILogger> logLazy = new(() =>
@@ -41,8 +43,15 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
     private readonly IPublisher<QuestClaimedMessage> questClaimedPublisher;
 
     // Quest lifecycle tracking
+
+    [ShowInInspector]
+    [ReadOnly]
     private readonly Dictionary<string, QuestRuntimeState> activeQuests = new();
+    [ShowInInspector]
+    [ReadOnly]
     private readonly Dictionary<string, QuestRuntimeState> completedUnclaimedQuests = new();
+    [ShowInInspector]
+    [ReadOnly]
     private readonly HashSet<string> claimedQuestGuids = new();
 
     // Graph runner tracking
@@ -478,22 +487,111 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       // Restore active quests
       foreach (var activeQuestData in saveData.ActiveQuests)
       {
-        // TODO: Game needs to provide a way to resolve QuestDefinition from GUID
-        // For now, we skip restoration of active quests
-        // Game can implement custom restoration logic by calling StartQuestAsync manually
-        Debug.LogWarning($"[QuestManager] Active quest restoration not fully implemented for {activeQuestData.QuestGuid[..8]}...");
+        try
+        {
+          var questDef = FindQuestDefinitionByGuid(activeQuestData.QuestGuid);
+          if (questDef != null)
+          {
+            // Start the quest (this will create runtime state and load graphs)
+            var started = await StartQuestAsync(questDef, ct);
+            if (started)
+            {
+              // Restore the started time
+              if (activeQuests.TryGetValue(activeQuestData.QuestGuid, out var runtimeState))
+              {
+                // Note: StartedAt is readonly, so we can't restore it directly
+                // The quest will have a new StartedAt time, which is acceptable
+                log.ForMethod().Information("Restored active quest '{QuestName}' ({QuestGuid})",
+                  questDef.DisplayName, activeQuestData.QuestGuid);
+              }
+            }
+            else
+            {
+              log.ForMethod().Warning("Failed to start quest '{QuestName}' ({QuestGuid}) during restoration",
+                questDef.DisplayName, activeQuestData.QuestGuid);
+            }
+          }
+          else
+          {
+            log.ForMethod().Warning("QuestDefinition not found for GUID {QuestGuid} - cannot restore active quest",
+              activeQuestData.QuestGuid);
+          }
+        }
+        catch (Exception ex)
+        {
+          log.ForMethod().Error(ex, "Error restoring active quest {QuestGuid}: {Message}",
+            activeQuestData.QuestGuid, ex.Message);
+        }
       }
 
       // Restore completed-unclaimed quests
+      // NOTE: We start the quests but DON'T call CompleteQuest yet, because that would unload the graphs
+      // The graph state will be restored first, then we'll mark them as completed
       foreach (var completedQuestData in saveData.CompletedUnclaimedQuests)
       {
-        // TODO: Same as above - game needs to provide QuestDefinition resolution
-        Debug.LogWarning($"[QuestManager] Completed-unclaimed quest restoration not fully implemented for {completedQuestData.QuestGuid[..8]}...");
+        try
+        {
+          var questDef = FindQuestDefinitionByGuid(completedQuestData.QuestGuid);
+          if (questDef != null)
+          {
+            // Start the quest first (to create runtime state and load graphs)
+            // We'll mark it as completed AFTER graph states are restored
+            var started = await StartQuestAsync(questDef, ct);
+            if (started)
+            {
+              log.ForMethod().Information("Restored completed-unclaimed quest '{QuestName}' ({QuestGuid}) - will mark as completed after graph state restoration",
+                questDef.DisplayName, completedQuestData.QuestGuid);
+            }
+            else
+            {
+              log.ForMethod().Warning("Failed to start quest '{QuestName}' ({QuestGuid}) during restoration",
+                questDef.DisplayName, completedQuestData.QuestGuid);
+            }
+          }
+          else
+          {
+            log.ForMethod().Warning("QuestDefinition not found for GUID {QuestGuid} - cannot restore completed quest",
+              completedQuestData.QuestGuid);
+          }
+        }
+        catch (Exception ex)
+        {
+          log.ForMethod().Error(ex, "Error restoring completed quest {QuestGuid}: {Message}",
+            completedQuestData.QuestGuid, ex.Message);
+        }
       }
 
-      Debug.Log($"[QuestManager] Restored save data: {claimedQuestGuids.Count} claimed quests");
+      log.ForMethod().Information("Restored save data: {ActiveQuestCount} active quests, {CompletedUnclaimedQuestCount} completed-unclaimed quests, {ClaimedQuestCount} claimed quests",
+        activeQuests.Count, completedUnclaimedQuests.Count, claimedQuestGuids.Count);
 
       await UniTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// Marks quests as completed after graph state restoration.
+    /// This is called by GraphStateSaveController after restoring graph states,
+    /// so that completed quests don't unload their graphs before state is restored.
+    /// </summary>
+    public void FinalizeCompletedQuestRestoration(IEnumerable<string> completedQuestGuids)
+    {
+      foreach (var questGuid in completedQuestGuids)
+      {
+        if (activeQuests.TryGetValue(questGuid, out var runtimeState))
+        {
+          // Log completion percentage before finalizing
+          var completionBefore = runtimeState.GetCompletionPercentage();
+          log.ForMethod().Information("Finalizing restoration of completed quest {QuestGuid} - completion before: {Completion}%",
+            questGuid, completionBefore * 100);
+
+          // Only complete if it's still active (was restored but not yet completed)
+          CompleteQuest(questGuid);
+          log.ForMethod().Information("Finalized restoration of completed quest {QuestGuid}", questGuid);
+        }
+        else
+        {
+          log.ForMethod().Warning("Cannot finalize quest {QuestGuid} - not found in active quests", questGuid);
+        }
+      }
     }
 
     // ==================== PRIVATE HELPERS ====================
@@ -611,10 +709,31 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
 
     private string SerializeGraphState(IGraphState graphState)
     {
-      // TODO: Implement proper serialization
-      // For now, return empty string
-      // Game can implement custom serialization via IGraphState.GetAllKeys() and Get<T>()
+      // Graph state is already saved separately via GraphStateSaveController
+      // We just need to store a marker here - the actual state is in the graph_states save data
+      // Return empty string as a placeholder (the graph state will be restored from GraphStateSnapshot)
       return string.Empty;
+    }
+
+    /// <summary>
+    /// Finds a QuestDefinition by GUID using Resources.LoadAll.
+    /// This is a simple implementation - games can override this via a registry if needed.
+    /// </summary>
+    private QuestDefinition FindQuestDefinitionByGuid(string questGuid)
+    {
+      if (string.IsNullOrEmpty(questGuid))
+        return null;
+
+      // Search all QuestDefinition assets in Resources
+      var allQuests = Resources.LoadAll<QuestDefinition>("");
+      var quest = allQuests.FirstOrDefault(q => q.Guid == questGuid);
+
+      if (quest == null)
+      {
+        log.ForMethod().Warning("QuestDefinition with GUID {QuestGuid} not found in Resources", questGuid);
+      }
+
+      return quest;
     }
 
     // ==================== PROGRESS TRACKING ====================
