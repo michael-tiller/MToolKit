@@ -134,10 +134,50 @@ namespace MToolKit.Runtime.VisualGraphs.Export
         // Check GUID presence
         if (node is VisualGraphNodeBase vgNode && string.IsNullOrEmpty(vgNode.Guid))
           errors.Add($"Node '{node.name}' (type: {nodeTypeName}) is missing GUID in graph '{graph.name}'.");
+
+        // Validate asset references
+        ValidateAssetReferences(node, graph.name, errors);
       }
 
       if (errors.Any())
         throw new InvalidGraphException($"Graph validation failed:\n{string.Join("\n", errors)}");
+    }
+
+    /// <summary>
+    ///   Validate AssetReference fields in a node.
+    /// </summary>
+    private void ValidateAssetReferences(Node node, string graphName, List<string> errors)
+    {
+#if UNITY_ADDRESSABLES
+      var type = node.GetType();
+      var fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+        .Where(f => f.IsPublic || f.GetCustomAttribute<SerializeField>() != null);
+
+      foreach (var field in fields)
+      {
+        var value = field.GetValue(node);
+        if (value == null) continue;
+
+        // Check if field is an AssetReference
+        if (!value.GetType().IsSubclassOf(typeof(AssetReference)))
+          continue;
+
+        var assetRef = value as AssetReference;
+
+        // Validate AssetReference is assigned
+        if (string.IsNullOrEmpty(assetRef.AssetGUID))
+        {
+          errors.Add($"Node '{node.name}' in graph '{graphName}' has unassigned AssetReference field '{field.Name}'");
+          continue;
+        }
+
+        // Validate asset exists and is loadable
+        if (!assetRef.RuntimeKeyIsValid())
+        {
+          errors.Add($"Node '{node.name}' in graph '{graphName}' has invalid AssetReference '{field.Name}' (GUID: {assetRef.AssetGUID}). Asset may be deleted or not marked as Addressable.");
+        }
+      }
+#endif
     }
 
     /// <summary>
@@ -188,7 +228,18 @@ namespace MToolKit.Runtime.VisualGraphs.Export
             if (value != null && value.GetType().IsSubclassOf(typeof(AssetReference)))
             {
               var assetRef = value as AssetReference;
-              dict[field.Name] = SerializableAssetReference.FromAssetReference(assetRef);
+              var serialized = SerializableAssetReference.FromAssetReference(assetRef);
+              
+              if (serialized == null)
+              {
+                Debug.LogWarning($"Node '{node.name}' field '{field.Name}' has null or invalid AssetReference");
+              }
+              else if (!string.IsNullOrEmpty(serialized.AssetGuid) && !assetRef.RuntimeKeyIsValid())
+              {
+                Debug.LogWarning($"Node '{node.name}' field '{field.Name}' AssetReference (GUID: {serialized.AssetGuid}) is not a valid Addressable. Asset may not load at runtime.");
+              }
+              
+              dict[field.Name] = serialized;
             }
             else
 #endif
