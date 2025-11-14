@@ -150,6 +150,14 @@ namespace MToolKit.Runtime.VisualGraphs
       builder.Register<MessageTypeCheckNodeExecutor>(Lifetime.Singleton)
         .As<IGraphNodeExecutor>();
 
+      // State executors (generic state management)
+      builder.Register<GenericStateSetNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<GenericStateCheckNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<GenericStateGetNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+
       // Dialogue executors
       builder.Register<DialogueLineNodeExecutor>(Lifetime.Singleton)
         .As<IGraphNodeExecutor>();

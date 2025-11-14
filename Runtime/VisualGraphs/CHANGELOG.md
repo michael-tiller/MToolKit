@@ -611,6 +611,7 @@ All registered with DI in `VisualGraphPlugin`
 - ✅ Phase 1.1: Plugin Architecture Integration
 - ✅ Phase 1.3: MessagePipe Event Bus Integration
 - ✅ Phase 2.1: Quest Progress Tracking System
+- ✅ Phase 2.2: Quest Conditions & Requirements (Generic State System)
 - ✅ Phase 2.3: Quest Rewards System
 - ✅ Phase 4: Asset Reference System Overhaul (superseded by Phase 1.0.1)
 
@@ -621,7 +622,56 @@ All registered with DI in `VisualGraphPlugin`
 - Complete quest lifecycle orchestration
 - Message data flow system (bonus feature)
 
-**Overall Progress:** 8 of 11 critical milestones complete! ✅
+**Overall Progress:** 9 of 11 critical milestones complete! ✅
+
+---
+
+## Phase 2.2: Quest Conditions & Requirements ✅ **COMPLETE**
+
+**Status:** ✅ **Generic State System fully implemented!**
+
+**Approach:** Rearchitected as game-agnostic state system. Framework provides generic state nodes. Games implement their own condition logic.
+
+**What Was Built:**
+
+1. **Generic State Nodes** - Three new node types for state management:
+   - `GenericStateSetNode` - Set arbitrary state keys with type conversion (bool, int, float, string)
+   - `GenericStateCheckNode` - Branch execution based on state values with comparison operators
+   - `GenericStateGetNode` - Read state values and store in other keys for comparisons
+
+2. **State Change Events** - Reactive state change notifications:
+   - `GraphStateChangedMessage` - Emitted when state values change
+   - Enables reactive graphs that respond to state changes across graph boundaries
+
+**Key Features:**
+- ✅ Type support: bool, int, float, string, enum values
+- ✅ Comparison operators: Equals, NotEquals, GreaterThan, LessThan, GreaterThanOrEqual, LessThanOrEqual
+- ✅ Case-insensitive string comparison option
+- ✅ Debug logging for troubleshooting
+- ✅ Default values for missing state keys
+- ✅ Automatic state change message emission
+
+**Files Created:**
+- ✅ `Runtime/VisualGraphs/Authoring/Nodes/State/GenericStateSetNode.cs`
+- ✅ `Runtime/VisualGraphs/Authoring/Nodes/State/GenericStateCheckNode.cs`
+- ✅ `Runtime/VisualGraphs/Authoring/Nodes/State/GenericStateGetNode.cs`
+- ✅ `Runtime/VisualGraphs/Executors/GenericStateSetNodeExecutor.cs`
+- ✅ `Runtime/VisualGraphs/Executors/GenericStateCheckNodeExecutor.cs`
+- ✅ `Runtime/VisualGraphs/Executors/GenericStateGetNodeExecutor.cs`
+- ✅ `Runtime/VisualGraphs/Runtime/Messages/GraphStateChangedMessage.cs`
+
+**Files Modified:**
+- ✅ `Runtime/VisualGraphs/VisualGraphPlugin.cs` - Registered state executors
+
+**Usage Example:**
+```csharp
+// In a graph:
+// 1. GenericStateSetNode: Set "player_has_key" = true
+// 2. GenericStateCheckNode: Check if "player_has_key" == true → branch to unlock door
+// 3. Other graphs can subscribe to GraphStateChangedMessage to react to state changes
+```
+
+**Design Decision:** Framework provides generic state primitives. Games implement their own condition logic using these tools, keeping the framework game-agnostic while enabling powerful reactive patterns.
 
 ---
 
