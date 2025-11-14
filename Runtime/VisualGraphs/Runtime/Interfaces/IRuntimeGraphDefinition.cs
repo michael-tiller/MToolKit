@@ -13,6 +13,8 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Interfaces
 
     /// <summary>Graph domain (Quest, Dialogue, etc.)</summary>
     string GraphDomain { get; }
+    /// <summary>Maximum number of execution steps</summary>
+    int MaxExecutionSteps { get; }
 
     /// <summary>Event subscriptions for this graph</summary>
     IReadOnlyList<RuntimeSubscriptionDefinition> Subscriptions { get; }

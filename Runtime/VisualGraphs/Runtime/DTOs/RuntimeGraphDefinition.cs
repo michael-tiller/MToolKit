@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
+using Sirenix.OdinInspector;
+using UnityEngine;
 
 namespace MToolKit.Runtime.VisualGraphs.Runtime.DTOs
 {
@@ -13,6 +15,9 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.DTOs
   {
     public string GraphId;
     public string GraphDomain;
+    [field: SerializeField]
+    [MinValue(1)]
+    public int MaxExecutionSteps { get; set; } = 1024;
     public List<RuntimeSubscriptionDefinition> Subscriptions = new();
     public List<RuntimeNodeDefinition> Nodes = new();
     public List<RuntimeConnectionDefinition> Connections = new();

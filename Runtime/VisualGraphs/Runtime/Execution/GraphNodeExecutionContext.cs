@@ -1,4 +1,5 @@
 using System;
+using MToolKit.Runtime.MessageBus.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 
 namespace MToolKit.Runtime.VisualGraphs.Runtime.Execution
@@ -35,9 +36,9 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Execution
     }
 
     /// <summary>Emit an event</summary>
-    public void Emit(IEventMessage message)
+    public void Emit(IGameMessage message, string domain = null)
     {
-      eventEmitter.Emit(message);
+      eventEmitter.Emit(message, domain);
     }
   }
 }

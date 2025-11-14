@@ -1,5 +1,6 @@
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using MToolKit.Runtime.MessageBus.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime.DTOs;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 
@@ -21,7 +22,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Interfaces
       IRuntimeGraphDefinition graph,
       RuntimeNodeDefinition node,
       IGraphState state,
-      IEventMessage message,
+      IGameMessage message,
       GraphNodeExecutionContext context,
       CancellationToken ct = default);
   }

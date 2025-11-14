@@ -1141,7 +1141,7 @@ namespace MToolKit.Runtime.Installer
         {
           child.gameObject.SetActive(visible);
           canvasCount++;
-          log.ForGameObject(gameObject).ForMethod().Information("{0} navigation canvas {1} (active: {2})", visible ? "Showed" : "Hid", childName, child.gameObject.activeSelf);
+          log.ForGameObject(gameObject).ForMethod().Debug("{0} navigation canvas {1} (active: {2})", visible ? "Showed" : "Hid", childName, child.gameObject.activeSelf);
         }
       }
 

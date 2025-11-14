@@ -41,9 +41,9 @@ Event-driven visual graph subsystem for Unity using xNode for authoring, with ru
 
 ### Unity Bridge
 
-- **VisualGraphBootstrapMB**: Initializes graphs from registry on Awake
-- **EventBusBridgeMB**: Bridges R3 events to graph router
-- **VisualGraphInstaller**: VContainer installer for DI setup
+- **VisualGraphPlugin**: Plugin that manages graph system lifecycle, initialization, and DI registration
+- **EventBusBridge**: Bridges MessagePipe events to graph router
+- **VisualGraphConfig**: ScriptableObject configuration for the plugin
 
 ### Variable System
 
@@ -98,17 +98,14 @@ Right-click in Unity:
 
 ### 5. Bootstrap
 
-Add `VisualGraphBootstrapMB` to a GameObject and assign the registry.
+Add `VisualGraphPlugin` to a GameObject in your scene. Create a `VisualGraphConfig` asset and assign the registry to it. The plugin will handle initialization automatically.
 
-### 6. Install in VContainer
+### 6. Setup
 
-```csharp
-protected override void Configure(IContainerBuilder builder)
-{
-    new VisualGraphInstaller().Install(builder);
-    // ... other installers
-}
-```
+The `VisualGraphPlugin` handles all VContainer registration automatically through its `Register()` method. Just ensure:
+- The plugin prefab is added to your scene
+- The `VisualGraphConfig` is created and assigned
+- The plugin is registered in `GlobalPluginConfigAsset`
 
 ### 7. Send Events
 
@@ -246,12 +243,12 @@ VisualGraphs/
 │   ├── DialogueDefinition.cs
 │   └── VisualGraphRegistry.cs
 ├── Bootstrap/
-│   ├── VisualGraphBootstrapMB.cs
-│   └── EventBusBridgeMB.cs
+│   └── EventBusBridge.cs
+├── Config/
+│   └── VisualGraphConfig.cs
+├── VisualGraphPlugin.cs
 ├── Persistence/
 │   └── GraphStateSaveProvider.cs
-├── Installer/
-│   └── VisualGraphInstaller.cs
 └── Executors/               # Example executors
     ├── QuestSetStageNodeExecutor.cs
     ├── DialogueLineNodeExecutor.cs
@@ -278,7 +275,7 @@ VisualGraphs/
 ## Notes
 
 - **xNode is authoring-only**: Runtime has no dependency on xNode
-- **MonoBehaviours only at boundary**: `VisualGraphBootstrapMB`, `EventBusBridgeMB`
+- **Plugin architecture**: `VisualGraphPlugin` manages full lifecycle with proper initialization
 - **Saved state wins**: Application order ensures saved data overrides authoring
 - **Executors control continuation**: Call `context.EnqueueNext()` to continue
 - **Stable GUIDs**: Node identity persists across editor changes

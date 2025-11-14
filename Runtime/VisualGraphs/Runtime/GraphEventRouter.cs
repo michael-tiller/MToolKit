@@ -2,17 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using MToolKit.Runtime.MessageBus.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 
 namespace MToolKit.Runtime.VisualGraphs.Runtime
 {
   /// <summary>
-  ///   Routes events to graph runners with O(1) indexed lookups by (type, domain).
+  ///   Routes MessagePipe messages to graph runners with O(1) indexed lookups by (type, domain).
   /// </summary>
-  public sealed class GraphEventRouter
+  public sealed class GraphEventRouter : IGraphEventRouter
   {
     private readonly List<IGraphRunner> all = new();
-    private readonly Dictionary<(string type, string domain), List<IGraphRunner>> byTypeDomain = new();
+    private readonly Dictionary<(Type messageType, string domain), List<IGraphRunner>> byTypeDomain = new();
 
     /// <summary>Register a graph runner and index its subscriptions</summary>
     public void RegisterRunner(IGraphRunner runner)
@@ -24,7 +25,10 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
 
       foreach (var sub in runner.Definition.Subscriptions)
       {
-        var key = (sub.EventType, sub.EventDomain ?? string.Empty);
+        if (sub.MessageType == null || !sub.MessageType.IsValid)
+          continue;
+
+        var key = (sub.MessageType.Type, sub.DomainFilter ?? string.Empty);
 
         if (!byTypeDomain.TryGetValue(key, out var list))
         {
@@ -36,13 +40,14 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
       }
     }
 
-    /// <summary>Route an event to all matching graph runners</summary>
-    public async UniTask RouteAsync(IEventMessage message, CancellationToken ct = default)
+    /// <summary>Route a MessagePipe message to all matching graph runners</summary>
+    public async UniTask RouteAsync(IGameMessage message, string domain = null, CancellationToken ct = default)
     {
       if (message == null) return;
 
-      var domain = message.Domain ?? string.Empty;
-      var key = (message.Type, domain);
+      var messageType = message.GetType();
+      var domainFilter = domain ?? string.Empty;
+      var key = (messageType, domainFilter);
 
       // Try exact domain match first
       if (byTypeDomain.TryGetValue(key, out var list))
@@ -50,18 +55,18 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
         foreach (var runner in list)
         {
           if (ct.IsCancellationRequested) break;
-          await runner.HandleEventAsync(message, ct);
+          await runner.HandleMessageAsync(message, domain, ct);
         }
         return;
       }
 
       // Try wildcard domain match (empty domain = match all)
-      key = (message.Type, string.Empty);
+      key = (messageType, string.Empty);
       if (byTypeDomain.TryGetValue(key, out list))
         foreach (var runner in list)
         {
           if (ct.IsCancellationRequested) break;
-          await runner.HandleEventAsync(message, ct);
+          await runner.HandleMessageAsync(message, domain, ct);
         }
     }
 
@@ -69,6 +74,17 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
     public IEnumerable<IGraphRunner> GetRunners()
     {
       return all;
+    }
+
+    /// <summary>Get all unique message types that graphs are subscribed to</summary>
+    public HashSet<Type> GetSubscribedMessageTypes()
+    {
+      var types = new HashSet<Type>();
+      foreach (var key in byTypeDomain.Keys)
+      {
+        types.Add(key.messageType);
+      }
+      return types;
     }
 
     /// <summary>Clear all runners</summary>

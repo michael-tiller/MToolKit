@@ -9,8 +9,8 @@ namespace MToolKit.Runtime.VisualGraphs.Variables
   ///   Global/project-wide graph variables mapped by graph ID.
   ///   Applied during bootstrap before definition initial variables and saved state.
   /// </summary>
-  [CreateAssetMenu(menuName = "MToolKit/Visual Graphs/Global Variables", fileName = "GlobalGraphVariables", order = 201)
-  ]
+  [CreateAssetMenu(menuName = "MToolKit/Visual Graphs/Global Variables", fileName = "GlobalGraphVariables", order = 201)]
+  [InlineEditor]
   public sealed class GlobalGraphVariables : ScriptableObject
   {
     [InfoBox("Global variables are applied in this order:\n1. Global variables (this asset)\n2. Definition initial variables\n3. Restored save state (wins)")]

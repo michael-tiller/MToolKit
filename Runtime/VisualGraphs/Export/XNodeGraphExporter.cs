@@ -2,9 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using MToolKit.Runtime.Utilities;
 using MToolKit.Runtime.VisualGraphs.Authoring;
-using MToolKit.Runtime.VisualGraphs.Authoring.Graphs;
-using MToolKit.Runtime.VisualGraphs.Authoring.Nodes.Quest;
+using MToolKit.Runtime.VisualGraphs.Dialogue.Graphs;
+using MToolKit.Runtime.VisualGraphs.Quest.Graphs;
 using MToolKit.Runtime.VisualGraphs.Runtime.DTOs;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 using UnityEngine;
@@ -44,12 +45,60 @@ namespace MToolKit.Runtime.VisualGraphs.Export
       {
         GraphId = graphAsset.name,
         GraphDomain = DetectDomain(graphAsset),
+        MaxExecutionSteps = 1024, // Default, overridden below if graph specifies
         Subscriptions = new List<RuntimeSubscriptionDefinition>(),
         Nodes = new List<RuntimeNodeDefinition>(),
         Connections = new List<RuntimeConnectionDefinition>()
       };
 
+      // Extract per-graph configuration
+      if (graphAsset is QuestGraphAsset questGraph)
+      {
+        // Copy execution limit
+        def.MaxExecutionSteps = questGraph.MaxExecutionSteps;
+
+        // Extract subscriptions from graph asset (explicit subscriptions)
+        if (questGraph.Subscriptions != null)
+        {
+          foreach (var subscription in questGraph.Subscriptions)
+          {
+            if (subscription?.MessageType == null || !subscription.MessageType.IsValid)
+              continue;
+
+            def.Subscriptions.Add(new RuntimeSubscriptionDefinition
+            {
+              MessageType = subscription.MessageType,
+              DomainFilter = subscription.DomainFilter,
+              Required = subscription.Required
+            });
+          }
+        }
+      }
+      else if (graphAsset is DialogueGraphAsset dialogueGraph)
+      {
+        // Copy execution limit
+        def.MaxExecutionSteps = dialogueGraph.MaxExecutionSteps;
+
+        // Extract subscriptions
+        if (dialogueGraph.Subscriptions != null)
+        {
+          foreach (var subscription in dialogueGraph.Subscriptions)
+          {
+            if (subscription?.MessageType == null || !subscription.MessageType.IsValid)
+              continue;
+
+            def.Subscriptions.Add(new RuntimeSubscriptionDefinition
+            {
+              MessageType = subscription.MessageType,
+              DomainFilter = subscription.DomainFilter,
+              Required = subscription.Required
+            });
+          }
+        }
+      }
+
       // Extract nodes
+      var nodesByType = new Dictionary<string, List<Node>>();
       foreach (var node in graphAsset.nodes)
       {
         if (node == null) continue;
@@ -61,20 +110,6 @@ namespace MToolKit.Runtime.VisualGraphs.Export
           Parameters = ExtractParameters(node)
         };
         def.Nodes.Add(runtimeNode);
-
-        // Collect event subscriptions
-        if (node is QuestOnEventNode questEventNode)
-          def.Subscriptions.Add(new RuntimeSubscriptionDefinition
-          {
-            EventType = questEventNode.EventType,
-            EventDomain = questEventNode.EventDomain
-          });
-        else if (node is IEventSubscribedNode subNode)
-          def.Subscriptions.Add(new RuntimeSubscriptionDefinition
-          {
-            EventType = subNode.EventType,
-            EventDomain = subNode.EventDomain
-          });
       }
 
       // Extract connections
@@ -126,6 +161,10 @@ namespace MToolKit.Runtime.VisualGraphs.Export
         }
 
         var nodeTypeName = node.GetType().Name;
+
+        // Entry nodes don't need executors - they're subscription points, not execution nodes
+        if (node is EntryNodeBase)
+          continue;
 
         // Check if executor exists
         if (nodeRegistry != null && !nodeRegistry.HasExecutor(nodeTypeName))
@@ -268,11 +307,21 @@ namespace MToolKit.Runtime.VisualGraphs.Export
 
     /// <summary>
     ///   Normalize UnityEngine.Object references to IDs/keys/names for runtime serialization.
-    ///   Handles AssetReferences by extracting their GUID for proper addressable loading at runtime.
+    ///   Handles GuidScriptableObject by extracting GUID for safe, type-safe references.
     /// </summary>
     private object NormalizeUnityObject(Object obj)
     {
       if (obj == null) return null;
+
+      // Handle GuidScriptableObject - extract GUID for safe references
+      if (obj is GuidScriptableObject guidObj)
+      {
+        if (string.IsNullOrEmpty(guidObj.Guid))
+        {
+          Debug.LogWarning($"GuidScriptableObject '{obj.name}' has empty GUID. This may cause runtime errors.");
+        }
+        return guidObj.Guid;
+      }
 
       // For regular Unity objects, return the instance ID or name
       // These would need to be scene references or resources
