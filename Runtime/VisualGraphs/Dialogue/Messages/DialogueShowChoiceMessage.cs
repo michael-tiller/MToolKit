@@ -31,12 +31,10 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Messages
     public readonly struct ChoiceData
     {
       public readonly string Text;
-      public readonly string LocalizationKey;
 
-      public ChoiceData(string text, string localizationKey = null)
+      public ChoiceData(string text)
       {
         Text = text ?? string.Empty;
-        LocalizationKey = localizationKey;
       }
     }
   }

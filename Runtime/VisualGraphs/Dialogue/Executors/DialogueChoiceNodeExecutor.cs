@@ -45,34 +45,56 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
 
       if (node.Parameters.TryGetValue("Choices", out var choicesParam))
       {
-        // Handle List<object> (serialized list)
-        if (choicesParam is List<object> choicesList)
+        log.ForMethod().Verbose("Found Choices parameter of type {Type}", choicesParam?.GetType().Name ?? "null");
+
+        // Handle List<Dictionary<string, object>> (strongly-typed list from our exporter)
+        if (choicesParam is System.Collections.IEnumerable choicesEnumerable)
         {
-          foreach (var choiceObj in choicesList.Take(3)) // Limit to 3 choices
+          var count = 0;
+          foreach (var choiceObj in choicesEnumerable)
           {
-            // Each choice might be serialized as a Dictionary<string, object>
+            if (count >= 3) break; // Limit to 3 choices
+
+            // Each choice should be a Dictionary<string, object>
             if (choiceObj is Dictionary<string, object> choiceDict)
             {
               // Field names match the Choice class: "Text" and "LocalizationKey"
               var text = choiceDict.TryGetValue("Text", out var txt) ? txt as string :
                         (choiceDict.TryGetValue("text", out var txt2) ? txt2 as string : "");
-              var locKey = choiceDict.TryGetValue("LocalizationKey", out var lk) ? lk as string :
-                          (choiceDict.TryGetValue("localizationKey", out var lk2) ? lk2 as string : null);
-              choices.Add(new DialogueShowChoiceMessage.ChoiceData(text, locKey));
+              choices.Add(new DialogueShowChoiceMessage.ChoiceData(text));
+              log.ForMethod().Verbose("Extracted choice: Text='{Text}'", text);
+              count++;
             }
             // Or it might be the actual Choice object (if serialization preserves type)
             else if (choiceObj != null)
             {
+              log.ForMethod().Verbose("Choice object is of type {Type}, attempting reflection extraction", choiceObj.GetType().Name);
+
               // Try to extract via reflection as fallback
               var choiceType = choiceObj.GetType();
               var textField = choiceType.GetField("Text");
               var locField = choiceType.GetField("LocalizationKey");
               var text = textField?.GetValue(choiceObj) as string ?? "";
               var locKey = locField?.GetValue(choiceObj) as string;
-              choices.Add(new DialogueShowChoiceMessage.ChoiceData(text, locKey));
+              choices.Add(new DialogueShowChoiceMessage.ChoiceData(text));
+              log.ForMethod().Verbose("Extracted choice via reflection: Text='{Text}'", text);
+              count++;
             }
           }
+
+          log.ForMethod().Information("Processed {Count} choices from parameter", count);
         }
+        else
+        {
+          log.ForMethod().Warning("Choices parameter is not enumerable, it's {Type}. Available parameter keys: {Keys}",
+            choicesParam?.GetType().Name ?? "null",
+            string.Join(", ", node.Parameters.Keys));
+        }
+      }
+      else
+      {
+        log.ForMethod().Warning("No 'Choices' parameter found in node. Available parameter keys: {Keys}",
+          string.Join(", ", node.Parameters.Keys));
       }
 
       // Publish dialogue choice message to display choices
@@ -82,9 +104,15 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
       }
       else
       {
-        // No choices to show, continue immediately
+        // No choices to show, continue immediately by storing next node IDs in state
+        var nextNodeIds = new List<string>();
         foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
-          context.EnqueueNext(connection.ToNodeId);
+        {
+          nextNodeIds.Add(connection.ToNodeId);
+        }
+        state.Set("Dialogue.NextNodeIds", nextNodeIds);
+        log.ForMethod().Information("No choices to show - stored {Count} next node ID(s) in state for graph {GraphId}.",
+          nextNodeIds.Count, graph.GraphId);
         return;
       }
 
@@ -92,88 +120,113 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
       var selectedChoiceIndex = await WaitForChoiceSelectionAsync(graph.GraphId, ct);
 
       // Continue to the selected choice's output port for branching
-      // The Output port is embedded inside each Choice, so port names are nested like "Choices.0.Output"
+      // The exporter now stores connections with predictable port names: "Choice_{index}"
       if (selectedChoiceIndex >= 0 && selectedChoiceIndex < choices.Count)
       {
         // Get all connections from this node
         var allConnections = graph.GetConnectionsFrom(node.NodeId).ToList();
 
-        log.ForMethod().Verbose("Choice {ChoiceIndex} selected. Found {ConnectionCount} total connections from node {NodeId}. Port names: {PortNames}",
+        log.ForMethod().Information("Choice {ChoiceIndex} selected. Found {ConnectionCount} total connections from node {NodeId}. Port names: {PortNames}",
           selectedChoiceIndex, allConnections.Count, node.NodeId, string.Join(", ", allConnections.Select(c => c.PortName)));
 
-        // Try matching nested port formats first (most likely for embedded ports)
-        // XNode nested dynamic ports use formats like:
-        // - "Choices.0.Output" (dot notation with index)
-        // - "Choices[0].Output" (bracket notation with index)
-        var nestedPortFormats = new[]
+        // Try multiple port name formats:
+        // 1. "Choice_{index}" - format used by exporter in RuntimeConnectionDefinition
+        // 2. "ChoiceOutputs {index}" - actual xNode dynamic port name format
+        var portNameFormats = new[]
         {
-          $"Choices.{selectedChoiceIndex}.Output",
-          $"Choices[{selectedChoiceIndex}].Output",
-          $"Choices.{selectedChoiceIndex}.Output 0" // In case there are multiple outputs per choice
+          $"Choice_{selectedChoiceIndex}",
+          $"ChoiceOutputs {selectedChoiceIndex}"
         };
 
-        bool found = false;
-        foreach (var portFormat in nestedPortFormats)
+        var matchingConnections = new List<RuntimeConnectionDefinition>();
+        string matchedPortName = null;
+
+        foreach (var portNameFormat in portNameFormats)
         {
-          var matchingConnections = allConnections
-            .Where(c => c.PortName == portFormat || c.PortName.StartsWith(portFormat + " "))
+          var matches = allConnections
+            .Where(c => c.PortName == portNameFormat || c.PortName.StartsWith(portNameFormat + " "))
             .ToList();
 
-          if (matchingConnections.Count > 0)
+          if (matches.Count > 0)
           {
-            log.ForMethod().Information("Branching to {ConnectionCount} node(s) via port '{PortName}' for choice {ChoiceIndex}",
-              matchingConnections.Count, portFormat, selectedChoiceIndex);
-
-            foreach (var connection in matchingConnections)
-            {
-              context.EnqueueNext(connection.ToNodeId);
-            }
-            found = true;
+            matchingConnections = matches;
+            matchedPortName = portNameFormat;
             break;
           }
         }
 
-        if (!found)
+        log.ForMethod().Information("Looking for ports matching choice {ChoiceIndex}. Tried formats: {Formats}. Found {MatchCount} matching connection(s) via '{MatchedPort}'.",
+          selectedChoiceIndex, string.Join(", ", portNameFormats), matchingConnections.Count, matchedPortName ?? "none");
+
+        if (matchingConnections.Count > 0)
         {
-          // Fallback: try flat port formats (in case ports are flattened somehow)
-          var flatPortFormats = new[]
+          log.ForMethod().Information("Branching to {ConnectionCount} node(s) via port '{PortName}' for choice {ChoiceIndex}",
+            matchingConnections.Count, matchedPortName, selectedChoiceIndex);
+
+          // Store next node IDs in state instead of enqueueing immediately
+          // This allows the dialogue to pause and resume properly
+          var nextNodeIds = new List<string>();
+          foreach (var connection in matchingConnections)
           {
+            nextNodeIds.Add(connection.ToNodeId);
+          }
+          state.Set("Dialogue.NextNodeIds", nextNodeIds);
+          log.ForMethod().Information("Stored {Count} next node ID(s) in state for graph {GraphId} after choice selection.",
+            nextNodeIds.Count, graph.GraphId);
+        }
+        else
+        {
+          // Fallback: Try legacy port name formats (for backwards compatibility with old exports)
+          var legacyPortFormats = new[]
+          {
+            $"Choices.{selectedChoiceIndex}.Output",
+            $"Choices[{selectedChoiceIndex}].Output",
+            $"Choices.{selectedChoiceIndex}.Output 0",
             $"Output {selectedChoiceIndex}",
             $"Output[{selectedChoiceIndex}]",
             $"Output.{selectedChoiceIndex}"
           };
 
-          foreach (var flatFormat in flatPortFormats)
+          bool found = false;
+          foreach (var portFormat in legacyPortFormats)
           {
-            var flatConnections = allConnections
-              .Where(c => c.PortName == flatFormat)
+            var legacyConnections = allConnections
+              .Where(c => c.PortName == portFormat || c.PortName.StartsWith(portFormat + " "))
               .ToList();
 
-            if (flatConnections.Count > 0)
+            if (legacyConnections.Count > 0)
             {
-              log.ForMethod().Information("Branching to {ConnectionCount} node(s) via port '{PortName}' (flat format) for choice {ChoiceIndex}",
-                flatConnections.Count, flatFormat, selectedChoiceIndex);
+              log.ForMethod().Information("Branching to {ConnectionCount} node(s) via legacy port '{PortName}' for choice {ChoiceIndex}",
+                legacyConnections.Count, portFormat, selectedChoiceIndex);
 
-              foreach (var connection in flatConnections)
+              // Store next node IDs in state instead of enqueueing immediately
+              var nextNodeIds = new List<string>();
+              foreach (var connection in legacyConnections)
               {
-                context.EnqueueNext(connection.ToNodeId);
+                nextNodeIds.Add(connection.ToNodeId);
               }
+              state.Set("Dialogue.NextNodeIds", nextNodeIds);
+              log.ForMethod().Information("Stored {Count} next node ID(s) in state for graph {GraphId} after choice selection (legacy port).",
+                nextNodeIds.Count, graph.GraphId);
               found = true;
               break;
             }
           }
-        }
 
-        if (!found)
-        {
-          // Last resort: match by connection order (assumes connections are in choice order)
-          // This is less reliable but works if port names aren't being exported correctly
-          log.ForMethod().Warning("Could not match port name for choice {ChoiceIndex}. Using connection order fallback. Available ports: {PortNames}",
-            selectedChoiceIndex, string.Join(", ", allConnections.Select(c => c.PortName)));
-
-          if (selectedChoiceIndex < allConnections.Count)
+          if (!found)
           {
-            context.EnqueueNext(allConnections[selectedChoiceIndex].ToNodeId);
+            // Last resort: match by connection order (assumes connections are in choice order)
+            log.ForMethod().Warning("Could not match port name for choice {ChoiceIndex}. Using connection order fallback. Available ports: {PortNames}",
+              selectedChoiceIndex, string.Join(", ", allConnections.Select(c => c.PortName)));
+
+            if (selectedChoiceIndex < allConnections.Count)
+            {
+              // Store next node ID in state instead of enqueueing immediately
+              var nextNodeIds = new List<string> { allConnections[selectedChoiceIndex].ToNodeId };
+              state.Set("Dialogue.NextNodeIds", nextNodeIds);
+              log.ForMethod().Information("Stored next node ID in state for graph {GraphId} after choice selection (fallback).",
+                graph.GraphId);
+            }
           }
         }
       }

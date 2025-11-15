@@ -28,9 +28,24 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Nodes
     [Tooltip("Dialogue text to display")]
     public string Text = "Hello, traveler!";
 
-    [BoxGroup("Content")]
-    [Tooltip("Optional localization key")]
-    public LocalizedString LocalizationKey;
+    [BoxGroup("Timing")]
+    [Tooltip("Minimum time the line should stay on screen before it is allowed to advance (manual or auto)")]
+    [MinValue(0)]
+    public float MinDisplaySeconds = 0.0f;
+
+    [BoxGroup("Timing")]
+    [Tooltip("If true, automatically advance after MinDisplaySeconds + AutoAdvanceDelaySeconds")]
+    public bool AutoAdvance = false;
+
+    [BoxGroup("Timing")]
+    [Tooltip("Additional delay before auto-advancing (only used if AutoAdvance is true)")]
+    [MinValue(0)]
+    [ShowIf("AutoAdvance")]
+    public float AutoAdvanceDelaySeconds = 0.0f;
+
+    [BoxGroup("Timing")]
+    [Tooltip("If true, player can skip this line by clicking Next before MinDisplaySeconds")]
+    public bool Skippable = true;
 
     public override object GetValue(NodePort port)
     {

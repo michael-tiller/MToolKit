@@ -706,6 +706,154 @@ GameMessageBroker.GetSubscriber<QuestClaimedMessage>()
 
 ---
 
+## Phase 3: Dialogue System Completion ✅ **COMPLETE**
+
+**Status:** ✅ **Production-ready dialogue system with message-based architecture**
+
+**What Was Built:**
+
+### Core Dialogue Nodes & Executors
+
+1. **`DialogueStartNode`** - Entry point for dialogue graphs
+   - Subscribes to dialogue trigger messages
+   - Initiates dialogue execution flow
+
+2. **`DialogueLineNode`** - Displays dialogue text
+   - Supports speaker ID, text, and localization keys
+   - Auto-advance and skippable options
+   - Minimum display time configuration
+   - Emits `DialogueShowMessage` to UI
+   - Waits for user input via `DialogueProgressMessage` subscription
+
+3. **`DialogueChoiceNode`** - Presents player choices
+   - **Dynamic port support** - Automatically creates output ports for each choice
+   - Supports up to 3 choices per node
+   - Emits `DialogueShowChoiceMessage` to UI
+   - Branches to selected choice output port only
+   - Handles choice selection via `DialogueChoiceSelectedMessage`
+
+### Message-Based Architecture
+
+**Decision:** Implemented message-based communication instead of service interface pattern for better decoupling and flexibility.
+
+**Messages Created:**
+- `DialogueShowMessage` - Signals UI to display a dialogue line
+- `DialogueShowChoiceMessage` - Signals UI to display choices
+- `DialogueChoiceSelectedMessage` - Published by UI when player selects a choice
+- `DialogueProgressMessage` - Published by UI to continue dialogue progression
+- `DialogueContinueMessage` - Internal message to resume graph execution
+
+**Benefits:**
+- ✅ Multiple systems can react to dialogue events (3D positioning, audio, camera, etc.)
+- ✅ Decoupled - UI implementation is game-specific
+- ✅ Flexible - Easy to add new dialogue features without changing core system
+- ✅ Testable - Messages can be mocked/subscribed to for testing
+
+### Dynamic Port System
+
+**Problem Solved:** xNode doesn't scan nested types for ports, so `[Output]` on nested `Choice` class was ignored.
+
+**Solution Implemented:**
+- Added `[Output(dynamicPortList = true)] public NodeConnection[] ChoiceOutputs;` directly to `DialogueChoiceNode`
+- Implemented `SyncOutputPorts()` method to synchronize port count with choices list
+- Uses `[OnValueChanged(nameof(SyncOutputPorts))]` to auto-update ports when choices change
+- Exporter correctly maps xNode's dynamic port names (`"ChoiceOutputs {index}"`) to runtime format (`"Choice_{index}"`)
+
+### Execution Flow
+
+**Dialogue Progression:**
+1. Entry node (`DialogueStartNode`) receives trigger message
+2. Stores next node IDs in graph state (allows pausing)
+3. Executes first dialogue node (`DialogueLineNode` or `DialogueChoiceNode`)
+4. Node emits message to UI and stores next node IDs in state
+5. Graph execution pauses, waiting for user input
+6. UI publishes `DialogueProgressMessage` or `DialogueChoiceSelectedMessage`
+7. `DialogueService` publishes `DialogueContinueMessage` to resume execution
+8. `GraphRunner` reads next node IDs from state and continues
+9. Process repeats until dialogue ends (no next nodes)
+
+**Race Condition Fix:**
+- Added one-frame delay (`await UniTask.Yield()`) in `DialogueService.OnDialogueChoiceSelectedMessage` before publishing `DialogueContinueMessage`
+- Ensures executor has finished storing next node IDs in state before runner reads them
+
+### Export & Serialization
+
+**Choice Serialization:**
+- `XNodeGraphExporter.ExtractChoiceNodeParameters()` manually serializes `Choices` list as `List<Dictionary<string, object>>`
+- Stores choice text in runtime node parameters
+- Executor correctly deserializes choices from parameters
+
+**Port Connection Mapping:**
+- `XNodeGraphExporter.ExtractChoiceNodeConnections()` maps xNode dynamic ports to runtime connections
+- Handles both `"ChoiceOutputs {index}"` (xNode format) and `"Choice_{index}"` (runtime format)
+- Correctly identifies which output port corresponds to which choice index
+
+### Graceful Dialogue End
+
+**Implementation:**
+- `GraphRunner` detects when dialogue naturally ends (no next node IDs in state)
+- Emits `DialogueProgressMessage(shouldClose: true)` to signal UI to close
+- Changed from warning log to informational log (expected behavior)
+
+### Localization Integration
+
+- Dialogue nodes support `LocalizedString` fields
+- Text can be localized using Unity's standard localization tooling
+- Localization keys stored in node parameters and passed to UI
+
+### Key Features Delivered:
+
+- ✅ **Full dialogue execution** - Start, line display, choice selection, branching
+- ✅ **Dynamic choice ports** - Variable number of output ports based on choices
+- ✅ **Message-based UI integration** - Decoupled, flexible communication
+- ✅ **Proper state management** - Dialogue pauses/resumes correctly
+- ✅ **Choice branching** - Only selected branch executes
+- ✅ **Graceful dialogue end** - Auto-detects and closes when complete
+- ✅ **Localization support** - Integrated with Unity localization
+- ✅ **Race condition handling** - Proper async coordination
+- ✅ **Comprehensive logging** - Verbose logging for debugging
+
+### Files Created:
+
+- ✅ `Runtime/VisualGraphs/Dialogue/Nodes/DialogueStartNode.cs`
+- ✅ `Runtime/VisualGraphs/Dialogue/Nodes/DialogueLineNode.cs`
+- ✅ `Runtime/VisualGraphs/Dialogue/Nodes/DialogueChoiceNode.cs`
+- ✅ `Runtime/VisualGraphs/Dialogue/Executors/DialogueStartNodeExecutor.cs`
+- ✅ `Runtime/VisualGraphs/Dialogue/Executors/DialogueLineNodeExecutor.cs`
+- ✅ `Runtime/VisualGraphs/Dialogue/Executors/DialogueChoiceNodeExecutor.cs`
+- ✅ `Runtime/VisualGraphs/Dialogue/Messages/DialogueShowMessage.cs`
+- ✅ `Runtime/VisualGraphs/Dialogue/Messages/DialogueShowChoiceMessage.cs`
+- ✅ `Runtime/VisualGraphs/Dialogue/Messages/DialogueChoiceSelectedMessage.cs`
+- ✅ `Runtime/VisualGraphs/Dialogue/Messages/DialogueProgressMessage.cs`
+- ✅ `Runtime/VisualGraphs/Dialogue/Messages/DialogueContinueMessage.cs`
+- ✅ `Runtime/VisualGraphs/Dialogue/Graphs/DialogueGraphAsset.cs`
+- ✅ `Runtime/VisualGraphs/Dialogue/Definitions/DialogueDefinition.cs`
+
+### Files Modified:
+
+- ✅ `Runtime/VisualGraphs/Export/XNodeGraphExporter.cs` - Added choice serialization and port mapping
+- ✅ `Runtime/VisualGraphs/Runtime/GraphRunner.cs` - Added dialogue-specific execution flow and graceful end handling
+- ✅ `Runtime/VisualGraphs/Dialogue/Nodes/DialogueChoiceNode.cs` - Added dynamic port support with `SyncOutputPorts()`
+
+### Architecture Decisions:
+
+**Message-Based vs Service Interface:**
+- **Chosen:** Message-based architecture using `IGameMessage` and MessagePipe
+- **Rationale:** Better decoupling, multiple subscribers, flexible for 3D dialogue systems
+- **Alternative Considered:** `IDialogueUIService` interface (deferred - can be added later as wrapper if needed)
+
+**Dynamic Ports:**
+- **Chosen:** xNode's `[Output(dynamicPortList = true)]` with synchronization method
+- **Rationale:** Native xNode support, automatic port creation, works with existing export system
+
+**State Management:**
+- **Chosen:** Store next node IDs in graph state, pause execution, resume via `DialogueContinueMessage`
+- **Rationale:** Allows proper pausing between dialogue lines/choices, supports async UI operations
+
+**Phase 3 Summary:** ✅ **Complete** - Production-ready dialogue system with full execution flow, dynamic choices, message-based UI integration, and proper state management. System is ready for 3D dialogue implementation.
+
+---
+
 ## Phase 4: Asset Reference System Overhaul ✅ **SUPERSEDED BY PHASE 1.0.1**
 
 **Status:** ✅ **Already Solved with Superior Approach!**

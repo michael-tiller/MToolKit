@@ -99,16 +99,34 @@ namespace MToolKit.Runtime.VisualGraphs.Export
 
       // Extract nodes
       var nodesByType = new Dictionary<string, List<Node>>();
+      var nodeIdSet = new HashSet<string>();
       foreach (var node in graphAsset.nodes)
       {
         if (node == null) continue;
 
+        var nodeId = GetNodeId(node);
+
+        // Validate: Check for duplicate node IDs
+        if (nodeIdSet.Contains(nodeId))
+        {
+          Debug.LogError($"Graph '{graphAsset.name}': Duplicate node ID '{nodeId}' found! Node '{node.name}' ({node.GetType().Name}) has the same ID as another node. This will cause connection issues. Please regenerate the GUID for this node in Unity.");
+          continue; // Skip this node to prevent corruption
+        }
+        nodeIdSet.Add(nodeId);
+
         var runtimeNode = new RuntimeNodeDefinition
         {
-          NodeId = GetNodeId(node),
+          NodeId = nodeId,
           NodeType = node.GetType().Name,
           Parameters = ExtractParameters(node)
         };
+
+        // Special handling for DialogueChoiceNode to properly serialize nested Choices
+        if (node is Dialogue.Nodes.DialogueChoiceNode choiceNode)
+        {
+          ExtractChoiceNodeParameters(choiceNode, runtimeNode);
+        }
+
         def.Nodes.Add(runtimeNode);
       }
 
@@ -117,18 +135,57 @@ namespace MToolKit.Runtime.VisualGraphs.Export
       {
         if (node == null) continue;
 
+        // Special handling for DialogueChoiceNode to extract choice indices
+        if (node is Dialogue.Nodes.DialogueChoiceNode choiceNode)
+        {
+          ExtractChoiceNodeConnections(choiceNode, def, graphAsset);
+          continue;
+        }
+
+        // Standard connection extraction for other nodes
+        var fromNodeId = GetNodeId(node);
+        var fromNodeName = node.name;
+        var fromNodeType = node.GetType().Name;
+
         foreach (var port in node.Ports)
         {
           if (!port.IsOutput) continue;
 
-          foreach (var conn in port.GetConnections())
+          var connections = port.GetConnections();
+          Debug.Log($"[Export] Node '{fromNodeName}' ({fromNodeType}, ID: {fromNodeId}) - Port '{port.fieldName}' has {connections.Count} connection(s)");
+
+          foreach (var conn in connections)
           {
-            if (conn?.node == null) continue;
+            if (conn?.node == null)
+            {
+              Debug.LogWarning($"[Export] Node '{fromNodeName}' port '{port.fieldName}' has null connection");
+              continue;
+            }
+
+            var toNodeId = GetNodeId(conn.node);
+            var toNodeName = conn.node.name;
+            var toNodeType = conn.node.GetType().Name;
+
+            // Get text for DialogueLineNode for debugging
+            var toNodeText = "";
+            if (conn.node is Dialogue.Nodes.DialogueLineNode lineNode)
+            {
+              toNodeText = $" (Text: '{lineNode.Text}')";
+            }
+
+            Debug.Log($"[Export]   Connection: '{fromNodeName}' ({fromNodeId}) -> '{toNodeName}' ({toNodeId}) via port '{port.fieldName}'{toNodeText}");
+
+            // Validate connection - warn about self-loops
+            if (fromNodeId == toNodeId)
+            {
+              Debug.LogWarning($"Graph '{graphAsset.name}': Node '{node.name}' ({fromNodeId}) has a self-loop connection on port '{port.fieldName}'. This may cause infinite loops. Check the graph connections in Unity.");
+              continue; // Skip self-loops
+            }
 
             def.Connections.Add(new RuntimeConnectionDefinition
             {
-              FromNodeId = GetNodeId(node),
-              ToNodeId = GetNodeId(conn.node),
+              FromNodeId = fromNodeId,
+              ToNodeId = toNodeId,
               PortName = port.fieldName
             });
           }
@@ -137,6 +194,115 @@ namespace MToolKit.Runtime.VisualGraphs.Export
 
       def.BuildLookupCaches();
       return def;
+    }
+
+    /// <summary>
+    ///   Extract and serialize Choices from a DialogueChoiceNode.
+    ///   Handles nested Choice objects with LocalizedString fields that don't serialize well.
+    /// </summary>
+    private void ExtractChoiceNodeParameters(
+      Dialogue.Nodes.DialogueChoiceNode choiceNode,
+      RuntimeNodeDefinition runtimeNode)
+    {
+      var choices = choiceNode.Choices ?? new List<Dialogue.Nodes.DialogueChoiceNode.Choice>();
+      var serializedChoices = new List<Dictionary<string, object>>();
+
+      foreach (var choice in choices)
+      {
+        if (choice == null) continue;
+
+        var choiceDict = new Dictionary<string, object>
+        {
+          ["Text"] = choice.Text ?? ""
+        };
+        serializedChoices.Add(choiceDict);
+      }
+
+      // Replace the Choices parameter with our serialized version
+      runtimeNode.Parameters["Choices"] = serializedChoices;
+
+      Debug.Log($"[Export] DialogueChoiceNode '{choiceNode.name}': Serialized {serializedChoices.Count} choices");
+    }
+
+    /// <summary>
+    ///   Extract connections from a DialogueChoiceNode, storing choice index in port name.
+    ///   This ensures reliable matching between choice selection and target nodes.
+    /// </summary>
+    private void ExtractChoiceNodeConnections(
+      Dialogue.Nodes.DialogueChoiceNode choiceNode,
+      RuntimeGraphDefinition def,
+      NodeGraph graphAsset)
+    {
+      var nodeId = GetNodeId(choiceNode);
+      var choices = choiceNode.Choices ?? new List<Dialogue.Nodes.DialogueChoiceNode.Choice>();
+
+      // Iterate through choices and find their output ports
+      // xNode's dynamicPortList creates ports named "ChoiceOutputs {index}" (e.g., "ChoiceOutputs 0", "ChoiceOutputs 1")
+      for (var choiceIndex = 0; choiceIndex < choices.Count; choiceIndex++)
+      {
+        // Look for ports matching xNode's dynamic port naming scheme: "ChoiceOutputs {index}"
+        var expectedPortName = $"ChoiceOutputs {choiceIndex}";
+
+        foreach (var port in choiceNode.Ports)
+        {
+          if (!port.IsOutput) continue;
+
+          // Check if this port matches our expected name (exact match or starts with it)
+          if (port.fieldName == expectedPortName || port.fieldName.StartsWith(expectedPortName + " "))
+          {
+            // Found the port for this choice - extract all connections
+            foreach (var conn in port.GetConnections())
+            {
+              if (conn?.node == null) continue;
+
+              // Store with a predictable port name format: "Choice_{index}"
+              // This makes it easy to match in the executor
+              def.Connections.Add(new RuntimeConnectionDefinition
+              {
+                FromNodeId = nodeId,
+                ToNodeId = GetNodeId(conn.node),
+                PortName = $"Choice_{choiceIndex}"
+              });
+            }
+          }
+        }
+      }
+
+      // Fallback: if we didn't find any connections using the pattern matching,
+      // try to match by order (xNode maintains order for dynamic ports)
+      // This handles edge cases where port naming might be different
+      var connectionsForThisNode = def.Connections.Count(c => c.FromNodeId == nodeId);
+      if (connectionsForThisNode == 0)
+      {
+        // No connections found with pattern matching - try order-based matching
+        var allOutputPorts = choiceNode.Ports
+          .Where(p => p.IsOutput)
+          .OrderBy(p => p.fieldName) // Sort to ensure consistent ordering
+          .ToList();
+
+        if (allOutputPorts.Count > 0)
+        {
+          // Use connection order as fallback - assumes ports are in choice order
+          var connectionIndex = 0;
+          foreach (var port in allOutputPorts)
+          {
+            foreach (var conn in port.GetConnections())
+            {
+              if (conn?.node == null) continue;
+              if (connectionIndex < choices.Count)
+              {
+                def.Connections.Add(new RuntimeConnectionDefinition
+                {
+                  FromNodeId = nodeId,
+                  ToNodeId = GetNodeId(conn.node),
+                  PortName = $"Choice_{connectionIndex}"
+                });
+                connectionIndex++;
+              }
+            }
+          }
+        }
+      }
     }
 
     /// <summary>

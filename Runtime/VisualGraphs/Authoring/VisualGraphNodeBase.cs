@@ -48,5 +48,16 @@ namespace MToolKit.Runtime.VisualGraphs.Authoring
 #endif
       }
     }
+
+    /// <summary>
+    ///   Force regenerate GUID for this node. Used when fixing duplicate GUIDs.
+    /// </summary>
+#if UNITY_EDITOR
+    public void RegenerateGuid()
+    {
+      guid = System.Guid.NewGuid().ToString();
+      EditorUtility.SetDirty(this);
+    }
+#endif
   }
 }

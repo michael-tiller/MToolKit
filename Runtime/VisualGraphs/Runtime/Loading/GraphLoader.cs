@@ -259,9 +259,34 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       }
       dialogueDef.InitialVariables?.ApplyTo(state);
 
+      // Log all nodes for debugging
+      log.Information("Dialogue graph '{DialogueId}' nodes:", dialogueDef.DialogueId);
+      foreach (var node in runtimeDef.Nodes)
+      {
+        var nodeText = node.NodeType == "DialogueLineNode" && node.Parameters.TryGetValue("Text", out var txt)
+          ? txt as string ?? ""
+          : "N/A";
+        log.Information("  Node: {NodeId} ({NodeType}) - Text: '{Text}'", node.NodeId, node.NodeType, nodeText);
+      }
+
+      // Log all connections for debugging
+      log.Information("Dialogue graph '{DialogueId}' connections:", dialogueDef.DialogueId);
+      foreach (var conn in runtimeDef.Connections)
+      {
+        var fromNode = runtimeDef.GetNodeById(conn.FromNodeId);
+        var toNode = runtimeDef.GetNodeById(conn.ToNodeId);
+        var fromType = fromNode?.NodeType ?? "Unknown";
+        var toType = toNode?.NodeType ?? "Unknown";
+        var toText = toNode?.NodeType == "DialogueLineNode" && toNode.Parameters.TryGetValue("Text", out var txt)
+          ? txt as string ?? ""
+          : "N/A";
+        log.Information("  Connection: {FromNodeId} ({FromType}) -> {ToNodeId} ({ToType}) via '{PortName}' (Text: '{Text}')",
+          conn.FromNodeId, fromType, conn.ToNodeId, toType, conn.PortName, toText);
+      }
+
       var runner = new GraphRunner(runtimeDef, state, executorRegistry, services, eventEmitter);
-      log.Information("Loaded dialogue graph '{DialogueId}': {NodeCount} nodes, {SubscriptionCount} subscriptions",
-        dialogueDef.DialogueId, runtimeDef.Nodes.Count, runtimeDef.Subscriptions.Count);
+      log.Information("Loaded dialogue graph '{DialogueId}': {NodeCount} nodes, {ConnectionCount} connections, {SubscriptionCount} subscriptions",
+        dialogueDef.DialogueId, runtimeDef.Nodes.Count, runtimeDef.Connections.Count, runtimeDef.Subscriptions.Count);
 
       return runner;
     }

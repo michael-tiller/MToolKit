@@ -44,6 +44,15 @@ namespace MToolKit.Runtime.Settings.UI
 
     public void Setup(EModalButtonType modalButtonType, UnityAction onClick, string text)
     {
+
+      if (instance != null)
+      {
+        Destroy(instance.gameObject);
+      }
+      instance = null;
+
+      log.ForGameObject(gameObject).ForMethod().Verbose("Setting up button {2} as {0} with text {1}", modalButtonType, text, gameObject.name);
+
       Button buttonPrefab = GetButtonPrefab(modalButtonType);
       type = modalButtonType;
       instance = Instantiate(buttonPrefab, transform);

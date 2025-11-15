@@ -19,20 +19,14 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Messages
     public readonly string SpeakerName;
 
     /// <summary>
-    ///   Optional localization key for the dialogue text
-    /// </summary>
-    public readonly string LocalizationKey;
-
-    /// <summary>
     ///   The graph ID that triggered this dialogue
     /// </summary>
     public readonly string GraphId;
 
-    public DialogueShowMessage(string dialogueText, string speakerName, string localizationKey = null, string graphId = null)
+    public DialogueShowMessage(string dialogueText, string speakerName, string graphId = null)
     {
       DialogueText = dialogueText ?? string.Empty;
       SpeakerName = speakerName ?? string.Empty;
-      LocalizationKey = localizationKey;
       GraphId = graphId;
     }
   }

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.MessageBus.Interfaces;
+using MToolKit.Runtime.VisualGraphs.Dialogue.Messages;
 using MToolKit.Runtime.VisualGraphs.Runtime.Debug;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
@@ -53,6 +54,14 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
     {
       if (messageType == null) return false;
 
+      // DialogueContinueMessage can always be handled by dialogue graphs
+      // This allows dialogue execution to resume after pausing
+      if (messageType == typeof(DialogueContinueMessage))
+      {
+        return Definition.GraphDomain == "Dialogue" ||
+               Definition.Nodes.Any(n => n.NodeType == "DialogueStartNode" || n.NodeType == "DialogueLineNode" || n.NodeType == "DialogueChoiceNode");
+      }
+
       var domainFilter = domain ?? string.Empty;
       return Definition.Subscriptions.Any(s =>
         s.MessageType != null &&
@@ -64,8 +73,16 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
     {
       if (message == null) return;
 
+      var messageTypeName = message.GetType().Name;
       log.ForMethod().Information("Quest: Graph '{GraphId}' received message '{MessageType}' (domain: {Domain})",
-        Definition.GraphId, message.GetType().Name, domain ?? "null");
+        Definition.GraphId, messageTypeName, domain ?? "null");
+
+      // Special logging for dialogue messages
+      if (message is DialogueContinueMessage continueMsg)
+      {
+        log.ForMethod().Information("Dialogue: Graph '{GraphId}' received DialogueContinueMessage with GraphId={MessageGraphId}",
+          Definition.GraphId, continueMsg.GraphId);
+      }
 
       // Emit debug event for graph execution start
       NodeDebugEvents.RaiseGraphExecutionChanged(
@@ -76,18 +93,57 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
 
       var queue = new NodeExecutionQueue();
 
-      // Find entry nodes - these are the nodes that should start execution
-      // Common entry node types: QuestOnEventNode, DialogueStartNode, EntryNodeBase
-      var entryNodeCount = 0;
-      foreach (var node in Definition.Nodes)
-        if (IsEntryNode(node.NodeType))
+      // Special handling for DialogueContinueMessage: read next node IDs from state
+      if (message is DialogueContinueMessage continueMessage)
+      {
+        // Verify graph ID matches
+        if (!string.IsNullOrEmpty(continueMessage.GraphId) && continueMessage.GraphId != Definition.GraphId)
         {
-          queue.Enqueue(node.NodeId);
-          entryNodeCount++;
+          log.ForMethod().Verbose("DialogueContinueMessage GraphId mismatch: expected {ExpectedGraphId}, got {ActualGraphId} - ignoring",
+            Definition.GraphId, continueMessage.GraphId);
+          return;
         }
 
-      log.ForMethod().Information("Quest: Found {EntryNodeCount} entry nodes in graph '{GraphId}'",
-        entryNodeCount, Definition.GraphId);
+        // Read next node IDs from state
+        if (state.TryGet<List<string>>("Dialogue.NextNodeIds", out var nextNodeIds) && nextNodeIds != null && nextNodeIds.Count > 0)
+        {
+          log.ForMethod().Information("Dialogue: Continuing execution for graph '{GraphId}' with {Count} next node ID(s): {NodeIds}",
+            Definition.GraphId, nextNodeIds.Count, string.Join(", ", nextNodeIds));
+
+          foreach (var nodeId in nextNodeIds)
+          {
+            queue.Enqueue(nodeId);
+          }
+
+          // Clear the next node IDs from state
+          state.Set<List<string>>("Dialogue.NextNodeIds", new List<string>());
+        }
+        else
+        {
+          // Dialogue has naturally ended - emit close message instead of warning
+          log.ForMethod().Information("Dialogue: No next node IDs found in state for graph '{GraphId}'. Dialogue has ended - closing dialogue view.",
+            Definition.GraphId);
+
+          // Emit DialogueProgressMessage with shouldClose=true to gracefully close the dialogue
+          emitter.Emit(new DialogueProgressMessage(shouldClose: true, Definition.GraphId), Definition.GraphDomain);
+          return;
+        }
+      }
+      else
+      {
+        // Normal message handling: find entry nodes - these are the nodes that should start execution
+        // Common entry node types: QuestOnEventNode, DialogueStartNode, EntryNodeBase
+        var entryNodeCount = 0;
+        foreach (var node in Definition.Nodes)
+          if (IsEntryNode(node.NodeType))
+          {
+            queue.Enqueue(node.NodeId);
+            entryNodeCount++;
+          }
+
+        log.ForMethod().Information("Quest: Found {EntryNodeCount} entry nodes in graph '{GraphId}'",
+          entryNodeCount, Definition.GraphId);
+      }
 
       var context = new GraphNodeExecutionContext(queue, services, emitter);
       var steps = 0;
@@ -115,21 +171,53 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
         }
 
         // Entry nodes are subscription points - they don't have executors
-        // Instead, enqueue all nodes connected from this entry node
+        // For dialogue graphs, store next node IDs in state instead of enqueueing directly
+        // This ensures proper pausing after each dialogue node
         if (IsEntryNode(nodeDef.NodeType))
         {
-          log.ForMethod().Information("Quest: Processing entry node {NodeId} (type: {NodeType}) - enqueueing connected nodes",
+          log.ForMethod().Information("Quest: Processing entry node {NodeId} (type: {NodeType})",
             nodeId, nodeDef.NodeType);
-          var connectionCount = 0;
-          foreach (var connection in Definition.GetConnectionsFrom(nodeId))
+
+          // Check if this is a dialogue graph - if so, store next node IDs in state
+          // Otherwise, enqueue directly (for quests and other systems)
+          var connections = Definition.GetConnectionsFrom(nodeId).ToList();
+          if (Definition.GraphDomain == "Dialogue" || nodeDef.NodeType == "DialogueStartNode")
           {
-            queue.Enqueue(connection.ToNodeId);
-            connectionCount++;
-            log.ForMethod().Information("Quest: Enqueued node {ToNodeId} from entry node {FromNodeId}",
-              connection.ToNodeId, nodeId);
+            var nextNodeIds = connections.Select(c => c.ToNodeId).ToList();
+            if (nextNodeIds.Count > 0)
+            {
+              // Log connection details for debugging
+              foreach (var conn in connections)
+              {
+                var targetNode = Definition.GetNodeById(conn.ToNodeId);
+                var targetText = targetNode?.NodeType == "DialogueLineNode" && targetNode.Parameters.TryGetValue("Text", out var txt)
+                  ? txt as string ?? ""
+                  : "N/A";
+                log.ForMethod().Information("Dialogue: Entry node connection: {FromNodeId} -> {ToNodeId} (Port: {PortName}, Target Text: '{Text}')",
+                  conn.FromNodeId, conn.ToNodeId, conn.PortName, targetText);
+              }
+
+              state.Set("Dialogue.NextNodeIds", nextNodeIds);
+              log.ForMethod().Information("Dialogue: Entry node {NodeId} stored {Count} next node ID(s) in state: {NodeIds}. Will process when DialogueContinueMessage is received.",
+                nodeId, nextNodeIds.Count, string.Join(", ", nextNodeIds));
+              // Break immediately - execution will continue when DialogueContinueMessage is received
+              break;
+            }
           }
-          log.ForMethod().Information("Quest: Entry node {NodeId} enqueued {ConnectionCount} connected node(s)",
-            nodeId, connectionCount);
+          else
+          {
+            // For non-dialogue graphs, enqueue directly (original behavior)
+            var connectionCount = 0;
+            foreach (var connection in connections)
+            {
+              queue.Enqueue(connection.ToNodeId);
+              connectionCount++;
+              log.ForMethod().Information("Quest: Enqueued node {ToNodeId} from entry node {FromNodeId}",
+                connection.ToNodeId, nodeId);
+            }
+            log.ForMethod().Information("Quest: Entry node {NodeId} enqueued {ConnectionCount} connected node(s)",
+              nodeId, connectionCount);
+          }
           continue;
         }
 
@@ -146,8 +234,18 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
           continue;
         }
 
-        log.ForMethod().Information("Quest: Executing node {NodeId} (type: {NodeType}) in graph '{GraphId}'",
-          nodeId, nodeDef.NodeType, Definition.GraphId);
+        // Log node details for dialogue nodes
+        if (nodeDef.NodeType == "DialogueLineNode" && nodeDef.Parameters.TryGetValue("Text", out var textParam))
+        {
+          var nodeText = textParam as string ?? "";
+          log.ForMethod().Information("Quest: Executing DialogueLineNode {NodeId} in graph '{GraphId}' with text '{Text}'",
+            nodeId, Definition.GraphId, nodeText);
+        }
+        else
+        {
+          log.ForMethod().Information("Quest: Executing node {NodeId} (type: {NodeType}) in graph '{GraphId}'",
+            nodeId, nodeDef.NodeType, Definition.GraphId);
+        }
 
         var stopwatch = Stopwatch.StartNew();
         string errorMessage = null;
@@ -157,6 +255,21 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
           await executor.ExecuteAsync(Definition, nodeDef, state, message, context, ct);
           log.ForMethod().Information("Quest: Completed execution of node {NodeType} ({NodeId})",
             nodeDef.NodeType, nodeId);
+
+          // Check if this is a dialogue node that has stored next node IDs in state
+          // If so, pause execution and wait for DialogueContinueMessage
+          // This allows dialogue to pause after each line/choice and wait for user input
+          if (nodeDef.NodeType == "DialogueLineNode" || nodeDef.NodeType == "DialogueChoiceNode")
+          {
+            if (state.TryGet<List<string>>("Dialogue.NextNodeIds", out var storedNextNodes) &&
+                storedNextNodes != null && storedNextNodes.Count > 0)
+            {
+              log.ForMethod().Information("Dialogue: Pausing execution after {NodeType} ({NodeId}). Waiting for user input to continue.",
+                nodeDef.NodeType, nodeId);
+              // Stop processing - execution will resume when DialogueContinueMessage is received
+              break;
+            }
+          }
         }
         catch (Exception ex)
         {
