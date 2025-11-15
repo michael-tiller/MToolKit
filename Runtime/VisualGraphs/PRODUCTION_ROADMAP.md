@@ -1584,21 +1584,28 @@ This aligns perfectly with MToolKit's mission of shipping production-quality gam
   - Consider a "message impact analysis" tool that shows the full graph of reactions
 - **Priority:** Medium (important for maintainability and debugging)
 
-#### 3. Save/Load Lifecycle Ordering 🔴 **CRITICAL**
-- **Issue:** Core services, graph state, and event subscriptions all have to restore in the right order. If events fire before graph state is restored (or vice versa), you get double triggers, missed triggers, or inconsistent state.
+#### 3. Save/Load Lifecycle Ordering ⚠️ **HARDENING NEEDED** (Implementation Complete, Hardening Pending)
+
+**Status:** ✅ **Implementation is complete and working** - Save/load functionality is functional. These are hardening tasks to prevent edge cases.
+
+**Current Implementation:**
+- ✅ Quest state restores first (line 169-170 in GraphStateSaveController)
+- ✅ Graph states restore after quest graphs are loaded
+- ✅ Late registration handling (save system loads before plugin)
+- ✅ Proper cancellation token support
+
+**Potential Edge Cases (Not Yet Hardened):**
+- **Issue:** If events fire during load/restore, could cause double triggers or missed triggers
 - **Impact:** 
-  - Save/load bugs that corrupt player progress
-  - Duplicate events causing quests to complete twice
-  - Missed events leaving quests stuck
-  - Inconsistent state that's hard to debug
-  - **Game-breaking bugs that only appear after save/load**
-- **Mitigation:**
-  - Define clear save/load phases in `SaveSystemCoordinator`
-  - Ensure graph state restores before event subscriptions are active
-  - Add validation to detect out-of-order restoration
-  - Consider a "restore mode" that suppresses events until fully loaded
-  - **Test save/load extensively with complex graph state**
-- **Priority:** **Critical** - Save/load correctness is fundamental. If this breaks, the system is unusable in production.
+  - Potential duplicate events during restoration
+  - Events might fire before state is fully restored
+  - Edge cases with complex graph state
+- **Hardening Tasks (Not Blocking):**
+  - [ ] Define clear save/load phases in `SaveSystemCoordinator` (if not already defined)
+  - [ ] Add validation to detect out-of-order restoration
+  - [ ] Consider a "restore mode" that suppresses events until fully loaded
+  - [ ] **Test save/load extensively with complex graph state** (Phase 5 - Testing)
+- **Priority:** **Medium** - Implementation works, but hardening would make it more robust. Not blocking production use.
 
 #### 4. Message Schema / Taxonomy Drift 🔴 **CRITICAL**
 

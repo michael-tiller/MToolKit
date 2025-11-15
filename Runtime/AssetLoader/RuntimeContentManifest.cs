@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 
 namespace MToolKit.Runtime.AssetLoader
 {
@@ -13,24 +14,46 @@ namespace MToolKit.Runtime.AssetLoader
     ///   Remote catalog URLs to load (e.g., DLC catalogs, patched content).
     ///   Supports file://, http://, and https:// protocols.
     /// </summary>
-    public string[] Catalogs = Array.Empty<string>();
+    [SerializeField]
+    private string[] catalogs = Array.Empty<string>();
 
     /// <summary>
     ///   Addressable labels to preload before gameplay starts.
     ///   All assets with these labels will be loaded and cached.
     /// </summary>
-    public string[] Labels = Array.Empty<string>();
+    [SerializeField]
+    private string[] labels = Array.Empty<string>();
 
     /// <summary>
     ///   Addressable scene keys to load additively after content preload.
     ///   Scenes must be configured as Addressables (not in Build Settings).
     ///   Scenes are loaded in the order specified.
     /// </summary>
-    public string[] Scenes = Array.Empty<string>();
+    [SerializeField]
+    private string[] scenes = Array.Empty<string>();
 
     /// <summary>
     ///   Optional version identifier for cache invalidation.
     /// </summary>
-    public string Version = string.Empty;
+    [SerializeField]
+    private string version = string.Empty;
+
+    // Public properties to access the serialized fields
+    public string[] Catalogs => catalogs ?? Array.Empty<string>();
+    public string[] Labels => labels ?? Array.Empty<string>();
+    public string[] Scenes => scenes ?? Array.Empty<string>();
+    public string Version => version ?? string.Empty;
+
+    public RuntimeContentManifest()
+    {
+    }
+
+    public RuntimeContentManifest(string[] catalogs, string[] labels, string[] scenes, string version)
+    {
+      this.catalogs = catalogs;
+      this.labels = labels;
+      this.scenes = scenes;
+      this.version = version;
+    }
   }
 }

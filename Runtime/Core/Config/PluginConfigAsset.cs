@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace MToolKit.Runtime.Core.Config
 {
-  [CreateAssetMenu(menuName = "_MTools/Core/PluginConfigAsset", fileName = "PluginConfig")]
+  [CreateAssetMenu(menuName = "MToolKit/Core/PluginConfigAsset", fileName = "PluginConfig")]
   [InlineEditor]
   public class PluginConfigAsset : ScriptableObject
   {

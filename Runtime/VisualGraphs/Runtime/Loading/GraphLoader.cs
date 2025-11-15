@@ -1,16 +1,19 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
-using MToolKit.Runtime.VisualGraphs.Bootstrap;
-using MToolKit.Runtime.VisualGraphs.Definitions;
+using MToolKit.Runtime.Core.Types;
+using MToolKit.Runtime.VisualGraphs.Config;
+using MToolKit.Runtime.VisualGraphs.Dialogue.Definitions;
+using MToolKit.Runtime.VisualGraphs.Dialogue.Messages;
 using MToolKit.Runtime.VisualGraphs.Export;
+using MToolKit.Runtime.VisualGraphs.Quest.Definitions;
+using MToolKit.Runtime.VisualGraphs.Runtime.DTOs;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime.State;
-using MToolKit.Runtime.VisualGraphs.Quest.Definitions;
-using MToolKit.Runtime.VisualGraphs.Dialogue.Definitions;
 using Serilog;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
@@ -93,24 +96,11 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
         return runner;
       }
 
-      // Fallback to registry asset (backward compatibility)
-      questDef = registry.QuestDefinitions?.Find(q => q.Guid == graphId);
-      if (questDef != null)
-      {
-        var runner = await LoadQuestGraphAsync(questDef, ct);
-        if (runner != null)
-        {
-          loadedRunners[graphId] = runner;
-          router.RegisterRunner(runner);
-          return runner;
-        }
-        // Quest has no graph asset (optional) - this is valid, but can't load a runner
-        // Return null runner - caller should handle this gracefully
-        log.Warning("Quest '{QuestId}' has no quest-level GraphAsset (optional). Returning null runner.",
-          graphId);
-        return null;
-      }
+      // Note: Fallback to registry.QuestDefinitions removed - all quests should be loaded into
+      // GraphDefinitionRegistry during initialization. If a quest isn't found here, it means
+      // it wasn't in the registry or failed to load during initialization.
 
+      // Fallback to registry asset for dialogue (backward compatibility)
       dialogueDef = registry.DialogueDefinitions?.Find(d => d.DialogueId == graphId);
       if (dialogueDef != null)
       {
@@ -240,6 +230,23 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       var exporter = new XNodeGraphExporter(executorRegistry);
       var runtimeDef = exporter.Export(graphAsset);
       runtimeDef.GraphId = dialogueDef.DialogueId;
+
+      // Automatically subscribe dialogue graphs to DialogueStartMessage if not already subscribed
+      var dialogueStartMessageType = typeof(Dialogue.Messages.DialogueStartMessage);
+      var hasDialogueStartSubscription = runtimeDef.Subscriptions.Any(s =>
+        s.MessageType != null &&
+        s.MessageType.Type == dialogueStartMessageType);
+
+      if (!hasDialogueStartSubscription)
+      {
+        runtimeDef.Subscriptions.Add(new RuntimeSubscriptionDefinition
+        {
+          MessageType = new MessageTypeReference(dialogueStartMessageType),
+          DomainFilter = null, // Match any domain
+          Required = true // Entry node (DialogueStartNode) is required
+        });
+        log.Debug("Auto-added DialogueStartMessage subscription to dialogue graph '{DialogueId}'", dialogueDef.DialogueId);
+      }
 
       var baseState = new InMemoryGraphState();
       var state = new DebuggableGraphState(baseState, runtimeDef.GraphId);

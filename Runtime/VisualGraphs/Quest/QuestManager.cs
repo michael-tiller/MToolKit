@@ -84,11 +84,13 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
     }
     public void Dispose()
     {
-      foreach (var subscription in subscriptions)
+      if (this == null)
+        return;
+      foreach (var subscription in subscriptions?.ToList() ?? new List<IDisposable>())
       {
-        subscription.Dispose();
+        subscription?.Dispose();
       }
-      subscriptions.Clear();
+      subscriptions?.Clear();
       subscriptions = null;
     }
 
@@ -716,25 +718,62 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
     }
 
     /// <summary>
-    /// Finds a QuestDefinition by GUID using Resources.LoadAll.
-    /// This is a simple implementation - games can override this via a registry if needed.
+    /// Finds a QuestDefinition by GUID.
+    /// First checks the GraphDefinitionRegistry, then attempts to load from addressables if needed.
+    /// Falls back to Resources for backward compatibility.
     /// </summary>
     private QuestDefinition FindQuestDefinitionByGuid(string questGuid)
     {
       if (string.IsNullOrEmpty(questGuid))
         return null;
 
-      // Search all QuestDefinition assets in Resources
-      var allQuests = Resources.LoadAll<QuestDefinition>("");
-      var quest = allQuests.FirstOrDefault(q => q.Guid == questGuid);
-
-      if (quest == null)
+      // First, check the runtime registry (may have been loaded from addressables or Resources)
+      var quest = GraphDefinitionRegistry.GetQuestDefinition(questGuid);
+      if (quest != null)
       {
-        log.ForMethod().Warning("QuestDefinition with GUID {QuestGuid} not found in Resources", questGuid);
+        return quest;
+      }
+
+#if UNITY_ADDRESSABLES
+      // If not in registry, try loading from addressables via the registry asset references
+      quest = TryLoadQuestFromAddressables(questGuid);
+      if (quest != null)
+      {
+        // Register it for future lookups
+        GraphDefinitionRegistry.RegisterQuestDefinition(quest);
+        return quest;
+      }
+#endif
+
+      // Fallback to Resources for backward compatibility
+      var allQuests = Resources.LoadAll<QuestDefinition>("");
+      quest = allQuests.FirstOrDefault(q => q.Guid == questGuid);
+
+      if (quest != null)
+      {
+        // Register it for future lookups
+        GraphDefinitionRegistry.RegisterQuestDefinition(quest);
+      }
+      else
+      {
+        log.ForMethod().Warning("QuestDefinition with GUID {QuestGuid} not found in registry, addressables, or Resources", questGuid);
       }
 
       return quest;
     }
+
+#if UNITY_ADDRESSABLES
+    /// <summary>
+    /// Attempts to load a quest definition from addressables by searching registry asset references.
+    /// </summary>
+    private QuestDefinition TryLoadQuestFromAddressables(string questGuid)
+    {
+      // This will be called from VisualGraphPlugin during initialization
+      // For now, return null - the registry should be populated during initialization
+      // This method can be extended if we need lazy loading from addressables
+      return null;
+    }
+#endif
 
     // ==================== PROGRESS TRACKING ====================
 

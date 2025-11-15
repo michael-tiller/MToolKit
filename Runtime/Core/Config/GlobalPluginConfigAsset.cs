@@ -9,7 +9,7 @@ namespace MToolKit.Runtime.Core.Config
   ///   Configuration asset for global plugins that persist across all scenes.
   ///   These plugins are instantiated by GlobalInstaller and provide core services.
   /// </summary>
-  [CreateAssetMenu(menuName = "_MTools/Core/GlobalPluginConfigAsset", fileName = "GlobalPluginConfig")]
+  [CreateAssetMenu(menuName = "MToolKit/Core/GlobalPluginConfigAsset", fileName = "GlobalPluginConfig")]
   [InlineEditor]
   public class GlobalPluginConfigAsset : ScriptableObject
   {

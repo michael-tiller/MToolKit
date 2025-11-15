@@ -44,6 +44,14 @@ namespace MToolKit.Runtime.ErrorSystem.Views
 
     public void SetMessage(string message)
     {
+
+      if (string.IsNullOrWhiteSpace(message))
+      {
+        log.ForGameObject(gameObject).ForMethod().Debug("Setting message to empty");
+        errorText.SetText(string.Empty);
+        return;
+      }
+
       log.ForGameObject(gameObject).ForMethod().Information("Setting message: {0}", message);
       errorText.SetText(message);
     }

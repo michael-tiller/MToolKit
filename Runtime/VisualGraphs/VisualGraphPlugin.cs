@@ -6,7 +6,6 @@ using MToolKit.Runtime.Core.Abstractions;
 using MToolKit.Runtime.MessageBus.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Bootstrap;
 using MToolKit.Runtime.VisualGraphs.Config;
-using MToolKit.Runtime.VisualGraphs.Definitions;
 using MToolKit.Runtime.VisualGraphs.Executors;
 using MToolKit.Runtime.VisualGraphs.Quest.Executors;
 using MToolKit.Runtime.VisualGraphs.Runtime;
@@ -15,15 +14,13 @@ using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime.Loading;
 using MToolKit.Runtime.VisualGraphs.Dialogue.Executors;
 using MToolKit.Runtime.VisualGraphs.Quest.Definitions;
-using MToolKit.Runtime.VisualGraphs.Dialogue.Definitions;
-using MToolKit.Runtime.VisualGraphs.Persistence;
-using MToolKit.Runtime.Persistence.Interfaces;
 using MToolKit.Runtime.Persistence;
 using MToolKit.Runtime.Persistence.ES3Integration;
 using System.Linq;
 using Serilog;
 using Sirenix.OdinInspector;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
 using VContainer;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
@@ -426,6 +423,56 @@ namespace MToolKit.Runtime.VisualGraphs
     }
 
     /// <summary>
+    ///   Load quest definitions from the registry via addressables.
+    /// </summary>
+    private async UniTask<List<QuestDefinition>> LoadQuestDefinitionsFromRegistryAsync(VisualGraphRegistry registry)
+    {
+      var questDefs = new List<QuestDefinition>();
+
+      if (registry == null || registry.QuestDefinitions == null)
+        return questDefs;
+
+      log.ForGameObject(gameObject).Information("Loading {Count} quest definitions from addressables...", registry.QuestDefinitions.Count);
+
+      foreach (QuestAssetReference assetRef in registry.QuestDefinitions)
+      {
+        if (assetRef == null || !assetRef.HasValidGuid)
+        {
+          log.ForGameObject(gameObject).Warning("Skipping invalid quest asset reference (null or missing GUID)");
+          continue;
+        }
+
+        try
+        {
+          var handle = Addressables.LoadAssetAsync<QuestDefinition>(assetRef);
+          var questDef = await handle;
+
+          if (questDef != null)
+          {
+            questDefs.Add(questDef);
+            // Register in the runtime registry for lookup by GUID
+            Runtime.GraphDefinitionRegistry.RegisterQuestDefinition(questDef);
+            log.ForGameObject(gameObject).Debug("Loaded quest definition '{QuestName}' ({QuestGuid}) from addressables",
+              questDef.DisplayName, questDef.Guid);
+          }
+          else
+          {
+            log.ForGameObject(gameObject).Warning("Failed to load quest definition from addressable (GUID: {Guid})", assetRef.AssetGUID);
+          }
+        }
+        catch (Exception ex)
+        {
+          log.ForGameObject(gameObject).Error(ex, "Error loading quest definition from addressable (GUID: {Guid}): {Message}",
+            assetRef.AssetGUID, ex.Message);
+        }
+      }
+
+      await UniTask.WaitForEndOfFrame();
+
+      return questDefs;
+    }
+
+    /// <summary>
     ///   Initialize all graphs from the registry.
     /// </summary>
     private async UniTask InitializeGraphsAsync(VisualGraphRegistry registry)
@@ -440,12 +487,14 @@ namespace MToolKit.Runtime.VisualGraphs
 
       var loadTasks = new List<UniTask>();
 
-      // Use self-registered definitions (preferred) or fallback to registry
-      var questDefs = Runtime.GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
-      if (questDefs.Count == 0 && registry != null && registry.QuestDefinitions != null)
+      // Load quest definitions from registry (may be asset references for addressables)
+      var questDefs = await LoadQuestDefinitionsFromRegistryAsync(registry);
+
+      // Use self-registered definitions (preferred) or fallback to loaded registry quests
+      var registeredQuestDefs = Runtime.GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
+      if (registeredQuestDefs.Count > 0)
       {
-        // Fallback to registry asset for backward compatibility
-        questDefs = registry.QuestDefinitions.Where(q => q != null).ToList();
+        questDefs = registeredQuestDefs;
       }
 
       foreach (var questDef in questDefs)

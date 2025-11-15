@@ -1,10 +1,15 @@
 using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using MessagePipe;
+using MToolKit.Runtime.MessageBus;
+using GameMessageBroker = MToolKit.Runtime.MessageBus.GameMessageBroker;
 using MToolKit.Runtime.VisualGraphs.Runtime.DTOs;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using MToolKit.Runtime.MessageBus.Interfaces;
+using MToolKit.Runtime.VisualGraphs.Dialogue.Messages;
+using R3;
 
 namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
 {
@@ -16,7 +21,7 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
   {
     #region IGraphNodeExecutor Members
 
-    public string NodeType => nameof(DialogueLineNodeExecutor);
+    public string NodeType => "DialogueLineNode";
 
     public async UniTask ExecuteAsync(
       IRuntimeGraphDefinition graph,
@@ -26,24 +31,58 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
       GraphNodeExecutionContext context,
       CancellationToken ct = default)
     {
-      // Extract parameters
-      var speakerId = node.Parameters.TryGetValue("speakerId", out var sid) ? sid as string : "Unknown";
-      var text = node.Parameters.TryGetValue("text", out var txt) ? txt as string : "";
-      var localizationKey = node.Parameters.TryGetValue("localizationKey", out var lk) ? lk as string : null;
+      // Extract parameters (field names match the node class exactly)
+      var speakerId = node.Parameters.TryGetValue("SpeakerId", out var sid) ? sid as string : "Unknown";
+      var text = node.Parameters.TryGetValue("Text", out var txt) ? txt as string : "";
+      var localizationKey = node.Parameters.TryGetValue("LocalizationKey", out var lk) ? lk as string : null;
 
-      // TODO: Resolve IDialogueUIService from context and show line
-      // var dialogueUI = context.Resolve<IDialogueUIService>();
-      // await dialogueUI.ShowLineAsync(speakerId, text, ct);
+      // Publish dialogue show message to display the dialogue line
+      context.Emit(new DialogueShowMessage(text, speakerId, localizationKey, graph.GraphId));
 
-      // For now, simulate delay
-      await UniTask.Delay(TimeSpan.FromSeconds(2), cancellationToken: ct);
+      // Wait for player to progress (dialogue view will publish DialogueProgressMessage when Next is clicked)
+      await WaitForDialogueProgressAsync(graph.GraphId, ct);
 
-      // TODO: Emit Dialogue.LineShown message to MessagePipe
-      // Example: context.Emit(new DialogueLineShownMessage(graph.GraphId, speakerId, text));
-
-      // Continue to connected nodes
+      // Continue to connected nodes after player has progressed
       foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
         context.EnqueueNext(connection.ToNodeId);
+    }
+
+    private async UniTask WaitForDialogueProgressAsync(string graphId, CancellationToken ct)
+    {
+      var tcs = new UniTaskCompletionSource();
+      IDisposable subscription = null;
+
+      try
+      {
+        var subscriber = GameMessageBroker.GetSubscriber<DialogueProgressMessage>();
+        if (subscriber != null)
+        {
+          subscription = subscriber.Subscribe(message =>
+          {
+            // Only continue if this message is for our graph (or no graph ID specified, meaning any)
+            if (string.IsNullOrEmpty(message.GraphId) || message.GraphId == graphId)
+            {
+              tcs.TrySetResult();
+            }
+          });
+        }
+
+        // Wait for the progress message or cancellation
+        // Use AttachExternalCancellation to handle cancellation
+        try
+        {
+          await tcs.Task.AttachExternalCancellation(ct);
+        }
+        catch (OperationCanceledException)
+        {
+          // Cancellation handled - subscription will be disposed in finally
+          return;
+        }
+      }
+      finally
+      {
+        subscription?.Dispose();
+      }
     }
 
     #endregion

@@ -39,7 +39,7 @@ namespace MToolKit.Runtime.Bootstrapper
     public async UniTask LoadGameAsync(CancellationToken ct = default)
     {
       // Load manifest from StreamingAssets
-      RuntimeContentManifest manifest = await LoadManifestAsync(ct);
+      (RuntimeContentManifest manifest, string path) = await LoadManifestAsync(ct);
 
       // Initialize Addressables
       await contentLoader.InitializeAsync(ct);
@@ -80,7 +80,9 @@ namespace MToolKit.Runtime.Bootstrapper
         await LoadScenesFromManifest(manifest, ct);
       }
 
-      log.ForMethod().Information("Game content loaded successfully. Version: {Version}", manifest.Version);
+      await UniTask.WaitForEndOfFrame();
+
+      log.ForMethod().Information("Game content loaded successfully. Manifest: {ManifestPath}, Version: {Version}", path, manifest.Version);
     }
 
     #endregion
@@ -136,31 +138,31 @@ namespace MToolKit.Runtime.Bootstrapper
       }
     }
 
-    private static async UniTask<RuntimeContentManifest> LoadManifestAsync(CancellationToken ct)
+    private static async UniTask<(RuntimeContentManifest, string)> LoadManifestAsync(CancellationToken ct)
     {
       string manifestPath = Path.Combine(Application.streamingAssetsPath, "manifest.json");
 
       if (!File.Exists(manifestPath))
       {
         log.ForMethod().Warning("Manifest not found at {Path}, using defaults", manifestPath);
-        return new RuntimeContentManifest
-        {
-          Catalogs = Array.Empty<string>(),
-          Labels = new[] { "core", "ui", "localization" },
-          Scenes = Array.Empty<string>(),
-          Version = "1.0"
-        };
+        return (new RuntimeContentManifest(
+          catalogs: Array.Empty<string>(),
+          labels: new[] { "core", "ui", "localization" },
+          scenes: Array.Empty<string>(),
+          version: "1.0"),
+          manifestPath);
       }
 
       try
       {
         string text = await File.ReadAllTextAsync(manifestPath, ct);
         RuntimeContentManifest manifest = JsonUtility.FromJson<RuntimeContentManifest>(text);
-        log.ForMethod().Information("Loaded manifest with {Catalogs} catalogs, {Labels} labels, {Scenes} scenes",
+        log.ForMethod().Information("Loaded manifest {Path} with {Catalogs} catalogs, {Labels} labels, {Scenes} scenes",
+          manifestPath,
           manifest.Catalogs?.Length ?? 0,
           manifest.Labels?.Length ?? 0,
           manifest.Scenes?.Length ?? 0);
-        return manifest;
+        return (manifest, manifestPath);
       }
       catch (Exception ex)
       {
