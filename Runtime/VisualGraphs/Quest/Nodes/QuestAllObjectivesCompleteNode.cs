@@ -11,6 +11,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Nodes
   /// </summary>
   [CreateNodeMenu("Quest/Objective/Check All Complete")]
   [NodeTint("#8B6B93")]
+  [NodeWidth(400)]
   public sealed class QuestAllObjectivesCompleteNode : VisualGraphNodeBase
   {
     [Input(connectionType = ConnectionType.Multiple)]

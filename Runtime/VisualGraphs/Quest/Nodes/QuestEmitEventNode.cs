@@ -13,6 +13,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Nodes
   /// </summary>
   [CreateNodeMenu("Quest/Emit Event")]
   [NodeTint("#A66B7F")]
+  [NodeWidth(500)]
   public sealed class QuestEmitEventNode : VisualGraphNodeBase
   {
     [Input] public NodePort Input;

@@ -136,7 +136,11 @@ namespace MToolKit.Runtime.VisualGraphs
         .As<IGraphNodeExecutor>();
       builder.Register<QuestObjectiveCheckNodeExecutor>(Lifetime.Singleton)
         .As<IGraphNodeExecutor>();
+      builder.Register<QuestStateCheckNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
       builder.Register<QuestAllObjectivesCompleteNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Quest.Executors.StartQuestNodeExecutor>(Lifetime.Singleton)
         .As<IGraphNodeExecutor>();
 
       // Message executors (data flow from messages)

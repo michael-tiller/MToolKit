@@ -11,6 +11,7 @@ using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using MToolKit.Runtime.MessageBus.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Dialogue.Messages;
+using MToolKit.Runtime.VisualGraphs.Runtime;
 using R3;
 using Serilog;
 using ILogger = Serilog.ILogger;
@@ -73,9 +74,7 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
               // Try to extract via reflection as fallback
               var choiceType = choiceObj.GetType();
               var textField = choiceType.GetField("Text");
-              var locField = choiceType.GetField("LocalizationKey");
               var text = textField?.GetValue(choiceObj) as string ?? "";
-              var locKey = locField?.GetValue(choiceObj) as string;
               choices.Add(new DialogueShowChoiceMessage.ChoiceData(text));
               log.ForMethod().Verbose("Extracted choice via reflection: Text='{Text}'", text);
               count++;
@@ -97,10 +96,24 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
           string.Join(", ", node.Parameters.Keys));
       }
 
+      // Get the table name from DialogueDefinition
+      string tableName = string.Empty;
+      var dialogueDef = GraphDefinitionRegistry.GetDialogueDefinition(graph.GraphId);
+      if (dialogueDef != null && dialogueDef.DialogueTableCollection != null)
+      {
+        tableName = dialogueDef.DialogueTableCollection.name;
+        log.ForMethod().Verbose("Retrieved table name '{TableName}' from DialogueDefinition for graph {GraphId}", tableName, graph.GraphId);
+      }
+      else
+      {
+        log.ForMethod().Warning("Could not retrieve DialogueDefinition or DialogueTableCollection for graph {GraphId}. Table name will be empty.", graph.GraphId);
+      }
+
       // Publish dialogue choice message to display choices
       if (choices.Count > 0)
       {
-        context.Emit(new DialogueShowChoiceMessage(choices, graph.GraphId));
+        context.Emit(new DialogueShowChoiceMessage(choices, tableName, graph.GraphId));
+        log.ForMethod().Information("Emitted DialogueShowChoiceMessage for graph {GraphId} with {ChoiceCount} choices and table '{TableName}'", graph.GraphId, choices.Count, tableName);
       }
       else
       {

@@ -1,7 +1,13 @@
+using MToolKit.Runtime.Utilities;
 using MToolKit.Runtime.VisualGraphs.Dialogue.Graphs;
 using MToolKit.Runtime.VisualGraphs.Variables;
 using Sirenix.OdinInspector;
 using UnityEngine;
+using UnityEngine.Localization;
+
+#if UNITY_EDITOR
+using UnityEditor.Localization;
+#endif
 
 namespace MToolKit.Runtime.VisualGraphs.Dialogue.Definitions
 {
@@ -9,11 +15,16 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Definitions
   ///   Dialogue definition asset linking a dialogue ID to a graph and configuration.
   /// </summary>
   [CreateAssetMenu(menuName = "MToolKit/Visual Graphs/Dialogue Definition", fileName = "DialogueDef", order = 301)]
-  public sealed class DialogueDefinition : ScriptableObject
+  public sealed class DialogueDefinition : GuidScriptableObject
   {
     [BoxGroup("Identity")]
     [Tooltip("Unique dialogue identifier")]
-    public string DialogueId = "dialogue_001";
+    public string DialogueId => $"dialogue_{Guid}";
+
+    [ReadOnly]
+    [ShowInInspector]
+    [PropertyOrder(-1)]
+    public string Id => $"dialogue_{Guid}";
 
     [BoxGroup("Graph")]
     [Required]
@@ -25,17 +36,17 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Definitions
     [Tooltip("Initial variables for this dialogue (applied after global, before save)")]
     public GraphVariableSet InitialVariables;
 
-    [BoxGroup("Configuration")]
-    [Tooltip("Start this dialogue when NPC is interacted with")]
-    public bool StartOnInteract = true;
-
-    [BoxGroup("Configuration")]
-    [Tooltip("NPC identifier for this dialogue")]
-    public string NpcId = "npc_001";
-
-    [BoxGroup("Addressable")]
-    [Tooltip("Optional addressable key for dynamic loading")]
-    public string AddressableKey;
+#if UNITY_EDITOR
+    [BoxGroup("Localization")]
+    [Required]
+    [Tooltip("Localization tables for this dialogue (should contain all relevant StringTables). This is NOT a table but a TableCollection.")]
+    public StringTableCollection DialogueTableCollection;
+#else
+    [BoxGroup("Localization")]
+    [Required]
+    [Tooltip("Localization tables for this dialogue (should contain all relevant StringTables). This is NOT a table but a TableCollection.")]
+    public Object DialogueTableCollection;
+#endif
 
 #if UNITY_EDITOR
     [BoxGroup("Graph")]

@@ -10,6 +10,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Nodes
   /// </summary>
   [CreateNodeMenu("Quest/Set Stage")]
   [NodeTint("#6B8FA8")]
+  [NodeWidth(400)]
   public sealed class QuestSetStageNode : VisualGraphNodeBase
   {
     [Input(connectionType = ConnectionType.Multiple)]

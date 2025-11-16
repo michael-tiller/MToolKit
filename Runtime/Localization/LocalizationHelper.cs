@@ -3,6 +3,9 @@ using Serilog;
 using Serilog.Core;
 using UnityEngine.Localization.Settings;
 using ILogger = Serilog.ILogger;
+using UnityEditor.Localization;
+using Cysharp.Threading.Tasks;
+using System.Threading.Tasks;
 
 namespace MToolKit.Runtime.Localization
 {
@@ -16,6 +19,18 @@ namespace MToolKit.Runtime.Localization
       log.ForMethod().Debug("Getting localized string for key: {0}", key);
       log.ForMethod().Verbose("Args: {0}", args);
       return LocalizationSettings.StringDatabase.GetLocalizedString("Default String Table", key, args);
+    }
+    public static async UniTask<string> GetLocalizedStringAsync(string tableName, string key, params object[] args)
+    {
+      log.ForMethod().Debug("Getting localized string for key: {0}", key);
+      log.ForMethod().Verbose("Args: {0}", args);
+      return await LocalizationSettings.StringDatabase.GetLocalizedStringAsync(tableName, key, args);
+    }
+    public static string GetLocalizedString(string tableName, string key, params object[] args)
+    {
+      log.ForMethod().Debug("Getting localized string for key: {0}", key);
+      log.ForMethod().Verbose("Args: {0}", args);
+      return LocalizationSettings.StringDatabase.GetLocalizedString(tableName, key, args);
     }
   }
 }

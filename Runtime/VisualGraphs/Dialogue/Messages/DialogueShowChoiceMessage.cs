@@ -19,10 +19,16 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Messages
     /// </summary>
     public readonly string GraphId;
 
-    public DialogueShowChoiceMessage(IReadOnlyList<ChoiceData> choices, string graphId = null)
+    /// <summary>
+    ///   The table name that contains the choice texts
+    /// </summary>
+    public readonly string Table;
+
+    public DialogueShowChoiceMessage(IReadOnlyList<ChoiceData> choices, string table, string graphId = null)
     {
       Choices = choices ?? new List<ChoiceData>();
       GraphId = graphId;
+      Table = table ?? string.Empty;
     }
 
     /// <summary>

@@ -15,6 +15,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Nodes
   /// </summary>
   [CreateNodeMenu("Quest/Start Graph")]
   [NodeTint("#B8905C")]
+  [NodeWidth(400)]
   public sealed class QuestStartGraphNode : VisualGraphNodeBase
   {
     [Input] public NodePort Input;

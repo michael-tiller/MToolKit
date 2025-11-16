@@ -39,7 +39,11 @@ namespace MToolKit.Runtime.Utilities
     protected virtual void RefreshGuid()
     {
 #if UNITY_EDITOR
-      Guid = System.Guid.NewGuid().ToString();
+      Guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(this));
+      if (string.IsNullOrEmpty(Guid))
+      {
+        Guid = System.Guid.NewGuid().ToString();
+      }
       Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
       EditorUtility.SetDirty(this);
 #endif

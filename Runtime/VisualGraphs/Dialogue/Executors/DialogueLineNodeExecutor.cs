@@ -10,6 +10,7 @@ using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using MToolKit.Runtime.MessageBus.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Dialogue.Messages;
+using MToolKit.Runtime.VisualGraphs.Runtime;
 using R3;
 using UnityEngine;
 using Serilog;
@@ -42,7 +43,6 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
       // Extract parameters (field names match the node class exactly)
       var speakerId = node.Parameters.TryGetValue("SpeakerId", out var sid) ? sid as string : "Unknown";
       var text = node.Parameters.TryGetValue("Text", out var txt) ? txt as string : "";
-      var localizationKey = node.Parameters.TryGetValue("LocalizationKey", out var lk) ? lk as string : null;
 
       // Extract timing parameters
       var minDisplaySeconds = node.Parameters.TryGetValue("MinDisplaySeconds", out var minTime) && minTime is float min ? min : 0f;
@@ -61,9 +61,22 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
       log.ForMethod().Information("DialogueLineNode {NodeId}: Text='{Text}', Speaker='{Speaker}', Stored {Count} next node ID(s) in state: {NodeIds}",
         node.NodeId, text, speakerId, nextNodeIds.Count, string.Join(", ", nextNodeIds));
 
+      // Get the table name from DialogueDefinition
+      string tableName = string.Empty;
+      var dialogueDef = GraphDefinitionRegistry.GetDialogueDefinition(graph.GraphId);
+      if (dialogueDef != null && dialogueDef.DialogueTableCollection != null)
+      {
+        tableName = dialogueDef.DialogueTableCollection.name;
+        log.ForMethod().Verbose("Retrieved table name '{TableName}' from DialogueDefinition for graph {GraphId}", tableName, graph.GraphId);
+      }
+      else
+      {
+        log.ForMethod().Warning("Could not retrieve DialogueDefinition or DialogueTableCollection for graph {GraphId}. Table name will be empty.", graph.GraphId);
+      }
+
       // Publish dialogue show message to display the dialogue line
-      context.Emit(new DialogueShowMessage(text, speakerId, graph.GraphId));
-      log.ForMethod().Information("Emitted DialogueShowMessage for graph {GraphId} with text '{Text}'. Waiting for user input...", graph.GraphId, text);
+      context.Emit(new DialogueShowMessage(text, speakerId, tableName, graph.GraphId));
+      log.ForMethod().Information("Emitted DialogueShowMessage for graph {GraphId} with text '{Text}' and table '{TableName}'. Waiting for user input...", graph.GraphId, text, tableName);
 
       // Handle timing and progression
       if (autoAdvance)

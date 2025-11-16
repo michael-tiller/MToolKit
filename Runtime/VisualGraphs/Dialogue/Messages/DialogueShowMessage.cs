@@ -23,10 +23,16 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Messages
     /// </summary>
     public readonly string GraphId;
 
-    public DialogueShowMessage(string dialogueText, string speakerName, string graphId = null)
+    /// <summary>
+    ///   The table name that contains the dialogue text and speaker name
+    /// </summary>
+    public readonly string Table;
+
+    public DialogueShowMessage(string dialogueText, string speakerName, string table, string graphId = null)
     {
       DialogueText = dialogueText ?? string.Empty;
       SpeakerName = speakerName ?? string.Empty;
+      Table = table ?? string.Empty;
       GraphId = graphId;
     }
   }

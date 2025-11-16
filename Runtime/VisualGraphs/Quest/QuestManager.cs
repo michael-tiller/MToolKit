@@ -779,19 +779,19 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
 
     private void OnQuestStarted(QuestStartedMessage message)
     {
-      log.ForMethod().Information("Quest: OnQuestStarted handler called for quest {QuestGuid}", message.QuestGuid);
+      log.ForMethod().Information("Quest: OnQuestStarted handler called for quest {QuestName} ({QuestGuid})", message.Quest.DisplayName, message.QuestGuid);
     }
     private void OnQuestCompleted(QuestCompletedMessage message)
     {
-      log.ForMethod().Information("Quest: OnQuestCompleted handler called for quest {QuestGuid}", message.QuestGuid);
+      log.ForMethod().Information("Quest: OnQuestCompleted handler called for quest {QuestName} ({QuestGuid})", message.Quest.DisplayName, message.QuestGuid);
     }
     private void OnQuestAbandoned(QuestAbandonedMessage message)
     {
-      log.ForMethod().Information("Quest: OnQuestAbandoned handler called for quest {QuestGuid}", message.QuestGuid);
+      log.ForMethod().Information("Quest: OnQuestAbandoned handler called for quest {QuestName} ({QuestGuid})", message.Quest.DisplayName, message.QuestGuid);
     }
     private void OnQuestClaimed(QuestClaimedMessage message)
     {
-      log.ForMethod().Information("Quest: OnQuestClaimed handler called for quest {QuestGuid}", message.QuestGuid);
+      log.ForMethod().Information("Quest: OnQuestClaimed handler called for quest {QuestName} ({QuestGuid})", message.Quest.DisplayName, message.QuestGuid);
     }
 
     private void OnQuestObjectiveProgress(QuestObjectiveProgressMessage message)

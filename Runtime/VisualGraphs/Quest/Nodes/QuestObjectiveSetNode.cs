@@ -13,6 +13,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Nodes
   /// </summary>
   [CreateNodeMenu("Quest/Objective/Set Progress")]
   [NodeTint("#6B8FA8")]
+  [NodeWidth(400)]
   public sealed class QuestObjectiveSetNode : VisualGraphNodeBase
   {
     [Input(connectionType = ConnectionType.Multiple)]

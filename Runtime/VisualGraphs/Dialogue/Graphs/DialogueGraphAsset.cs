@@ -23,10 +23,6 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Graphs
     [HideLabel]
     public string Description;
 
-    [BoxGroup("Dialogue")]
-    [Tooltip("Default speaker for this dialogue")]
-    public string DefaultSpeaker;
-
     [BoxGroup("Performance")]
     [Tooltip("Max nodes executed per message (prevents infinite loops)")]
     [Range(64, 4096)]
@@ -46,13 +42,13 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Graphs
     public override Node CopyNode(Node original)
     {
       var copied = base.CopyNode(original);
-      
+
       // Regenerate GUID for VisualGraphNodeBase nodes to ensure uniqueness
       if (copied is VisualGraphNodeBase vgNode)
       {
         vgNode.RegenerateGuid();
       }
-      
+
       return copied;
     }
 
@@ -63,7 +59,7 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Graphs
     private void FixDuplicateGuids()
     {
       var guidCounts = new Dictionary<string, List<VisualGraphNodeBase>>();
-      
+
       // Find all VisualGraphNodeBase nodes and group by GUID
       foreach (var node in nodes)
       {
@@ -74,7 +70,7 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Graphs
           guidCounts[vgNode.Guid].Add(vgNode);
         }
       }
-      
+
       // Find duplicates and regenerate GUIDs (keep first occurrence, regenerate others)
       int fixedCount = 0;
       foreach (var kvp in guidCounts)
@@ -89,7 +85,7 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Graphs
           }
         }
       }
-      
+
       if (fixedCount > 0)
       {
         EditorUtility.SetDirty(this);

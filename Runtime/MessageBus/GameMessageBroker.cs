@@ -51,7 +51,7 @@ namespace MToolKit.Runtime.MessageBus
     {
       if (!isInitialized || gameResolver == null)
       {
-        log.ForMethod().Error("GameMessageBroker not initialized");
+        log.ForMethod().Error("GameMessageBroker not initialized or game resolver is null");
         return null;
       }
 
