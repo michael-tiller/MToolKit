@@ -18,7 +18,7 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
   {
     public string NodeType => "MessageFieldCheckNode";
 
-    public UniTask ExecuteAsync(
+    public UniTask Execute(
       IRuntimeGraphDefinition graph,
       RuntimeNodeDefinition node,
       IGraphState state,
@@ -37,11 +37,11 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
       var fieldName = node.Parameters.TryGetValue("fieldName", out var fn) ? fn as string : null;
       if (string.IsNullOrEmpty(fieldName))
         fieldName = node.Parameters.TryGetValue("FieldName", out fn) ? fn as string : null;
-      
+
       var expectedValue = node.Parameters.TryGetValue("expectedValue", out var ev) ? ev as string : null;
       if (string.IsNullOrEmpty(expectedValue))
         expectedValue = node.Parameters.TryGetValue("ExpectedValue", out ev) ? ev as string : null;
-      
+
       var ignoreCase = node.Parameters.TryGetValue("ignoreCase", out var ic) && Convert.ToBoolean(ic);
       if (!ignoreCase)
         ignoreCase = node.Parameters.TryGetValue("IgnoreCase", out ic) && Convert.ToBoolean(ic);

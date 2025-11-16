@@ -252,7 +252,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
 
         try
         {
-          await executor.ExecuteAsync(Definition, nodeDef, state, message, context, ct);
+          await executor.Execute(Definition, nodeDef, state, message, context, ct);
           log.ForMethod().Information("Quest: Completed execution of node {NodeType} ({NodeId})",
             nodeDef.NodeType, nodeId);
 

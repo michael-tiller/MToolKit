@@ -42,7 +42,63 @@ namespace MToolKit.Runtime.Core.Types
       {
         if (cachedType == null && !string.IsNullOrEmpty(assemblyQualifiedName))
         {
+          // Try Type.GetType first (fastest if assembly is already loaded)
           cachedType = Type.GetType(assemblyQualifiedName);
+
+          // Fallback: search through all loaded assemblies if Type.GetType fails
+          // This handles cases where the assembly name in the qualified name doesn't match
+          // or the assembly isn't loaded in the current context
+          if (cachedType == null)
+          {
+            var fullTypeName = assemblyQualifiedName.Split(',')[0].Trim(); // Get full type name (namespace + type)
+            var typeNameOnly = fullTypeName.Contains('.')
+              ? fullTypeName.Substring(fullTypeName.LastIndexOf('.') + 1)
+              : fullTypeName;
+
+            // First try exact match with full type name
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+              try
+              {
+                cachedType = assembly.GetType(fullTypeName);
+                if (cachedType != null)
+                  break;
+              }
+              catch
+              {
+                // Skip assemblies that can't be loaded or don't have the type
+                continue;
+              }
+            }
+
+            // If still not found, try searching all types in all assemblies
+            // This is slower but handles cases where assembly name doesn't match
+            if (cachedType == null)
+            {
+              foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+              {
+                try
+                {
+                  foreach (var type in assembly.GetTypes())
+                  {
+                    if (type.FullName == fullTypeName && typeof(IGameMessage).IsAssignableFrom(type))
+                    {
+                      cachedType = type;
+                      break;
+                    }
+                  }
+                  if (cachedType != null)
+                    break;
+                }
+                catch
+                {
+                  // Skip assemblies that can't be loaded
+                  continue;
+                }
+              }
+            }
+          }
+
           if (cachedType != null && !typeof(IGameMessage).IsAssignableFrom(cachedType))
           {
             Debug.LogError($"Type {cachedType.Name} does not implement IGameMessage");
@@ -94,8 +150,8 @@ namespace MToolKit.Runtime.Core.Types
         {
           foreach (var type in assembly.GetTypes())
           {
-            if (typeof(IGameMessage).IsAssignableFrom(type) && 
-                !type.IsInterface && 
+            if (typeof(IGameMessage).IsAssignableFrom(type) &&
+                !type.IsInterface &&
                 !type.IsAbstract)
             {
               messageTypes.Add(type);

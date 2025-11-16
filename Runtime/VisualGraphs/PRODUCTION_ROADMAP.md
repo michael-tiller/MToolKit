@@ -66,6 +66,60 @@
 
 **See `CHANGELOG.md` for complete implementation details.**
 
+### 3.1 Future Enhancements
+
+#### 3.1.1 Dialogue Signal/Event Integration ⚠️ **BASIC INTEGRATION EXISTS, GENERAL PATTERN NOT IMPLEMENTED**
+
+**Current Status:**
+- ✅ **Quest integration exists** - `StartQuestNode` can be used in dialogue graphs to start quests
+- ✅ Dialogue graphs can use any quest node (StartQuestNode, etc.) for quest actions
+- ✅ General graph system allows mixing node types across domains
+
+**What's Missing (General Signal Pattern):**
+- ❌ No general `DialogueSignalNode` for arbitrary dialogue-triggered events
+- ❌ No pluggable `IDialogueSignalHandler` interface for custom signal handling
+- ❌ No standardized string-based signal pattern (e.g., "StartQuest:quest_01", "PlaySound:sfx_01")
+- ❌ Each integration point requires a custom node type (e.g., StartQuestNode, would need StartSoundNode, etc.)
+
+**Current Solution:**
+- Use domain-specific nodes in dialogue graphs (e.g., `StartQuestNode` for quests)
+- Works well for common integrations (quests, state changes)
+- Requires creating new node types for each integration point
+
+**Proposed General Solution (Future Enhancement):**
+- Create `DialogueSignalNode` with executor
+- Use `IDialogueSignalHandler` interface for pluggable handlers
+- String-based signal IDs (e.g., "StartQuest:quest_01", "PlaySound:sfx_01")
+- Easy to extend without touching core dialogue code
+- Keep message-driven pattern
+
+**Impact:** Low-Medium - Basic integration works via domain nodes, general pattern would improve extensibility
+
+**Files to Create:**
+- `Runtime/VisualGraphs/Authoring/Nodes/Dialogue/DialogueSignalNode.cs`
+- `Runtime/VisualGraphs/Executors/Dialogue/DialogueSignalNodeExecutor.cs`
+- `Runtime/VisualGraphs/Dialogue/IDialogueSignalHandler.cs`
+
+**Files Already Implemented:**
+- ✅ `Runtime/VisualGraphs/Quest/Nodes/StartQuestNode.cs` (can be used in dialogue graphs)
+- ✅ `Runtime/VisualGraphs/Quest/Executors/StartQuestNodeExecutor.cs` (handles dialogue graph context)
+
+#### 3.1.2 Choice Visibility Conditions ⚠️ **BASIC SYSTEM EXISTS, INTEGRATION PENDING**
+
+**Current Status:**
+- ✅ Generic state system exists (`GenericStateCheckNode`) for conditional branching
+- ❌ Choice visibility not yet integrated into `DialogueChoiceNodeExecutor`
+
+**Proposed Solution:**
+- Add condition evaluation to `DialogueChoiceNodeExecutor` to filter visible choices
+- Use `GenericStateCheckNode` pattern or advanced condition system (see Phase 9.5)
+- Allow choices to be conditionally shown/hidden based on game state
+
+**Impact:** Medium - Enables dynamic dialogue based on game state
+
+**Files to Modify:**
+- `Runtime/VisualGraphs/Dialogue/Executors/DialogueChoiceNodeExecutor.cs`
+
 ---
 
 ## Phase 4: Asset Reference System Overhaul ✅ **SUPERSEDED BY PHASE 1.0.1**
@@ -174,6 +228,29 @@
   - Event order doesn't matter (for parallel graphs)
 
 **Framework:** FsCheck or custom property test framework
+
+---
+
+### 5.4 Code Quality Improvements
+
+#### 5.4.1 Port Name Matching Simplification ⚠️ **OPTIONAL IMPROVEMENT**
+
+**Location:** `DialogueChoiceNodeExecutor.cs:145-244`
+
+**Status:** Multiple fallback strategies implemented and working correctly, but logic is complex.
+
+**Current Implementation:**
+- Tries `Choice_{index}` format first
+- Falls back to `ChoiceOutputs {index}` format
+- Includes legacy format support for backwards compatibility
+- Final fallback uses connection order
+
+**Recommendation:** Consider simplifying by using node IDs in connections instead of port names, or storing port index in choice data.
+
+**Impact:** Low - Current implementation works, simplification would improve maintainability
+
+**Files to Modify:**
+- `Runtime/VisualGraphs/Dialogue/Executors/DialogueChoiceNodeExecutor.cs`
 
 ---
 
@@ -549,6 +626,43 @@ CropGraph:
 
 ---
 
+### 9.5 Advanced Condition System ⚠️ **BASIC VERSION EXISTS, ADVANCED VERSION NOT IMPLEMENTED**
+
+**Current Status:**
+- ✅ **Basic condition system exists** - `GenericStateSetNode`, `GenericStateCheckNode`, `GenericStateGetNode` provide state-based conditional branching
+- ✅ Can conditionally branch based on game state using state keys
+- ✅ Supports comparisons: Equals, NotEquals, GreaterThan, LessThan, etc.
+- ✅ Works for numeric, string, bool, and enum types
+
+**What's Missing (Advanced Features):**
+- ❌ No reusable `ConditionDefinition` ScriptableObjects (conditions are defined inline in graphs)
+- ❌ No pluggable `IConditionEvaluator` interface for custom condition logic
+- ❌ No `ConditionRegistry` for sharing conditions across graphs
+- ❌ No world state abstraction (`IWorldStateReader`) - uses graph state directly
+
+**Advanced Solution (Future Enhancement):**
+- Create `IConditionEvaluator` interface for pluggable condition logic
+- Implement `ConditionRegistry` with ScriptableObject definitions for reusable conditions
+- Create `ConditionDefinition` ScriptableObjects that can be shared across graphs
+- Add world state abstraction (`IWorldStateReader`) for querying game state outside graph state
+- Enable conditions to be composed and reused (e.g., "HasItem" + "QuestComplete" = "CanStartDialogue")
+
+**Impact:** Medium - Basic functionality exists, advanced features would improve reusability and maintainability
+
+**Files to Create:**
+- `Runtime/VisualGraphs/Conditions/IConditionEvaluator.cs`
+- `Runtime/VisualGraphs/Conditions/ConditionDefinition.cs`
+- `Runtime/VisualGraphs/Conditions/ConditionRegistry.cs`
+- `Runtime/VisualGraphs/Conditions/IWorldStateReader.cs`
+- `Runtime/VisualGraphs/Authoring/Nodes/Conditions/ConditionCheckNode.cs`
+- `Runtime/VisualGraphs/Executors/Conditions/ConditionCheckNodeExecutor.cs`
+
+**Files Already Implemented:**
+- ✅ `Runtime/VisualGraphs/Authoring/Nodes/State/GenericState*.cs`
+- ✅ `Runtime/VisualGraphs/Executors/GenericState*Executor.cs`
+
+---
+
 ## Phase 10: Unity Integration Nodes
 
 **Goal:** Deep integration with Unity engine systems
@@ -715,7 +829,7 @@ CropGraph:
 
 **Goal:** Support interconnected game systems like Space Station 14 using plugin architecture
 
-**Note:** This phase focuses on **system complexity** (inventory, roles, atmospherics, etc.), NOT multiplayer. For multiplayer support, see Phase 16 (Stretch Goal).
+**Note:** This phase focuses on **system complexity** (inventory, roles, atmospherics, etc.), NOT multiplayer. For multiplayer support, see Phase 17 (Stretch Goal).
 
 **Prerequisites:** Phase 9 (especially 9.4 Systemic Gameplay Primitives) must be complete for reactive system interactions
 
@@ -1075,7 +1189,92 @@ CropGraph:
 
 ---
 
-## Phase 16: Multiplayer/Networking Support (Stretch Goal)
+## Phase 16: Commercial Plugin Abstraction (Stretch Goal)
+
+**Goal:** Make commercial plugin dependencies optional where possible, allowing projects to use alternatives or free versions
+
+**Status:** Future stretch goal - Improves framework flexibility and reduces barriers to adoption
+
+### 16.1 Persistence Service Abstraction
+
+**Current:** ES3 is directly integrated into the save system  
+**Target:** Abstract behind `IPersistenceService` interface
+
+- [ ] Define `IPersistenceService` interface
+  - `SaveAsync<T>(string key, T value, CancellationToken ct)`
+  - `LoadAsync<T>(string key, CancellationToken ct)`
+  - `DeleteAsync(string key, CancellationToken ct)`
+  - `HasKeyAsync(string key, CancellationToken ct)`
+  - `GetAllKeysAsync(CancellationToken ct)`
+
+- [ ] Create `ES3PersistenceService` implementation
+  - Wraps ES3 API calls
+  - Handles ES3-specific features (encryption, compression, etc.)
+
+- [ ] Create `PlayerPrefsPersistenceService` fallback
+  - Simple implementation using Unity's PlayerPrefs
+  - For projects that don't want ES3 dependency
+
+- [ ] Update `PersistencePlugin` to use `IPersistenceService`
+  - Register implementation via DI
+  - Default to ES3 if available, fallback to PlayerPrefs
+
+- [ ] Update documentation
+  - How to implement custom persistence service
+  - Migration guide from direct ES3 usage
+
+**Files to Create:**
+- `Runtime/Persistence/IPersistenceService.cs`
+- `Runtime/Persistence/ES3PersistenceService.cs`
+- `Runtime/Persistence/PlayerPrefsPersistenceService.cs`
+
+**Files to Modify:**
+- `Runtime/Persistence/PersistencePlugin.cs` - Use interface instead of direct ES3
+- All save/load code to use `IPersistenceService`
+
+---
+
+### 16.2 DOTween Abstraction Layer
+
+**Current:** DOTween Pro features used directly  
+**Target:** Support free DOTween, enable Pro features when available
+
+- [ ] Create `IAnimationService` interface
+  - Basic animation methods (works with free DOTween)
+  - `Tween Animate(Transform target, Vector3 endValue, float duration)`
+  - `Tween AnimateColor(Image target, Color endValue, float duration)`
+  - `Tween AnimateFloat(float start, float end, float duration, Action<float> onUpdate)`
+
+- [ ] Create `DOTweenAnimationService` implementation
+  - Uses free DOTween features by default
+  - Detects DOTween Pro availability at runtime
+  - Enables Pro features (path tweening, advanced easing, etc.) when available
+
+- [ ] Create feature detection system
+  - `bool HasProFeatures()` - Check if DOTween Pro is available
+  - Gracefully degrade to free features if Pro not available
+
+- [ ] Update all animation code to use `IAnimationService`
+  - Replace direct DOTween calls
+  - Use service abstraction
+
+- [ ] Document feature differences
+  - What works with free vs Pro
+  - How to enable Pro features
+
+**Files to Create:**
+- `Runtime/Animation/IAnimationService.cs`
+- `Runtime/Animation/DOTweenAnimationService.cs`
+- `Runtime/Animation/AnimationFeatureDetector.cs`
+
+**Files to Modify:**
+- All animation code to use `IAnimationService` instead of direct DOTween
+
+**Note:** Odin Inspector remains required - it's deeply integrated into editor tooling and validation systems throughout the framework.
+
+---
+
+## Phase 17: Multiplayer/Networking Support (Stretch Goal)
 
 **Goal:** Enable multiplayer games with network-synced graph state
 
@@ -1317,7 +1516,7 @@ This aligns perfectly with MToolKit's mission of shipping production-quality gam
 - Complete node library (events, logic, math, state, Unity, domain nodes)
 - Systemic gameplay support (SS14/RimWorld-style reactive systems)
 - Production-ready with full test coverage, benchmarks, and stress tests
-- **Optional:** Multiplayer/Networking support (Phase 16 - Stretch Goal)
+- **Optional:** Multiplayer/Networking support (Phase 17 - Stretch Goal)
   - Network-synced graph state
   - Authority/ownership model
   - "Full SS14 multiplayer capability" milestone
@@ -1348,7 +1547,7 @@ This aligns perfectly with MToolKit's mission of shipping production-quality gam
 **Future Enhancements (Phase 5+):**
 - Graph versioning (Phase 8)
 - Visual Scripting integration (Phase 9+)
-- Multiplayer support (Phase 16 - Stretch Goal)
+- Multiplayer support (Phase 17 - Stretch Goal)
 
 ---
 

@@ -4,9 +4,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using ES3Internal;
 using MToolKit.Runtime.Persistence.Enums;
 using MToolKit.Runtime.Persistence.ES3Integration;
 using MToolKit.Runtime.Persistence.Interfaces;
+using MToolKit.Runtime.VisualGraphs.Config;
 using MToolKit.Runtime.VisualGraphs.Quest;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime.State;
@@ -29,15 +31,17 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
     private readonly IGraphEventRouter router;
     private readonly IES3Service es3Service;
     private readonly IQuestManager? questManager;
+    private readonly VisualGraphRegistry? registry;
     private readonly string domainPrefix;
     private const string GraphStatesSaveKey = "graph_states";
     private const string QuestManagerSaveKey = "quest_manager_state";
 
-    public GraphStateSaveController(IGraphEventRouter router, IES3Service es3Service, IQuestManager? questManager = null)
+    public GraphStateSaveController(IGraphEventRouter router, IES3Service es3Service, IQuestManager? questManager = null, VisualGraphRegistry? registry = null)
     {
       this.router = router ?? throw new ArgumentNullException(nameof(router));
       this.es3Service = es3Service ?? throw new ArgumentNullException(nameof(es3Service));
       this.questManager = questManager; // Optional - QuestManager may not be available
+      this.registry = registry; // Optional - Registry for dynamic quest loading
       domainPrefix = $"{Domain.ToString().ToLower()}_"; // e.g., "graphs_"
     }
 
@@ -155,10 +159,37 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
         Dictionary<string, GraphStateSnapshot> stateMap;
         if (hasGraphStates)
         {
-          stateMap = await es3Service.LoadAsync<Dictionary<string, GraphStateSnapshot>>(
-            graphStatesKey,
-            new Dictionary<string, GraphStateSnapshot>(),
-            ct);
+          try
+          {
+            // Ensure ES3Type for GraphStateSnapshot is available
+            // ES3 will auto-discover ES3Type_GraphStateSnapshot, but we ensure it's loaded
+            var graphStateSnapshotType = ES3TypeMgr.GetOrCreateES3Type(typeof(GraphStateSnapshot));
+            var dictionaryType = ES3TypeMgr.GetOrCreateES3Type(typeof(Dictionary<string, GraphStateSnapshot>));
+
+            log.ForMethod().Debug("Loading graph states with ES3Type support (GraphStateSnapshot type: {Type}, Dictionary type: {DictType})",
+              graphStateSnapshotType?.GetType().Name ?? "null", dictionaryType?.GetType().Name ?? "null");
+
+            // Try loading with explicit type handling
+            stateMap = await es3Service.LoadAsync<Dictionary<string, GraphStateSnapshot>>(
+              graphStatesKey,
+              new Dictionary<string, GraphStateSnapshot>(),
+              ct);
+
+            if (stateMap == null)
+            {
+              log.ForMethod().Warning("Loaded null graph states dictionary - using empty dictionary");
+              stateMap = new Dictionary<string, GraphStateSnapshot>();
+            }
+            else
+            {
+              log.ForMethod().Information("Successfully loaded {Count} graph states", stateMap.Count);
+            }
+          }
+          catch (Exception ex)
+          {
+            log.ForMethod().Error(ex, "Failed to load graph states from save data. Error: {Message}", ex.Message);
+            stateMap = new Dictionary<string, GraphStateSnapshot>();
+          }
         }
         else
         {
@@ -180,7 +211,16 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
 
             if (questSaveData != null)
             {
-              await questManager.RestoreSaveDataAsync(questSaveData, ct);
+              log.ForMethod().Information("Loaded QuestManager save data: {ActiveCount} active, {CompletedCount} completed, {ClaimedCount} claimed",
+                questSaveData.ActiveQuests.Count, questSaveData.CompletedUnclaimedQuests.Count, questSaveData.ClaimedQuestGuids.Count);
+
+              if (questSaveData.CompletedUnclaimedQuests.Count > 0)
+              {
+                log.ForMethod().Information("Completed quest GUIDs in save data: {Guids}",
+                  string.Join(", ", questSaveData.CompletedUnclaimedQuests.Select(q => q.QuestGuid)));
+              }
+
+              await questManager.RestoreSaveDataAsync(questSaveData, registry, ct);
               log.ForMethod().Information("Restored QuestManager state: {ActiveCount} active, {CompletedCount} completed, {ClaimedCount} claimed",
                 questSaveData.ActiveQuests.Count, questSaveData.CompletedUnclaimedQuests.Count, questSaveData.ClaimedQuestGuids.Count);
 
@@ -289,20 +329,13 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
           "Graph state load completed: {RestoredCount} restored, {MissingCount} missing runners, {TotalInSave} total in save data",
           restoredCount, missingCount, stateMap.Count);
 
-        // Now that graph states are restored, mark completed quests as completed
-        // (this will unload their graphs, but state is already restored)
+        // Note: Completed quests are already restored directly to completedUnclaimedQuests
+        // (they were never in activeQuests), so we don't need to call FinalizeCompletedQuestRestoration.
+        // The graphs remain loaded so that graph state can be restored, which has already happened above.
         if (questManager != null && questSaveData != null && questSaveData.CompletedUnclaimedQuests.Count > 0)
         {
-          try
-          {
-            var completedGuids = questSaveData.CompletedUnclaimedQuests.Select(q => q.QuestGuid).ToList();
-            questManager.FinalizeCompletedQuestRestoration(completedGuids);
-            log.ForMethod().Information("Finalized restoration of {Count} completed quest(s)", completedGuids.Count);
-          }
-          catch (Exception ex)
-          {
-            log.ForMethod().Warning(ex, "Failed to finalize completed quest restoration: {Message}", ex.Message);
-          }
+          var completedGuids = questSaveData.CompletedUnclaimedQuests.Select(q => q.QuestGuid).ToList();
+          log.ForMethod().Information("Completed quests ({Count}) were restored directly to completed state - no finalization needed", completedGuids.Count);
         }
       }
       catch (OperationCanceledException)

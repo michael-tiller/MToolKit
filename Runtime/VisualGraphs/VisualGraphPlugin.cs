@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Core.Abstractions;
+using MToolKit.Runtime.MessageBus;
 using MToolKit.Runtime.MessageBus.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Bootstrap;
 using MToolKit.Runtime.VisualGraphs.Config;
@@ -48,6 +49,7 @@ namespace MToolKit.Runtime.VisualGraphs
     private CancellationTokenSource cts;
     private GraphEventRouter graphEventRouter;
     private IQuestManager questManager;
+    private IDisposable questStartedSubscription;
 
     [ShowInInspector]
     [ReadOnly]
@@ -107,7 +109,16 @@ namespace MToolKit.Runtime.VisualGraphs
 
       // Save/load controller for graph state persistence
       // Note: Requires GraphEventRouter (registered above), IES3Service (from GlobalInstaller), and IQuestManager (registered above)
-      builder.Register<Persistence.GraphStateSaveController>(Lifetime.Singleton);
+      // Registry is already registered above, so we can inject it directly
+      if (config != null && config.DefaultRegistry != null)
+      {
+        builder.Register<Persistence.GraphStateSaveController>(Lifetime.Singleton)
+          .WithParameter("registry", config.DefaultRegistry);
+      }
+      else
+      {
+        builder.Register<Persistence.GraphStateSaveController>(Lifetime.Singleton);
+      }
 
       // Register EventBusBridge - try serialized field first, then find on GameObject
       if (eventBusBridge == null)
@@ -262,6 +273,27 @@ namespace MToolKit.Runtime.VisualGraphs
           eventBusBridge.Construct(graphEventRouter);
         }
 
+        // Subscribe to QuestStartedMessage to re-subscribe EventBusBridge when quests start
+        // This ensures objective graph subscriptions are registered even for manually started quests
+        try
+        {
+          var questStartedSubscriber = GameMessageBroker.GetSubscriber<Quest.Messages.QuestStartedMessage>();
+          if (questStartedSubscriber != null)
+          {
+            var handler = new QuestStartedMessageHandler(OnQuestStarted);
+            questStartedSubscription = questStartedSubscriber.Subscribe(handler);
+            log.ForGameObject(gameObject).Debug("Subscribed to QuestStartedMessage for EventBusBridge re-subscription");
+          }
+          else
+          {
+            log.ForGameObject(gameObject).Warning("QuestStartedMessage subscriber not available - EventBusBridge may not re-subscribe when quests start manually");
+          }
+        }
+        catch (Exception ex)
+        {
+          log.ForGameObject(gameObject).Warning(ex, "Failed to subscribe to QuestStartedMessage - EventBusBridge may not re-subscribe when quests start manually");
+        }
+
         log.ForGameObject(gameObject).Information("Visual Graphs plugin runtime initialization started");
 
         // Auto-initialize graphs if configured
@@ -388,8 +420,28 @@ namespace MToolKit.Runtime.VisualGraphs
 
             if (hasQuestData || hasGraphData)
             {
-              log.ForGameObject(gameObject).Information("Save data exists for graphs domain - manually loading after late registration");
+              log.ForGameObject(gameObject).Information("Save data exists for graphs domain - ensuring quest definitions are loaded before restoration");
+
+              // Always ensure quest definitions are loaded before restoring
+              // Even if LoadAllOnStartup is true, the save system might load before InitializeGraphsAsync completes
+              if (config != null && config.DefaultRegistry != null)
+              {
+                // Check if quest definitions are already loaded
+                var existingQuestDefs = Runtime.GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
+                log.ForGameObject(gameObject).Information("Found {Count} quest definitions already loaded in registry", existingQuestDefs.Count);
+
+                // Load quest definitions if not already loaded (or if LoadAllOnStartup is false)
+                if (existingQuestDefs.Count == 0 || !config.LoadAllOnStartup)
+                {
+                  log.ForGameObject(gameObject).Information("Loading quest definitions from registry before restoration");
+                  await LoadQuestDefinitionsFromRegistryAsync(config.DefaultRegistry);
+                  var loadedQuestDefs = Runtime.GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
+                  log.ForGameObject(gameObject).Information("Now have {Count} quest definitions loaded in registry", loadedQuestDefs.Count);
+                }
+              }
+
               // Manually trigger load on the controller
+              log.ForGameObject(gameObject).Information("Calling LoadAsync on GraphStateSaveController to restore quest data");
               await saveController.LoadAsync(default);
               log.ForGameObject(gameObject).Information("Manually loaded quest data after late registration");
             }
@@ -585,6 +637,33 @@ namespace MToolKit.Runtime.VisualGraphs
       }
     }
 
+    private void OnQuestStarted(Quest.Messages.QuestStartedMessage message)
+    {
+      // Re-subscribe EventBusBridge to include new objective graph subscriptions
+      if (eventBusBridge != null && graphEventRouter != null)
+      {
+        log.ForGameObject(gameObject).Information("Quest '{QuestName}' started - re-subscribing EventBusBridge to include objective graph subscriptions",
+          message.Quest?.DisplayName ?? message.QuestGuid);
+        eventBusBridge.Construct(graphEventRouter);
+        eventBusBridge.SubscribeToGraphMessages();
+      }
+    }
+
+    private sealed class QuestStartedMessageHandler : MessagePipe.IMessageHandler<Quest.Messages.QuestStartedMessage>
+    {
+      private readonly Action<Quest.Messages.QuestStartedMessage> action;
+
+      public QuestStartedMessageHandler(Action<Quest.Messages.QuestStartedMessage> action)
+      {
+        this.action = action ?? throw new ArgumentNullException(nameof(action));
+      }
+
+      public void Handle(Quest.Messages.QuestStartedMessage message)
+      {
+        action(message);
+      }
+    }
+
     private async UniTask AutoStartQuestAsync(IObjectResolver resolver)
     {
       log.ForGameObject(gameObject).ForMethod().Information("Quest: AutoStartQuestAsync invoked");
@@ -710,6 +789,8 @@ namespace MToolKit.Runtime.VisualGraphs
 
     private void OnDestroy()
     {
+      questStartedSubscription?.Dispose();
+      questStartedSubscription = null;
       cts?.Cancel();
       cts?.Dispose();
     }
@@ -770,12 +851,33 @@ namespace MToolKit.Runtime.VisualGraphs
           var progressMsg = (Quest.Messages.QuestObjectiveProgressMessage)message;
           if (questManager != null)
           {
-            log.ForMethod().Information("Quest: Message: {Message}. QuestCompleted: {QuestCompleted}", message.ToString(), progressMsg.Current >= progressMsg.Required ? "Yes" : "No");
+            var objectiveComplete = progressMsg.Current >= progressMsg.Required;
+            log.ForMethod().Information("Quest: Message: {Message}. ObjectiveCompleted: {ObjectiveCompleted}", message.ToString(), objectiveComplete ? "Yes" : "No");
 
-            if (progressMsg.Current >= progressMsg.Required)
+            // Check if ALL objectives are complete before completing the quest
+            if (objectiveComplete)
             {
-              log.ForMethod().Information("Quest: Quest completed: {QuestGuid}", progressMsg.QuestGuid);
-              questManager.CompleteQuest(progressMsg.QuestGuid);
+              var questState = questManager.GetQuestState(progressMsg.QuestGuid);
+              if (questState != null && questState.Definition != null)
+              {
+                var allObjectivesComplete = questState.Definition.IsComplete(questState.GraphState);
+                log.ForMethod().Information("Quest: Objective {ObjectiveGuid} complete. All objectives complete: {AllComplete} (Quest: {QuestGuid})",
+                  progressMsg.ObjectiveGuid, allObjectivesComplete, progressMsg.QuestGuid);
+
+                if (allObjectivesComplete)
+                {
+                  log.ForMethod().Information("Quest: All objectives complete - completing quest: {QuestGuid}", progressMsg.QuestGuid);
+                  questManager.CompleteQuest(progressMsg.QuestGuid);
+                }
+                else
+                {
+                  log.ForMethod().Information("Quest: Not all objectives complete yet - quest remains active: {QuestGuid}", progressMsg.QuestGuid);
+                }
+              }
+              else
+              {
+                log.ForMethod().Warning("Quest: Cannot check quest completion - quest state or definition not found for {QuestGuid}", progressMsg.QuestGuid);
+              }
             }
           }
         }

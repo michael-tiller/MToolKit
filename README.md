@@ -52,32 +52,51 @@ MToolKit provides essential systems required for shipped game titles. It's a mod
 
 ## Dependencies
 
+### Open Source Dependencies
+
 - **VContainer** - Dependency injection
 - **MessagePipe** - Async messaging
 - **R3** - Reactive properties
 - **Serilog** - Structured logging
 - **xNode** - Visual graph authoring
+
+### Unity Dependencies
+
 - **Unity Input System** - Input handling
 - **Unity Addressables** - Asset loading
 - **Unity Localization** - Localization
-- **GameAnalytics** - Analytics
-- **DOTween Pro** - Animation
-- **Sirenix Odin Inspector** - Editor enhancements
-- **ES3** - Save system
+
+### Third-Party Services
+
+- **GameAnalytics** - Analytics (free until threshold)
+
+### Free Commercial Plugins
+
+- **DOTween** - Animation (free version; only free features are used)
+
+### Commercial Plugins
+
+The following paid plugins are currently integrated into the project as hard dependencies.
+
+- **Sirenix Odin Inspector/Validator** - Editor enhancements (required)
+- **ES3** - Save system to be abstracted out
 
 ## Current Status
 
-**Status**: 15/18 core systems complete (84%)
-- ✅ Complete: 15 systems
-- 🚧 In Progress: 3 systems (Settings 95%, Visual Graph Subsystem 87%, Accessibility)
+**Status**: 16/18 core systems complete (89%)
+- ✅ Complete: 16 systems
+- 🚧 In Progress: 2 systems (Settings 95%, Accessibility)
 - 🔜 Planned (Post-Launch): Save Migrations (for post-launch updates with save structure changes)
 - ❌ Missing: 0 critical gaps for initial launch
 
-**Visual Graph Subsystem Details (87%):**
+**Visual Graph Subsystem: ✅ Complete**
 - ✅ Runtime infrastructure complete (POCO, DI-aware, event-driven)
 - ✅ xNode authoring with stable GUIDs
 - ✅ O(1) event routing, state management
-- 🚧 TODO: R3 event bus integration, ES3 save integration, UI service interfaces
+- ✅ Save system integration (ES3) with quest state persistence
+- ✅ Dialogue UI integration (message-based architecture)
+- ✅ Tested and working (branching dialogue → quest integration)
+- 🔜 Phase 2: Formal test coverage suite (target: 100%)
 
 ## Foundation Systems Included
 

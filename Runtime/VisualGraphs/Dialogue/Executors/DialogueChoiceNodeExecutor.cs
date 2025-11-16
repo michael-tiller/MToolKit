@@ -32,7 +32,7 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
 
     public string NodeType => "DialogueChoiceNode";
 
-    public async UniTask ExecuteAsync(
+    public async UniTask Execute(
       IRuntimeGraphDefinition graph,
       RuntimeNodeDefinition node,
       IGraphState state,

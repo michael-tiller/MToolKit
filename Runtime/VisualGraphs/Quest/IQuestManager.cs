@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using MToolKit.Runtime.VisualGraphs.Config;
 using MToolKit.Runtime.VisualGraphs.Quest.Definitions;
 
 namespace MToolKit.Runtime.VisualGraphs.Quest
@@ -102,7 +103,10 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
     /// Restores quest state from save data.
     /// Call this during game load before starting any quests.
     /// </summary>
-    UniTask RestoreSaveDataAsync(QuestManagerSaveData saveData, CancellationToken ct = default);
+    /// <param name="saveData">The save data to restore</param>
+    /// <param name="registry">Optional registry to enable dynamic loading of quest definitions</param>
+    /// <param name="ct">Cancellation token</param>
+    UniTask RestoreSaveDataAsync(QuestManagerSaveData saveData, VisualGraphRegistry registry = null, CancellationToken ct = default);
 
     /// <summary>
     /// Marks quests as completed after graph state restoration.

@@ -18,7 +18,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Interfaces
     ///   Execute a node. Executor decides whether to continue to connected nodes.
     ///   Use context.EnqueueNext() to continue execution.
     /// </summary>
-    UniTask ExecuteAsync(
+    UniTask Execute(
       IRuntimeGraphDefinition graph,
       RuntimeNodeDefinition node,
       IGraphState state,

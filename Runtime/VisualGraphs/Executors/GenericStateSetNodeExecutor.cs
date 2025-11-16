@@ -24,7 +24,7 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
 
     public string NodeType => "GenericStateSetNode";
 
-    public UniTask ExecuteAsync(
+    public UniTask Execute(
       IRuntimeGraphDefinition graph,
       RuntimeNodeDefinition node,
       IGraphState state,

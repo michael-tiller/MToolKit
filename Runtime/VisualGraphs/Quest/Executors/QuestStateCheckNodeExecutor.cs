@@ -34,7 +34,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
 
     public string NodeType => "QuestStateCheckNode";
 
-    public async UniTask ExecuteAsync(
+    public UniTask Execute(
       IRuntimeGraphDefinition graph,
       RuntimeNodeDefinition node,
       IGraphState state,
@@ -47,7 +47,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       {
         log.ForMethod().Warning("Quest: QuestStateCheckNode has no 'Quest' parameter, continuing to all outputs");
         ContinueToAllOutputs(graph, node, context);
-        return;
+        return UniTask.CompletedTask;
       }
 
       string questGuid = null;
@@ -62,7 +62,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
         {
           log.ForMethod().Warning("Quest: QuestStateCheckNode QuestAssetReference has no GUID, treating as NotStarted");
           BranchToOutput(graph, node, context, "NotStarted");
-          return;
+          return UniTask.CompletedTask;
         }
       }
       // Handle SerializableAssetReference (from QuestAssetReference field)
@@ -75,7 +75,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
         {
           log.ForMethod().Warning("Quest: QuestStateCheckNode QuestAssetReference has no GUID, treating as NotStarted");
           BranchToOutput(graph, node, context, "NotStarted");
-          return;
+          return UniTask.CompletedTask;
         }
       }
       // Fallback: handle direct QuestDefinition reference
@@ -83,20 +83,21 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       {
         questGuid = directQuest.Guid;
         log.ForMethod().Debug("Quest: QuestStateCheckNode found direct QuestDefinition: {QuestName} ({QuestGuid})", directQuest.DisplayName, questGuid);
+        return UniTask.CompletedTask;
       }
       else
       {
         log.ForMethod().Warning("Quest: QuestStateCheckNode 'Quest' parameter is not a SerializableAssetReference or QuestDefinition (type: {Type}), treating as NotStarted",
           questParam?.GetType().Name ?? "null");
         BranchToOutput(graph, node, context, "NotStarted");
-        return;
+        return UniTask.CompletedTask;
       }
 
       if (string.IsNullOrEmpty(questGuid))
       {
         log.ForMethod().Warning("Quest: QuestStateCheckNode has null or invalid quest GUID, treating as NotStarted");
         BranchToOutput(graph, node, context, "NotStarted");
-        return;
+        return UniTask.CompletedTask;
       }
 
       // Resolve QuestManager from context
@@ -105,7 +106,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       {
         log.ForMethod().Error("Quest: IQuestManager not found in DI container. Cannot check quest state for: {QuestGuid}", questGuid);
         BranchToOutput(graph, node, context, "NotStarted");
-        return;
+        return UniTask.CompletedTask;
       }
 
       // Determine quest state
@@ -139,6 +140,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       // The GraphRunner will continue processing these nodes in the same execution loop
       // since QuestStateCheckNode is not a DialogueLineNode or DialogueChoiceNode
       BranchToOutput(graph, node, context, targetPort);
+      return UniTask.CompletedTask;
     }
 
     private void BranchToOutput(IRuntimeGraphDefinition graph, RuntimeNodeDefinition node, GraphNodeExecutionContext context, string portName)

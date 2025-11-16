@@ -25,7 +25,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
 
     public string NodeType => "QuestObjectiveIncrementNode";
 
-    public UniTask ExecuteAsync(
+    public UniTask Execute(
       IRuntimeGraphDefinition graph,
       RuntimeNodeDefinition node,
       IGraphState state,

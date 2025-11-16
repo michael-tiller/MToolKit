@@ -6,6 +6,7 @@ using Cysharp.Threading.Tasks;
 using MessagePipe;
 using MToolKit.Runtime.MessageBus;
 using MToolKit.Runtime.VisualGraphs.Export;
+using MToolKit.Runtime.VisualGraphs.Config;
 using MToolKit.Runtime.VisualGraphs.Quest.Definitions;
 using MToolKit.Runtime.VisualGraphs.Quest.Graphs;
 using MToolKit.Runtime.VisualGraphs.Quest.Messages;
@@ -17,6 +18,7 @@ using R3;
 using Serilog;
 using Sirenix.OdinInspector;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
 
@@ -462,7 +464,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       return saveData;
     }
 
-    public async UniTask RestoreSaveDataAsync(QuestManagerSaveData saveData, CancellationToken ct = default)
+    public async UniTask RestoreSaveDataAsync(QuestManagerSaveData saveData, VisualGraphRegistry registry = null, CancellationToken ct = default)
     {
       if (saveData == null)
       {
@@ -491,7 +493,9 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       {
         try
         {
-          var questDef = FindQuestDefinitionByGuid(activeQuestData.QuestGuid);
+          // Wait for quest definition to be available (it might still be loading from addressables)
+          // Pass registry to enable dynamic loading if quest isn't found
+          var questDef = await WaitForQuestDefinitionAsync(activeQuestData.QuestGuid, registry, ct);
           if (questDef != null)
           {
             // Start the quest (this will create runtime state and load graphs)
@@ -515,7 +519,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
           }
           else
           {
-            log.ForMethod().Warning("QuestDefinition not found for GUID {QuestGuid} - cannot restore active quest",
+            log.ForMethod().Warning("QuestDefinition not found for GUID {QuestGuid} after waiting - cannot restore active quest",
               activeQuestData.QuestGuid);
           }
         }
@@ -527,41 +531,51 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       }
 
       // Restore completed-unclaimed quests
-      // NOTE: We start the quests but DON'T call CompleteQuest yet, because that would unload the graphs
+      // NOTE: We restore these directly without starting them, to avoid auto-completion
       // The graph state will be restored first, then we'll mark them as completed
+      log.ForMethod().Information("Restoring {Count} completed-unclaimed quest(s) from save data", saveData.CompletedUnclaimedQuests.Count);
+      var restoredCompletedCount = 0;
+      var failedCompletedCount = 0;
+
       foreach (var completedQuestData in saveData.CompletedUnclaimedQuests)
       {
         try
         {
-          var questDef = FindQuestDefinitionByGuid(completedQuestData.QuestGuid);
+          log.ForMethod().Information("Attempting to restore completed quest with GUID {QuestGuid}", completedQuestData.QuestGuid);
+
+          // Wait for quest definition to be available (it might still be loading from addressables)
+          // Pass registry to enable dynamic loading if quest isn't found
+          var questDef = await WaitForQuestDefinitionAsync(completedQuestData.QuestGuid, registry, ct);
           if (questDef != null)
           {
-            // Start the quest first (to create runtime state and load graphs)
-            // We'll mark it as completed AFTER graph states are restored
-            var started = await StartQuestAsync(questDef, ct);
-            if (started)
-            {
-              log.ForMethod().Information("Restored completed-unclaimed quest '{QuestName}' ({QuestGuid}) - will mark as completed after graph state restoration",
-                questDef.DisplayName, completedQuestData.QuestGuid);
-            }
-            else
-            {
-              log.ForMethod().Warning("Failed to start quest '{QuestName}' ({QuestGuid}) during restoration",
-                questDef.DisplayName, completedQuestData.QuestGuid);
-            }
+            log.ForMethod().Information("Found quest definition '{QuestName}' for GUID {QuestGuid} - restoring directly",
+              questDef.DisplayName, completedQuestData.QuestGuid);
+
+            // Restore the quest directly to completedUnclaimedQuests (skip active state entirely)
+            // Graphs are loaded so that graph state can be restored
+            await RestoreCompletedQuestDirectlyAsync(questDef, completedQuestData.StartedAt, ct);
+            restoredCompletedCount++;
+            log.ForMethod().Information("Successfully restored completed-unclaimed quest '{QuestName}' ({QuestGuid}) directly to completed state",
+              questDef.DisplayName, completedQuestData.QuestGuid);
           }
           else
           {
-            log.ForMethod().Warning("QuestDefinition not found for GUID {QuestGuid} - cannot restore completed quest",
+            failedCompletedCount++;
+            log.ForMethod().Error("QuestDefinition not found for GUID {QuestGuid} after waiting - cannot restore completed quest. " +
+              "This quest will be lost. Check that the quest definition is registered in the GraphDefinitionRegistry or available in Resources/Addressables.",
               completedQuestData.QuestGuid);
           }
         }
         catch (Exception ex)
         {
-          log.ForMethod().Error(ex, "Error restoring completed quest {QuestGuid}: {Message}",
+          failedCompletedCount++;
+          log.ForMethod().Error(ex, "Error restoring completed quest {QuestGuid}: {Message}. This quest will be lost.",
             completedQuestData.QuestGuid, ex.Message);
         }
       }
+
+      log.ForMethod().Information("Completed quest restoration summary: {RestoredCount} restored, {FailedCount} failed, {TotalCount} total",
+        restoredCompletedCount, failedCompletedCount, saveData.CompletedUnclaimedQuests.Count);
 
       log.ForMethod().Information("Restored save data: {ActiveQuestCount} active quests, {CompletedUnclaimedQuestCount} completed-unclaimed quests, {ClaimedQuestCount} claimed quests",
         activeQuests.Count, completedUnclaimedQuests.Count, claimedQuestGuids.Count);
@@ -597,6 +611,65 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
     }
 
     // ==================== PRIVATE HELPERS ====================
+
+    /// <summary>
+    /// Restores a completed quest directly to completedUnclaimedQuests without going through StartQuestAsync.
+    /// This prevents auto-completion from triggering during restoration.
+    /// Graphs are loaded so that graph state can be restored, but the quest is immediately marked as completed.
+    /// </summary>
+    private async UniTask RestoreCompletedQuestDirectlyAsync(QuestDefinition quest, DateTime startedAt, CancellationToken ct)
+    {
+      if (quest == null)
+      {
+        log.ForMethod().Error("Quest: Cannot restore null quest");
+        return;
+      }
+
+      var questGuid = quest.Guid;
+      log.ForMethod().Information("Quest: Restoring completed quest '{QuestName}' (GUID: {QuestGuid}) directly to completed state", quest.DisplayName, questGuid);
+
+      // Create runtime state with the saved StartedAt time
+      var graphState = new InMemoryGraphState();
+      graphState.Set("__quest_guid", questGuid);
+      graphState.Set("__quest_definition", quest);
+
+      var runtimeState = new QuestRuntimeState(
+          questGuid,
+          quest,
+          graphState,
+          startedAt
+      );
+
+      // Load objective graphs (but don't publish QuestStartedMessage)
+      // We need to load graphs so that graph state can be restored
+      log.ForMethod().Information("Quest: Loading {ObjectiveCount} objective graphs for restored completed quest '{QuestName}'", quest.Objectives.Count, quest.DisplayName);
+      await LoadObjectiveGraphsAsync(quest, runtimeState, ct);
+
+      // Optionally load quest-level graph if it exists
+      if (quest.GraphAsset != null)
+      {
+        try
+        {
+          log.ForMethod().Debug("Quest: Loading quest-level graph for restored completed quest '{QuestName}'", quest.DisplayName);
+          var runnerId = $"quest_{questGuid}";
+          var runner = await LoadGraphAsync(quest.GraphAsset, runnerId, graphState, ct);
+          loadedRunners[runnerId] = runner;
+          eventRouter.RegisterRunner(runner);
+          runtimeState.LoadedGraphInstanceIds.Add(runnerId);
+          log.ForMethod().Information("Quest: Loaded quest graph for restored completed quest '{QuestName}' (runner: {RunnerId})", quest.DisplayName, runnerId);
+        }
+        catch (Exception ex)
+        {
+          log.ForMethod().Error(ex, "Quest: Failed to load quest graph for restored completed quest '{QuestName}'", quest.DisplayName);
+        }
+      }
+
+      // Add directly to completedUnclaimedQuests (skip active state entirely)
+      // Note: We keep the graphs loaded so that graph state can be restored
+      completedUnclaimedQuests[questGuid] = runtimeState;
+
+      log.ForMethod().Information("Quest: Successfully restored completed quest '{QuestName}' ({QuestGuid}) directly to completed state", quest.DisplayName, questGuid);
+    }
 
     private async UniTask LoadObjectiveGraphsAsync(QuestDefinition quest, QuestRuntimeState runtimeState, CancellationToken ct)
     {
@@ -718,6 +791,76 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
     }
 
     /// <summary>
+    /// Waits for a QuestDefinition to be available, retrying if it's not found immediately.
+    /// This is useful during save restoration when quest definitions might still be loading from addressables.
+    /// Also tries to dynamically load from the registry if provided.
+    /// </summary>
+    private async UniTask<QuestDefinition> WaitForQuestDefinitionAsync(string questGuid, VisualGraphRegistry registry = null, CancellationToken ct = default)
+    {
+      if (string.IsNullOrEmpty(questGuid))
+        return null;
+
+      // First try to find it immediately
+      var quest = FindQuestDefinitionByGuid(questGuid);
+      if (quest != null)
+      {
+        return quest;
+      }
+
+      // If not found and we have a registry, try to load it dynamically from addressables
+      if (registry != null && registry.QuestDefinitions != null)
+      {
+        log.ForMethod().Information("QuestDefinition not found immediately for GUID {QuestGuid} - attempting to load from registry", questGuid);
+        quest = await TryLoadQuestFromRegistryAsync(questGuid, registry, ct);
+        if (quest != null)
+        {
+          return quest;
+        }
+      }
+
+      // If still not found, wait and retry (quest definitions might still be loading from addressables)
+      log.ForMethod().Information("QuestDefinition not found immediately for GUID {QuestGuid} - waiting for it to be loaded", questGuid);
+
+      var maxWaitTime = TimeSpan.FromSeconds(5);
+      var waitStart = DateTime.UtcNow;
+      var retryCount = 0;
+
+      while (DateTime.UtcNow - waitStart < maxWaitTime)
+      {
+        await UniTask.Delay(100, cancellationToken: ct); // Wait 100ms before retrying
+
+        quest = FindQuestDefinitionByGuid(questGuid);
+        if (quest != null)
+        {
+          log.ForMethod().Information("QuestDefinition found for GUID {QuestGuid} after {RetryCount} retries", questGuid, retryCount);
+          return quest;
+        }
+
+        // Try loading from registry again on each retry
+        if (registry != null && registry.QuestDefinitions != null && retryCount % 5 == 0) // Try every 500ms
+        {
+          quest = await TryLoadQuestFromRegistryAsync(questGuid, registry, ct);
+          if (quest != null)
+          {
+            log.ForMethod().Information("QuestDefinition loaded from registry for GUID {QuestGuid} after {RetryCount} retries", questGuid, retryCount);
+            return quest;
+          }
+        }
+
+        retryCount++;
+
+        if (ct.IsCancellationRequested)
+        {
+          log.ForMethod().Warning("Cancelled waiting for QuestDefinition with GUID {QuestGuid}", questGuid);
+          return null;
+        }
+      }
+
+      log.ForMethod().Warning("QuestDefinition not found for GUID {QuestGuid} after waiting {WaitTime} seconds", questGuid, maxWaitTime.TotalSeconds);
+      return null;
+    }
+
+    /// <summary>
     /// Finds a QuestDefinition by GUID.
     /// First checks the GraphDefinitionRegistry, then attempts to load from addressables if needed.
     /// Falls back to Resources for backward compatibility.
@@ -731,19 +874,10 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       var quest = GraphDefinitionRegistry.GetQuestDefinition(questGuid);
       if (quest != null)
       {
+        log.ForMethod().Debug("Found QuestDefinition '{QuestName}' for GUID {QuestGuid} in GraphDefinitionRegistry", quest.DisplayName, questGuid);
         return quest;
       }
 
-#if UNITY_ADDRESSABLES
-      // If not in registry, try loading from addressables via the registry asset references
-      quest = TryLoadQuestFromAddressables(questGuid);
-      if (quest != null)
-      {
-        // Register it for future lookups
-        GraphDefinitionRegistry.RegisterQuestDefinition(quest);
-        return quest;
-      }
-#endif
 
       // Fallback to Resources for backward compatibility
       var allQuests = Resources.LoadAll<QuestDefinition>("");
@@ -753,27 +887,79 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       {
         // Register it for future lookups
         GraphDefinitionRegistry.RegisterQuestDefinition(quest);
+        log.ForMethod().Debug("Found QuestDefinition '{QuestName}' for GUID {QuestGuid} in Resources", quest.DisplayName, questGuid);
       }
       else
       {
-        log.ForMethod().Warning("QuestDefinition with GUID {QuestGuid} not found in registry, addressables, or Resources", questGuid);
+        // Log available quest GUIDs for debugging
+        var availableGuids = GraphDefinitionRegistry.GetAllQuestDefinitions().Select(q => q.Guid).ToList();
+        var resourcesGuids = allQuests.Select(q => q.Guid).ToList();
+        log.ForMethod().Warning("QuestDefinition with GUID {QuestGuid} not found. " +
+          "Available in registry: {RegistryGuids}. Available in Resources: {ResourcesGuids}",
+          questGuid, string.Join(", ", availableGuids), string.Join(", ", resourcesGuids));
       }
 
       return quest;
     }
 
-#if UNITY_ADDRESSABLES
     /// <summary>
-    /// Attempts to load a quest definition from addressables by searching registry asset references.
+    /// Attempts to load a quest definition from the registry by searching through all QuestAssetReferences
+    /// and loading them from addressables to find the one matching the GUID.
     /// </summary>
-    private QuestDefinition TryLoadQuestFromAddressables(string questGuid)
+    private async UniTask<QuestDefinition> TryLoadQuestFromRegistryAsync(string questGuid, VisualGraphRegistry registry, CancellationToken ct = default)
     {
-      // This will be called from VisualGraphPlugin during initialization
-      // For now, return null - the registry should be populated during initialization
-      // This method can be extended if we need lazy loading from addressables
+      if (registry == null || registry.QuestDefinitions == null || registry.QuestDefinitions.Count == 0)
+      {
+        return null;
+      }
+
+      log.ForMethod().Information("Searching registry for quest definition with GUID {QuestGuid} ({Count} quest definitions in registry)",
+        questGuid, registry.QuestDefinitions.Count);
+
+      foreach (var assetRef in registry.QuestDefinitions)
+      {
+        if (assetRef == null || !assetRef.HasValidGuid)
+        {
+          continue;
+        }
+
+        try
+        {
+          // Load the quest definition from addressables
+          var handle = Addressables.LoadAssetAsync<QuestDefinition>(assetRef);
+          var questDef = await handle;
+
+          if (questDef != null)
+          {
+            // Register it for future lookups
+            GraphDefinitionRegistry.RegisterQuestDefinition(questDef);
+
+            // Check if this is the quest we're looking for
+            if (questDef.Guid == questGuid)
+            {
+              log.ForMethod().Information("Found and loaded quest definition '{QuestName}' (GUID: {QuestGuid}) from registry",
+                questDef.DisplayName, questGuid);
+              return questDef;
+            }
+          }
+        }
+        catch (Exception ex)
+        {
+          log.ForMethod().Warning(ex, "Error loading quest definition from addressable (GUID: {AssetGuid}): {Message}",
+            assetRef.AssetGUID, ex.Message);
+          // Continue searching other quests
+        }
+
+        if (ct.IsCancellationRequested)
+        {
+          break;
+        }
+      }
+
+      log.ForMethod().Warning("Quest definition with GUID {QuestGuid} not found in registry after searching {Count} quest definitions",
+        questGuid, registry.QuestDefinitions.Count);
       return null;
     }
-#endif
 
     // ==================== PROGRESS TRACKING ====================
 

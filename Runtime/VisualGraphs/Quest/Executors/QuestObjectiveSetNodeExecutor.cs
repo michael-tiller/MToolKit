@@ -26,7 +26,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
 
     public string NodeType => "QuestObjectiveSetNode";
 
-    public UniTask ExecuteAsync(
+    public UniTask Execute(
       IRuntimeGraphDefinition graph,
       RuntimeNodeDefinition node,
       IGraphState state,

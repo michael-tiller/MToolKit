@@ -30,7 +30,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
 
     public string NodeType => "StartQuestNode";
 
-    public async UniTask ExecuteAsync(
+    public async UniTask Execute(
       IRuntimeGraphDefinition graph,
       RuntimeNodeDefinition node,
       IGraphState state,
