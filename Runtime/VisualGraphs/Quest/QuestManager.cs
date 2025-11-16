@@ -43,6 +43,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
     private readonly IPublisher<QuestCompletedMessage> questCompletedPublisher;
     private readonly IPublisher<QuestAbandonedMessage> questAbandonedPublisher;
     private readonly IPublisher<QuestClaimedMessage> questClaimedPublisher;
+    private readonly IPublisher<CampaignCompletedMessage> campaignCompletedPublisher;
 
     // Quest lifecycle tracking
 
@@ -55,6 +56,16 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
     [ShowInInspector]
     [ReadOnly]
     private readonly HashSet<string> claimedQuestGuids = new();
+
+    // Campaign runtime state tracking
+    [ShowInInspector]
+    [ReadOnly]
+    private readonly Dictionary<string, CampaignRuntimeState> campaignStates = new();
+
+    // Quest state tracking (for locked/available quests that aren't active yet)
+    [ShowInInspector]
+    [ReadOnly]
+    private readonly Dictionary<string, QuestRuntimeState> questStates = new();
 
     // Graph runner tracking
     private readonly Dictionary<string, IGraphRunner> loadedRunners = new();
@@ -70,7 +81,8 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
         IPublisher<QuestStartedMessage> questStartedPublisher,
         IPublisher<QuestCompletedMessage> questCompletedPublisher,
         IPublisher<QuestAbandonedMessage> questAbandonedPublisher,
-        IPublisher<QuestClaimedMessage> questClaimedPublisher)
+        IPublisher<QuestClaimedMessage> questClaimedPublisher,
+        IPublisher<CampaignCompletedMessage> campaignCompletedPublisher)
     {
       this.eventRouter = eventRouter ?? throw new ArgumentNullException(nameof(eventRouter));
       this.executorRegistry = executorRegistry ?? throw new ArgumentNullException(nameof(executorRegistry));
@@ -80,6 +92,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       this.questCompletedPublisher = questCompletedPublisher ?? throw new ArgumentNullException(nameof(questCompletedPublisher));
       this.questAbandonedPublisher = questAbandonedPublisher ?? throw new ArgumentNullException(nameof(questAbandonedPublisher));
       this.questClaimedPublisher = questClaimedPublisher ?? throw new ArgumentNullException(nameof(questClaimedPublisher));
+      this.campaignCompletedPublisher = campaignCompletedPublisher ?? throw new ArgumentNullException(nameof(campaignCompletedPublisher));
 
       // Subscribe to quest progress updates (lazy - will retry if broker not ready)
       EnsureProgressSubscription();
@@ -165,6 +178,52 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       {
         log.ForMethod().Warning("Quest: GameMessageBroker.GetSubscriber returned null - broker may not be initialized yet");
       }
+
+      // Subscribe to request messages (commands)
+      var startQuestRequestSubscriber = GameMessageBroker.GetSubscriber<StartQuestRequestMessage>();
+      if (startQuestRequestSubscriber != null)
+      {
+        subscriptions.Add(startQuestRequestSubscriber.Subscribe(OnStartQuestRequest));
+        log.ForMethod().Information("Quest: Successfully subscribed to StartQuestRequestMessage");
+      }
+      else
+      {
+        log.ForMethod().Warning("Quest: GameMessageBroker.GetSubscriber returned null for StartQuestRequestMessage - broker may not be initialized yet");
+      }
+
+      var startCampaignRequestSubscriber = GameMessageBroker.GetSubscriber<StartCampaignRequestMessage>();
+      if (startCampaignRequestSubscriber != null)
+      {
+        subscriptions.Add(startCampaignRequestSubscriber.Subscribe(OnStartCampaignRequest));
+        log.ForMethod().Information("Quest: Successfully subscribed to StartCampaignRequestMessage");
+      }
+      else
+      {
+        log.ForMethod().Warning("Quest: GameMessageBroker.GetSubscriber returned null for StartCampaignRequestMessage - broker may not be initialized yet");
+      }
+
+      var claimQuestRequestSubscriber = GameMessageBroker.GetSubscriber<ClaimQuestRequestMessage>();
+      if (claimQuestRequestSubscriber != null)
+      {
+        subscriptions.Add(claimQuestRequestSubscriber.Subscribe(OnClaimQuestRequest));
+        log.ForMethod().Information("Quest: Successfully subscribed to ClaimQuestRequestMessage");
+      }
+      else
+      {
+        log.ForMethod().Warning("Quest: GameMessageBroker.GetSubscriber returned null for ClaimQuestRequestMessage - broker may not be initialized yet");
+      }
+
+      // Subscribe to campaign completion messages
+      var campaignCompletedSubscriber = GameMessageBroker.GetSubscriber<CampaignCompletedMessage>();
+      if (campaignCompletedSubscriber != null)
+      {
+        subscriptions.Add(campaignCompletedSubscriber.Subscribe(OnCampaignCompleted));
+        log.ForMethod().Information("Quest: Successfully subscribed to CampaignCompletedMessage");
+      }
+      else
+      {
+        log.ForMethod().Warning("Quest: GameMessageBroker.GetSubscriber returned null for CampaignCompletedMessage - broker may not be initialized yet");
+      }
     }
 
     // ==================== LIFECYCLE ====================
@@ -209,18 +268,26 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       graphState.Set("__quest_definition", quest);
       log.ForMethod().Debug("Quest: Stored quest context in graph state (quest_guid: {QuestGuid})", questGuid);
 
-      var runtimeState = new QuestRuntimeState(
-          questGuid,
-          quest,
-          graphState,
-          DateTime.UtcNow
-      );
+      // Get or create quest state and mark as started
+      var questState = GetOrCreateQuestState(questGuid, quest);
+      if (questState.GraphState == null)
+      {
+        // Create new runtime state with graph state
+        questState = new QuestRuntimeState(questGuid, quest, graphState, DateTime.UtcNow);
+      }
+      else
+      {
+        // Update existing state
+        questState.MarkStarted(DateTime.UtcNow);
+        questState.SetDefinition(quest);
+      }
 
-      activeQuests[questGuid] = runtimeState;
+      activeQuests[questGuid] = questState;
+      questStates[questGuid] = questState; // Keep in questStates for tracking
 
       // Load objective graphs
       log.ForMethod().Information("Quest: Loading {ObjectiveCount} objective graphs for quest '{QuestName}'", quest.Objectives.Count, quest.DisplayName);
-      await LoadObjectiveGraphsAsync(quest, runtimeState, ct);
+      await LoadObjectiveGraphsAsync(quest, questState, ct);
 
       // Optionally load quest-level graph if it exists
       if (quest.GraphAsset != null)
@@ -232,7 +299,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
           var runner = await LoadGraphAsync(quest.GraphAsset, runnerId, graphState, ct);
           loadedRunners[runnerId] = runner;
           eventRouter.RegisterRunner(runner);
-          runtimeState.LoadedGraphInstanceIds.Add(runnerId);
+          questState.LoadedGraphInstanceIds.Add(runnerId);
           log.ForMethod().Information("Quest: Loaded quest graph for '{QuestName}' (runner: {RunnerId})", quest.DisplayName, runnerId);
         }
         catch (Exception ex)
@@ -260,15 +327,19 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
         return false;
       }
 
-      var duration = DateTime.UtcNow - runtimeState.StartedAt;
+      var duration = DateTime.UtcNow - (runtimeState.StartedAt.HasValue ? runtimeState.StartedAt.Value : DateTime.UtcNow);
       log.ForMethod().Debug("Quest: Quest '{QuestName}' duration: {Duration} minutes", runtimeState.Definition.DisplayName, duration.TotalMinutes);
 
       // Unload all objective graphs (but keep quest-level graph if it exists)
       UnloadQuestGraphs(runtimeState);
 
+      // Update state to completed
+      runtimeState.MarkCompleted();
+
       // Move from active to completed-unclaimed
       activeQuests.Remove(questGuid);
       completedUnclaimedQuests[questGuid] = runtimeState;
+      questStates[questGuid] = runtimeState; // Keep in questStates for tracking
 
       // Emit message (objectives done, but NOT claimed yet)
       questCompletedPublisher.Publish(new QuestCompletedMessage(
@@ -277,6 +348,9 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
           duration
       ));
       log.ForMethod().Debug("Quest: Published QuestCompletedMessage for '{QuestName}'", runtimeState.Definition.DisplayName);
+
+      // Check for campaign completion
+      CheckCampaignCompletion(questGuid);
 
       log.ForMethod().Information("Quest: Completed quest '{QuestName}' ({QuestGuid}) in {Duration:F1} minutes - ready to claim",
         runtimeState.Definition.DisplayName, questGuid, duration.TotalMinutes);
@@ -293,7 +367,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
         return false;
       }
 
-      var totalDuration = DateTime.UtcNow - runtimeState.StartedAt;
+      var totalDuration = DateTime.UtcNow - (runtimeState.StartedAt.HasValue ? runtimeState.StartedAt.Value : DateTime.UtcNow);
 
       // Move from completed-unclaimed to claimed
       completedUnclaimedQuests.Remove(questGuid);
@@ -306,6 +380,9 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
           totalDuration
       ));
       log.ForMethod().Debug("Quest: Published QuestClaimedMessage for '{QuestName}'", runtimeState.Definition.DisplayName);
+
+      // Check for campaign completion (after quest is claimed)
+      CheckCampaignCompletion(questGuid);
 
       log.ForMethod().Information("Quest: Claimed quest '{QuestName}' ({QuestGuid}) - rewards should be granted now",
         runtimeState.Definition.DisplayName, questGuid);
@@ -440,7 +517,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
         saveData.ActiveQuests.Add(new ActiveQuestSaveData
         {
           QuestGuid = questGuid,
-          StartedAt = runtimeState.StartedAt,
+          StartedAt = runtimeState.StartedAt.HasValue ? runtimeState.StartedAt.Value : DateTime.UtcNow,
           SerializedGraphState = serializedState
         });
       }
@@ -456,7 +533,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
         saveData.CompletedUnclaimedQuests.Add(new ActiveQuestSaveData
         {
           QuestGuid = questGuid,
-          StartedAt = runtimeState.StartedAt,
+          StartedAt = runtimeState.StartedAt.HasValue ? runtimeState.StartedAt.Value : DateTime.UtcNow,
           SerializedGraphState = serializedState
         });
       }
@@ -980,6 +1057,11 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       log.ForMethod().Information("Quest: OnQuestClaimed handler called for quest {QuestName} ({QuestGuid})", message.Quest.DisplayName, message.QuestGuid);
     }
 
+    private void OnCampaignCompleted(CampaignCompletedMessage message)
+    {
+      log.ForMethod().Information("Quest: OnCampaignCompleted handler called for campaign {CampaignName} ({CampaignGuid})", message.Campaign.DisplayName, message.CampaignGuid);
+    }
+
     private void OnQuestObjectiveProgress(QuestObjectiveProgressMessage message)
     {
       log.ForMethod().Information("Quest: OnQuestObjectiveProgress handler called for quest {QuestGuid}, objective {ObjectiveGuid}",
@@ -1009,6 +1091,233 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
         questState.GraphState.Set(progressKey, message.Current);
         log.ForMethod().Information("Quest: Updated progress in graph state for objective {ObjectiveGuid}", message.ObjectiveGuid);
       }
+    }
+
+    // ==================== REQUEST MESSAGE HANDLERS ====================
+
+    private async void OnStartQuestRequest(StartQuestRequestMessage message)
+    {
+      if (message.Quest == null)
+      {
+        log.ForMethod().Warning("Quest: StartQuestRequestMessage received with null quest");
+        return;
+      }
+
+      log.ForMethod().Information("Quest: Received StartQuestRequestMessage for '{QuestName}' ({QuestGuid})",
+        message.Quest.DisplayName, message.Quest.Guid);
+
+      try
+      {
+        var success = await StartQuestAsync(message.Quest);
+        if (!success)
+        {
+          log.ForMethod().Warning("Quest: Failed to start quest '{QuestName}' from StartQuestRequestMessage",
+            message.Quest.DisplayName);
+        }
+      }
+      catch (Exception ex)
+      {
+        log.ForMethod().Error(ex, "Quest: Exception handling StartQuestRequestMessage for '{QuestName}'",
+          message.Quest.DisplayName);
+      }
+    }
+
+    private async void OnStartCampaignRequest(StartCampaignRequestMessage message)
+    {
+      if (message.Campaign == null)
+      {
+        log.ForMethod().Warning("Quest: StartCampaignRequestMessage received with null campaign");
+        return;
+      }
+
+      log.ForMethod().Information("Quest: Received StartCampaignRequestMessage for campaign '{CampaignName}' ({CampaignGuid})",
+        message.Campaign.DisplayName, message.Campaign.Guid);
+
+      try
+      {
+        // Track campaign state
+        if (!campaignStates.ContainsKey(message.Campaign.Guid))
+        {
+          campaignStates[message.Campaign.Guid] = new CampaignRuntimeState(message.Campaign.Guid, message.Campaign);
+        }
+        var campaignState = campaignStates[message.Campaign.Guid];
+        campaignState.IsActive = true;
+        campaignState.SetCampaign(message.Campaign);
+
+        // Auto-start quests with AutoWhenAvailable activation mode
+        var autoStartedCount = 0;
+        foreach (var quest in message.Campaign.Quests)
+        {
+          if (quest == null) continue;
+
+          // Check if quest should auto-start
+          if (quest.ActivationMode == EQuestActivationMode.AutoWhenAvailable)
+          {
+            // Check if quest is locked (availability check)
+            var questState = GetOrCreateQuestState(quest.Guid, quest);
+            if (questState.State == EQuestState.Locked)
+            {
+              log.ForMethod().Debug("Quest: Quest '{QuestName}' is locked, skipping auto-start", quest.DisplayName);
+              continue;
+            }
+
+            log.ForMethod().Information("Quest: Auto-starting quest '{QuestName}' (AutoWhenAvailable) from campaign '{CampaignName}'",
+              quest.DisplayName, message.Campaign.DisplayName);
+            var success = await StartQuestAsync(quest);
+            if (success)
+            {
+              autoStartedCount++;
+            }
+            else
+            {
+              log.ForMethod().Warning("Quest: Failed to auto-start quest '{QuestName}' from campaign '{CampaignName}'",
+                quest.DisplayName, message.Campaign.DisplayName);
+            }
+          }
+        }
+
+        if (autoStartedCount > 0)
+        {
+          log.ForMethod().Information("Quest: Campaign '{CampaignName}' started - auto-started {Count} quest(s)",
+            message.Campaign.DisplayName, autoStartedCount);
+        }
+        else
+        {
+          log.ForMethod().Information("Quest: Campaign '{CampaignName}' started (no auto-start quests configured or all locked)",
+            message.Campaign.DisplayName);
+        }
+      }
+      catch (Exception ex)
+      {
+        log.ForMethod().Error(ex, "Quest: Exception handling StartCampaignRequestMessage for campaign '{CampaignName}'",
+          message.Campaign.DisplayName);
+      }
+    }
+
+    private void OnClaimQuestRequest(ClaimQuestRequestMessage message)
+    {
+      if (string.IsNullOrEmpty(message.QuestGuid))
+      {
+        log.ForMethod().Warning("Quest: ClaimQuestRequestMessage received with null or empty quest GUID");
+        return;
+      }
+
+      log.ForMethod().Information("Quest: Received ClaimQuestRequestMessage for quest {QuestGuid}", message.QuestGuid);
+
+      try
+      {
+        var success = ClaimQuest(message.QuestGuid);
+        if (!success)
+        {
+          log.ForMethod().Warning("Quest: Failed to claim quest {QuestGuid} from ClaimQuestRequestMessage", message.QuestGuid);
+        }
+      }
+      catch (Exception ex)
+      {
+        log.ForMethod().Error(ex, "Quest: Exception handling ClaimQuestRequestMessage for quest {QuestGuid}", message.QuestGuid);
+      }
+    }
+
+    // ==================== CAMPAIGN COMPLETION ====================
+
+    /// <summary>
+    /// Checks if any campaign containing the specified quest is now complete.
+    /// Publishes CampaignCompletedMessage if a campaign completes.
+    /// </summary>
+    private void CheckCampaignCompletion(string questGuid)
+    {
+      // Find campaigns containing this quest
+      var allCampaigns = Resources.LoadAll<QuestCampaign>("");
+      foreach (var campaign in allCampaigns)
+      {
+        if (campaign == null || campaign.Quests == null)
+          continue;
+
+        // Check if this campaign contains the quest
+        var containsQuest = campaign.Quests.Any(q => q != null && q.Guid == questGuid);
+        if (!containsQuest)
+          continue;
+
+        // Count completed quests (completed-unclaimed or claimed)
+        var completedQuestCount = 0;
+        foreach (var quest in campaign.Quests)
+        {
+          if (quest == null) continue;
+
+          if (completedUnclaimedQuests.ContainsKey(quest.Guid) || claimedQuestGuids.Contains(quest.Guid))
+          {
+            completedQuestCount++;
+          }
+        }
+
+        // Check if campaign completion criteria is met
+        bool isComplete = campaign.AllQuestsRequired
+          ? completedQuestCount >= campaign.Quests.Count
+          : completedQuestCount >= campaign.RequiredQuestCount;
+
+        if (isComplete)
+        {
+          log.ForMethod().Information("Quest: Campaign '{CampaignName}' ({CampaignGuid}) is now complete ({CompletedCount}/{TotalCount} quests)",
+            campaign.DisplayName, campaign.Guid, completedQuestCount, campaign.Quests.Count);
+          campaignCompletedPublisher.Publish(new CampaignCompletedMessage(campaign.Guid, campaign));
+          log.ForMethod().Debug("Quest: Published CampaignCompletedMessage for '{CampaignName}'", campaign.DisplayName);
+        }
+      }
+    }
+
+    // ==================== QUEST STATE MANAGEMENT ====================
+
+    /// <summary>
+    /// Get or create a quest runtime state. Used for tracking locked/available quests.
+    /// </summary>
+    private QuestRuntimeState GetOrCreateQuestState(string questGuid, QuestDefinition quest = null)
+    {
+      // Check if quest is already active or completed
+      if (activeQuests.TryGetValue(questGuid, out var activeState))
+        return activeState;
+
+      if (completedUnclaimedQuests.TryGetValue(questGuid, out var completedState))
+        return completedState;
+
+      if (claimedQuestGuids.Contains(questGuid))
+      {
+        // Quest was claimed - create a state representing it as completed
+        if (!questStates.TryGetValue(questGuid, out var claimedState))
+        {
+          claimedState = new QuestRuntimeState(questGuid, EQuestState.Completed);
+          if (quest != null) claimedState.SetDefinition(quest);
+          questStates[questGuid] = claimedState;
+        }
+        return claimedState;
+      }
+
+      // Get or create quest state
+      if (!questStates.TryGetValue(questGuid, out var state))
+      {
+        // Check if quest is locked (availability check)
+        // TODO: Implement actual locked condition checking
+        var initialState = IsQuestLocked(questGuid, quest) ? EQuestState.Locked : EQuestState.Available;
+        state = new QuestRuntimeState(questGuid, initialState);
+        if (quest != null) state.SetDefinition(quest);
+        questStates[questGuid] = state;
+      }
+      else if (quest != null && state.Definition == null)
+      {
+        state.SetDefinition(quest);
+      }
+
+      return state;
+    }
+
+    /// <summary>
+    /// Check if a quest is locked (not yet available).
+    /// TODO: Implement actual locked condition logic (prerequisites, flags, etc.)
+    /// </summary>
+    private bool IsQuestLocked(string questGuid, QuestDefinition quest)
+    {
+      // For now, all quests are available (not locked)
+      // This will be implemented when locked conditions are added
+      return false;
     }
   }
 }

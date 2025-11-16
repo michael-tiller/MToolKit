@@ -8,6 +8,8 @@ using MToolKit.Runtime.VisualGraphs.Runtime.DTOs;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using Serilog;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
 
@@ -25,7 +27,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
 
     public string NodeType => "QuestObjectiveIncrementNode";
 
-    public UniTask Execute(
+    public async UniTask Execute(
       IRuntimeGraphDefinition graph,
       RuntimeNodeDefinition node,
       IGraphState state,
@@ -33,30 +35,55 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       GraphNodeExecutionContext context,
       CancellationToken ct = default)
     {
-      // Extract parameters (try both camelCase and PascalCase for compatibility)
-      // Objective field is a QuestObjective (GuidScriptableObject) serialized as GUID string
-      var objectiveGuid = node.Parameters.TryGetValue("objective", out var obj) ? obj as string : null;
-      if (string.IsNullOrEmpty(objectiveGuid))
-        objectiveGuid = node.Parameters.TryGetValue("Objective", out obj) ? obj as string : null;
+      // Extract Objective parameter
+      if (!node.Parameters.TryGetValue("Objective", out var objectiveParam))
+      {
+        log.ForMethod().Warning("Quest: QuestObjectiveIncrementNode has no 'Objective' parameter, continuing execution");
+        foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
+          context.EnqueueNext(connection.ToNodeId);
+        return;
+      }
 
-      var amount = node.Parameters.TryGetValue("amount", out var amt) ? Convert.ToInt32(amt) : 1;
-      if (amount == 1) // Default, try PascalCase
-        amount = node.Parameters.TryGetValue("Amount", out amt) ? Convert.ToInt32(amt) : 1;
+      QuestObjective objectiveDef = null;
+      string objectiveGuid = null;
 
-      var emitEvent = node.Parameters.TryGetValue("emitProgressEvent", out var emit) && Convert.ToBoolean(emit);
-      if (!emitEvent) // Try PascalCase
-        emitEvent = node.Parameters.TryGetValue("EmitProgressEvent", out emit) && Convert.ToBoolean(emit);
+      // Handle ObjectiveAssetReference directly
+      if (objectiveParam is ObjectiveAssetReference objectiveAssetRef)
+      {
+        var handle = Addressables.LoadAssetAsync<QuestObjective>(objectiveAssetRef);
+        objectiveDef = await handle.ToUniTask(cancellationToken: ct);
+        objectiveGuid = objectiveDef.Guid;
+      }
+      // Handle SerializableAssetReference
+      else if (objectiveParam is SerializableAssetReference assetRef)
+      {
+        var handle = Addressables.LoadAssetAsync<QuestObjective>(assetRef.AssetGuid);
+        objectiveDef = await handle.ToUniTask(cancellationToken: ct);
+        objectiveGuid = objectiveDef.Guid;
+      }
+      else
+      {
+        log.ForMethod().Warning("Quest: QuestObjectiveIncrementNode 'Objective' parameter is not an ObjectiveAssetReference or SerializableAssetReference (type: {Type}), continuing execution",
+          objectiveParam?.GetType().Name ?? "null");
+        foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
+          context.EnqueueNext(connection.ToNodeId);
+        return;
+      }
 
-      log.ForMethod().Information("Quest: Executing QuestObjectiveIncrementNode (objective: {ObjectiveGuid}, amount: {Amount}, emitEvent: {EmitEvent})",
-        objectiveGuid, amount, emitEvent);
-
-      if (string.IsNullOrEmpty(objectiveGuid))
+      if (objectiveDef == null || string.IsNullOrEmpty(objectiveGuid))
       {
         log.ForMethod().Warning("Quest: QuestObjectiveIncrementNode has null objective GUID, continuing execution");
         foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
           context.EnqueueNext(connection.ToNodeId);
-        return UniTask.CompletedTask;
+        return;
       }
+
+      // Extract other parameters
+      var amount = node.Parameters.TryGetValue("Amount", out var amt) ? Convert.ToInt32(amt) : 1;
+      var emitEvent = node.Parameters.TryGetValue("EmitProgressEvent", out var emit) && Convert.ToBoolean(emit);
+
+      log.ForMethod().Information("Quest: Executing QuestObjectiveIncrementNode (objective: {ObjectiveGuid}, amount: {Amount}, emitEvent: {EmitEvent})",
+        objectiveGuid, amount, emitEvent);
 
       // Get or create objective progress
       var key = $"objective_{objectiveGuid}";
@@ -106,16 +133,16 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
         var questDef = state.TryGet<QuestDefinition>("__quest_definition", out var qd) ? qd : null;
 
         // Find the objective definition
-        QuestObjective objectiveDef = null;
+        QuestObjective objectiveDefForMessage = null;
         if (questDef != null && questDef.Objectives != null)
         {
-          objectiveDef = questDef.Objectives.Find(o => o.Guid == objectiveGuid);
+          objectiveDefForMessage = questDef.Objectives.Find(o => o.Guid == objectiveGuid);
         }
 
         var progressMsg = new QuestObjectiveProgressMessage(
           questGuid,
           objectiveGuid,
-          objectiveDef,
+          objectiveDefForMessage,
           progress.Current,
           progress.Required,
           progress.Percentage,
@@ -135,8 +162,6 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       // Continue to connected nodes
       foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
         context.EnqueueNext(connection.ToNodeId);
-
-      return UniTask.CompletedTask;
     }
   }
 }

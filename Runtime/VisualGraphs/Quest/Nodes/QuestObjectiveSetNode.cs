@@ -3,6 +3,9 @@ using MToolKit.Runtime.VisualGraphs.Quest.Definitions;
 using Sirenix.OdinInspector;
 using UnityEngine;
 using XNode;
+#if UNITY_ADDRESSABLES
+using UnityEngine.AddressableAssets;
+#endif
 
 namespace MToolKit.Runtime.VisualGraphs.Quest.Nodes
 {
@@ -23,10 +26,9 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Nodes
     public NodeConnection Output;
 
     [BoxGroup("Objective")]
+    [InfoBox("The quest objective to set. Can be loaded via Addressables.")]
     [Required]
-    [InlineEditor]
-    [Tooltip("Quest objective to set (references QuestObjective asset by GUID)")]
-    public QuestObjective Objective;
+    public ObjectiveAssetReference Objective;
 
     [BoxGroup("Objective")]
     [MinValue(0)]

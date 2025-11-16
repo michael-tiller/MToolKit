@@ -720,8 +720,10 @@ GameMessageBroker.GetSubscriber<QuestClaimedMessage>()
 
 2. **`DialogueLineNode`** - Displays dialogue text
    - Supports speaker ID, text, and localization keys
-   - Auto-advance and skippable options
-   - Minimum display time configuration
+   - **Timing support** - `MinDisplaySeconds`, `AutoAdvanceDelaySeconds`, `AutoAdvance`, `Skippable` fields
+   - Auto-advance mode with configurable delays
+   - Minimum display time enforcement
+   - Skippable lines (race condition between min time and player click)
    - Emits `DialogueShowMessage` to UI
    - Waits for user input via `DialogueProgressMessage` subscription
 
@@ -804,8 +806,10 @@ GameMessageBroker.GetSubscriber<QuestClaimedMessage>()
 ### Key Features Delivered:
 
 - ✅ **Full dialogue execution** - Start, line display, choice selection, branching
+- ✅ **Timing support** - Auto-advance, minimum display time, skippable lines
 - ✅ **Dynamic choice ports** - Variable number of output ports based on choices
 - ✅ **Message-based UI integration** - Decoupled, flexible communication
+- ✅ **Quest integration** - `StartQuestNode` can be used in dialogue graphs to start quests
 - ✅ **Proper state management** - Dialogue pauses/resumes correctly
 - ✅ **Choice branching** - Only selected branch executes
 - ✅ **Graceful dialogue end** - Auto-detects and closes when complete

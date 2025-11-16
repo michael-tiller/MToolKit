@@ -66,60 +66,6 @@
 
 **See `CHANGELOG.md` for complete implementation details.**
 
-### 3.1 Future Enhancements
-
-#### 3.1.1 Dialogue Signal/Event Integration ⚠️ **BASIC INTEGRATION EXISTS, GENERAL PATTERN NOT IMPLEMENTED**
-
-**Current Status:**
-- ✅ **Quest integration exists** - `StartQuestNode` can be used in dialogue graphs to start quests
-- ✅ Dialogue graphs can use any quest node (StartQuestNode, etc.) for quest actions
-- ✅ General graph system allows mixing node types across domains
-
-**What's Missing (General Signal Pattern):**
-- ❌ No general `DialogueSignalNode` for arbitrary dialogue-triggered events
-- ❌ No pluggable `IDialogueSignalHandler` interface for custom signal handling
-- ❌ No standardized string-based signal pattern (e.g., "StartQuest:quest_01", "PlaySound:sfx_01")
-- ❌ Each integration point requires a custom node type (e.g., StartQuestNode, would need StartSoundNode, etc.)
-
-**Current Solution:**
-- Use domain-specific nodes in dialogue graphs (e.g., `StartQuestNode` for quests)
-- Works well for common integrations (quests, state changes)
-- Requires creating new node types for each integration point
-
-**Proposed General Solution (Future Enhancement):**
-- Create `DialogueSignalNode` with executor
-- Use `IDialogueSignalHandler` interface for pluggable handlers
-- String-based signal IDs (e.g., "StartQuest:quest_01", "PlaySound:sfx_01")
-- Easy to extend without touching core dialogue code
-- Keep message-driven pattern
-
-**Impact:** Low-Medium - Basic integration works via domain nodes, general pattern would improve extensibility
-
-**Files to Create:**
-- `Runtime/VisualGraphs/Authoring/Nodes/Dialogue/DialogueSignalNode.cs`
-- `Runtime/VisualGraphs/Executors/Dialogue/DialogueSignalNodeExecutor.cs`
-- `Runtime/VisualGraphs/Dialogue/IDialogueSignalHandler.cs`
-
-**Files Already Implemented:**
-- ✅ `Runtime/VisualGraphs/Quest/Nodes/StartQuestNode.cs` (can be used in dialogue graphs)
-- ✅ `Runtime/VisualGraphs/Quest/Executors/StartQuestNodeExecutor.cs` (handles dialogue graph context)
-
-#### 3.1.2 Choice Visibility Conditions ⚠️ **BASIC SYSTEM EXISTS, INTEGRATION PENDING**
-
-**Current Status:**
-- ✅ Generic state system exists (`GenericStateCheckNode`) for conditional branching
-- ❌ Choice visibility not yet integrated into `DialogueChoiceNodeExecutor`
-
-**Proposed Solution:**
-- Add condition evaluation to `DialogueChoiceNodeExecutor` to filter visible choices
-- Use `GenericStateCheckNode` pattern or advanced condition system (see Phase 9.5)
-- Allow choices to be conditionally shown/hidden based on game state
-
-**Impact:** Medium - Enables dynamic dialogue based on game state
-
-**Files to Modify:**
-- `Runtime/VisualGraphs/Dialogue/Executors/DialogueChoiceNodeExecutor.cs`
-
 ---
 
 ## Phase 4: Asset Reference System Overhaul ✅ **SUPERSEDED BY PHASE 1.0.1**
@@ -305,6 +251,62 @@
 **Files to Create:**
 - `Editor/VisualGraphs/Wizards/QuestCreationWizard.cs`
 - `Editor/VisualGraphs/Wizards/DialogueCreationWizard.cs`
+
+---
+
+### 6.4 Dialogue System Enhancements
+
+#### 6.4.1 Dialogue Signal/Event Integration ⚠️ **BASIC INTEGRATION EXISTS, GENERAL PATTERN NOT IMPLEMENTED**
+
+**Current Status:**
+- ✅ **Quest integration exists** - `StartQuestNode` can be used in dialogue graphs to start quests
+- ✅ Dialogue graphs can use any quest node (StartQuestNode, etc.) for quest actions
+- ✅ General graph system allows mixing node types across domains
+
+**What's Missing (General Signal Pattern):**
+- ❌ No general `DialogueSignalNode` for arbitrary dialogue-triggered events
+- ❌ No pluggable `IDialogueSignalHandler` interface for custom signal handling
+- ❌ No standardized string-based signal pattern (e.g., "StartQuest:quest_01", "PlaySound:sfx_01")
+- ❌ Each integration point requires a custom node type (e.g., StartQuestNode, would need StartSoundNode, etc.)
+
+**Current Solution:**
+- Use domain-specific nodes in dialogue graphs (e.g., `StartQuestNode` for quests)
+- Works well for common integrations (quests, state changes)
+- Requires creating new node types for each integration point
+
+**Proposed General Solution:**
+- Create `DialogueSignalNode` with executor
+- Use `IDialogueSignalHandler` interface for pluggable handlers
+- String-based signal IDs (e.g., "StartQuest:quest_01", "PlaySound:sfx_01")
+- Easy to extend without touching core dialogue code
+- Keep message-driven pattern
+
+**Impact:** Low-Medium - Basic integration works via domain nodes, general pattern would improve extensibility
+
+**Files to Create:**
+- `Runtime/VisualGraphs/Authoring/Nodes/Dialogue/DialogueSignalNode.cs`
+- `Runtime/VisualGraphs/Executors/Dialogue/DialogueSignalNodeExecutor.cs`
+- `Runtime/VisualGraphs/Dialogue/IDialogueSignalHandler.cs`
+
+**Files Already Implemented:**
+- ✅ `Runtime/VisualGraphs/Quest/Nodes/StartQuestNode.cs` (can be used in dialogue graphs)
+- ✅ `Runtime/VisualGraphs/Quest/Executors/StartQuestNodeExecutor.cs` (handles dialogue graph context)
+
+#### 6.4.2 Choice Visibility Conditions ⚠️ **BASIC SYSTEM EXISTS, INTEGRATION PENDING**
+
+**Current Status:**
+- ✅ Generic state system exists (`GenericStateCheckNode`) for conditional branching
+- ❌ Choice visibility not yet integrated into `DialogueChoiceNodeExecutor`
+
+**Proposed Solution:**
+- Add condition evaluation to `DialogueChoiceNodeExecutor` to filter visible choices
+- Use `GenericStateCheckNode` pattern or advanced condition system (see Phase 9.5)
+- Allow choices to be conditionally shown/hidden based on game state
+
+**Impact:** Medium - Enables dynamic dialogue based on game state
+
+**Files to Modify:**
+- `Runtime/VisualGraphs/Dialogue/Executors/DialogueChoiceNodeExecutor.cs`
 
 ---
 

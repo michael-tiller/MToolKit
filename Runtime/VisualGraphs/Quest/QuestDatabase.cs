@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using MToolKit.Runtime.Utilities;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -8,7 +9,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
   /// Simple registry for quest campaigns.
   /// </summary>
   [CreateAssetMenu(menuName = "MToolKit/VisualGraphs/Quest Database", fileName = "QuestDatabase")]
-  public sealed class QuestDatabase : ScriptableObject
+  public sealed class QuestDatabase : GuidScriptableObject
   {
     [Title("Campaign Registry")]
     [InfoBox("Add campaigns in the order you want them available.")]

@@ -9,6 +9,7 @@ using MToolKit.Runtime.VisualGraphs.Runtime.DTOs;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using Serilog;
+using UnityEngine.AddressableAssets;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
 
@@ -26,7 +27,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
 
     public string NodeType => "QuestObjectiveSetNode";
 
-    public UniTask Execute(
+    public async UniTask Execute(
       IRuntimeGraphDefinition graph,
       RuntimeNodeDefinition node,
       IGraphState state,
@@ -34,21 +35,55 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       GraphNodeExecutionContext context,
       CancellationToken ct = default)
     {
-      // Extract parameters - Objective field will be serialized as GUID string
-      var objectiveGuid = node.Parameters.TryGetValue("objective", out var obj) ? obj as string : null;
-      var value = node.Parameters.TryGetValue("value", out var val) ? Convert.ToInt32(val) : 0;
-      var emitEvent = node.Parameters.TryGetValue("emitProgressEvent", out var emit) && Convert.ToBoolean(emit);
+      // Extract Objective parameter
+      if (!node.Parameters.TryGetValue("Objective", out var objectiveParam))
+      {
+        log.ForMethod().Warning("Quest: QuestObjectiveSetNode has no 'Objective' parameter, continuing execution");
+        foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
+          context.EnqueueNext(connection.ToNodeId);
+        return;
+      }
+
+      QuestObjective objectiveDef = null;
+      string objectiveGuid = null;
+
+      // Handle ObjectiveAssetReference directly
+      if (objectiveParam is ObjectiveAssetReference objectiveAssetRef)
+      {
+        var handle = Addressables.LoadAssetAsync<QuestObjective>(objectiveAssetRef);
+        objectiveDef = await handle.ToUniTask(cancellationToken: ct);
+        objectiveGuid = objectiveDef.Guid;
+      }
+      // Handle SerializableAssetReference
+      else if (objectiveParam is SerializableAssetReference assetRef)
+      {
+        var handle = Addressables.LoadAssetAsync<QuestObjective>(assetRef.AssetGuid);
+        objectiveDef = await handle.ToUniTask(cancellationToken: ct);
+        objectiveGuid = objectiveDef.Guid;
+      }
+      else
+      {
+        log.ForMethod().Warning("Quest: QuestObjectiveSetNode 'Objective' parameter is not an ObjectiveAssetReference or SerializableAssetReference (type: {Type}), continuing execution",
+          objectiveParam?.GetType().Name ?? "null");
+        foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
+          context.EnqueueNext(connection.ToNodeId);
+        return;
+      }
+
+      if (objectiveDef == null || string.IsNullOrEmpty(objectiveGuid))
+      {
+        log.ForMethod().Warning("Quest: QuestObjectiveSetNode has null objective, continuing execution");
+        foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
+          context.EnqueueNext(connection.ToNodeId);
+        return;
+      }
+
+      // Extract other parameters
+      var value = node.Parameters.TryGetValue("Value", out var val) ? Convert.ToInt32(val) : 0;
+      var emitEvent = node.Parameters.TryGetValue("EmitProgressEvent", out var emit) && Convert.ToBoolean(emit);
 
       log.ForMethod().Debug("Quest: Executing QuestObjectiveSetNode (objective: {ObjectiveGuid}, value: {Value}, emitEvent: {EmitEvent})",
         objectiveGuid, value, emitEvent);
-
-      if (string.IsNullOrEmpty(objectiveGuid))
-      {
-        log.ForMethod().Warning("Quest: QuestObjectiveSetNode has null objective GUID, continuing execution");
-        foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
-          context.EnqueueNext(connection.ToNodeId);
-        return UniTask.CompletedTask;
-      }
 
       // Get or create objective progress
       var key = $"objective_{objectiveGuid}";
@@ -96,16 +131,16 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
         var questDef = state.TryGet<QuestDefinition>("__quest_definition", out var qd) ? qd : null;
 
         // Find the objective definition
-        QuestObjective objectiveDef = null;
+        QuestObjective objectiveDefForMessage = null;
         if (questDef != null && questDef.Objectives != null)
         {
-          objectiveDef = questDef.Objectives.Find(o => o.Guid == objectiveGuid);
+          objectiveDefForMessage = questDef.Objectives.Find(o => o.Guid == objectiveGuid);
         }
 
         var progressMsg = new QuestObjectiveProgressMessage(
           questGuid ?? string.Empty,
           objectiveGuid ?? string.Empty,
-          objectiveDef,
+          objectiveDefForMessage,
           progress.Current,
           progress.Required,
           progress.Percentage,
@@ -120,8 +155,6 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       // Continue to connected nodes
       foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
         context.EnqueueNext(connection.ToNodeId);
-
-      return UniTask.CompletedTask;
     }
   }
 }

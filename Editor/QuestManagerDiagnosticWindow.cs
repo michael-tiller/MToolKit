@@ -307,7 +307,7 @@ namespace MToolKit.Runtime.Editor
       {
         QuestGuid = runtimeState.QuestGuid,
         DisplayName = questDef.DisplayName,
-        StartedAt = runtimeState.StartedAt,
+        StartedAt = runtimeState.StartedAt.HasValue ? runtimeState.StartedAt.Value : DateTime.UtcNow,
         CompletionPercentage = runtimeState.GetCompletionPercentage(),
         Objectives = objectives
       };

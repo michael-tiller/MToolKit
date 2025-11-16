@@ -9,6 +9,7 @@ using MToolKit.Runtime.VisualGraphs.Runtime.DTOs;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using Serilog;
+using UnityEngine.AddressableAssets;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
 
@@ -27,7 +28,7 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
 
     public string NodeType => "QuestObjectiveCheckNode";
 
-    public UniTask Execute(
+    public async UniTask Execute(
       IRuntimeGraphDefinition graph,
       RuntimeNodeDefinition node,
       IGraphState state,
@@ -35,19 +36,47 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
       GraphNodeExecutionContext context,
       CancellationToken ct = default)
     {
-      // Extract parameters - Objective field will be serialized as GUID string
-      // Try both camelCase and PascalCase for compatibility
-      var objectiveGuid = node.Parameters.TryGetValue("objective", out var obj) ? obj as string : null;
-      if (string.IsNullOrEmpty(objectiveGuid))
-        objectiveGuid = node.Parameters.TryGetValue("Objective", out obj) ? obj as string : null;
+      // Extract Objective parameter
+      if (!node.Parameters.TryGetValue("Objective", out var objectiveParam))
+      {
+        log.ForMethod().Warning("Quest: QuestObjectiveCheckNode has no 'Objective' parameter, continuing to all outputs");
+        foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
+          context.EnqueueNext(connection.ToNodeId);
+        return;
+      }
+
+      QuestObjective objectiveDef = null;
+      string objectiveGuid = null;
+
+      // Handle ObjectiveAssetReference directly
+      if (objectiveParam is ObjectiveAssetReference objectiveAssetRef)
+      {
+        var handle = Addressables.LoadAssetAsync<QuestObjective>(objectiveAssetRef);
+        objectiveDef = await handle.ToUniTask(cancellationToken: ct);
+        objectiveGuid = objectiveDef.Guid;
+      }
+      // Handle SerializableAssetReference
+      else if (objectiveParam is SerializableAssetReference assetRef)
+      {
+        var handle = Addressables.LoadAssetAsync<QuestObjective>(assetRef.AssetGuid);
+        objectiveDef = await handle.ToUniTask(cancellationToken: ct);
+        objectiveGuid = objectiveDef.Guid;
+      }
+      else
+      {
+        log.ForMethod().Warning("Quest: QuestObjectiveCheckNode 'Objective' parameter is not an ObjectiveAssetReference or SerializableAssetReference (type: {Type}), continuing to all outputs",
+          objectiveParam?.GetType().Name ?? "null");
+        foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
+          context.EnqueueNext(connection.ToNodeId);
+        return;
+      }
 
       if (string.IsNullOrEmpty(objectiveGuid))
       {
         log.ForMethod().Warning("Quest: QuestObjectiveCheckNode has null objective GUID, continuing to all outputs");
-        // If no objective GUID, continue to all outputs (safeguard)
         foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
           context.EnqueueNext(connection.ToNodeId);
-        return UniTask.CompletedTask;
+        return;
       }
 
       // Check objective progress
@@ -102,8 +131,6 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
 
       foreach (var connection in matchingConnections)
         context.EnqueueNext(connection.ToNodeId);
-
-      return UniTask.CompletedTask;
     }
   }
 }

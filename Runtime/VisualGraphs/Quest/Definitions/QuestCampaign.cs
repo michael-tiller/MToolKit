@@ -52,9 +52,6 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Definitions
     [Tooltip("Number of quests required to complete campaign (if not all required)")]
     public int RequiredQuestCount = 1;
 
-    [BoxGroup("Configuration")]
-    [Tooltip("Auto-start first quest when campaign begins")]
-    public bool AutoStartFirstQuest = true;
 
     [BoxGroup("Configuration")]
     [Tooltip("Campaign category for UI/filtering")]

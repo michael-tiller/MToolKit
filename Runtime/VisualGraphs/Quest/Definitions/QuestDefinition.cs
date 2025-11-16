@@ -42,21 +42,30 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Definitions
     [Tooltip("Initial variables for this quest (applied after global, before save)")]
     public GraphVariableSet InitialVariables;
 
-    [BoxGroup("Configuration")]
-    [Tooltip("Auto-start this quest when the game loads")]
-    public bool AutoStart;
 
     [BoxGroup("Configuration")]
-    [Tooltip("Quest category for UI/filtering")]
-    public string Category = "Main";
+    [Tooltip("Quest category for UI/filtering and assignment policy decisions")]
+    public EQuestCategory Category = EQuestCategory.Main;
+
+    [BoxGroup("Configuration")]
+    [Tooltip("How this quest becomes available and starts")]
+    public EQuestActivationMode ActivationMode = EQuestActivationMode.Manual;
+
+    [BoxGroup("Configuration")]
+    [Tooltip("Visibility rules for this quest in the quest log/UI")]
+    public EQuestVisibility Visibility = EQuestVisibility.AlwaysVisible;
 
     [BoxGroup("Configuration")]
     [Tooltip("Whether this quest can be abandoned by the player. Set to false for critical/main story quests.")]
     public bool IsAbandonable = true;
 
-    [BoxGroup("Addressable")]
-    [Tooltip("Optional addressable key for dynamic loading")]
-    public string AddressableKey;
+    [BoxGroup("Configuration")]
+    [Tooltip("Whether this quest can be repeated after completion")]
+    public bool IsRepeatable = false;
+
+    [BoxGroup("Configuration")]
+    [Tooltip("Whether this quest can fail (e.g., time limit, critical failure condition)")]
+    public bool IsFailable = false;
 
     /// <summary>
     ///   Get progress for a specific objective from graph state.
