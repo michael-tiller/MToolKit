@@ -12,12 +12,47 @@
 **Plugin Integration: 100%** ✅ - Full plugin lifecycle with config system (1.1 complete!)  
 **MessagePipe Integration: 100%** ✅ - Bidirectional pub/sub working (1.3 complete!)  
 **Message Data Flow: 100%** ✅ - Field checks, extraction, type branching (2.1 bonus!)  
-**Quest System: 100%** ✅ - Full lifecycle orchestration with Quest Manager (Phase 2.1 complete!)  
+**Quest System: 100%** ✅ - Full lifecycle orchestration with Quest Manager (Phase 2 complete!)  
 **Quest Rewards: 100%** ✅ - Message-based reward pattern implemented and documented (Phase 2.3 complete!)  
 **Dialogue System: 100%** ✅ - Production-ready dialogue with message-based UI integration (Phase 3 complete!)  
 **Save System Integration: 100%** ✅ - Full save/load with quest state persistence (Phase 1.2 complete!)  
 **Quest Conditions: 100%** ✅ - Generic state system implemented (game-agnostic approach)  
-**Test Coverage: 0%** ❌ - No tests written (target: 100%)
+**Test Coverage: 0%** ❌ - No tests written (target: 100%) - **NEXT PRIORITY**
+
+**Future Enhancements (Not Blocking):**
+- Phase 2.5: Quest System Architecture Improvements (Contexts, GameRules) - See below
+- Phase 9.0+: Visual Scripting Foundation (Type safety, variable operations, dynamic values)
+
+---
+
+## 🎯 Next Steps & Focus Areas
+
+**Phase 2 is complete and production-ready.** Current focus should be on:
+
+### Immediate Priority: Phase 5 - Testing & Quality Assurance
+- **Goal:** Achieve 100% test coverage per MToolKit standards
+- **Why Critical:** System is production-ready but untested. Tests are essential for confidence and maintainability.
+- **Status:** 0% coverage - **START HERE**
+
+### Future Enhancements (After Testing):
+1. **Phase 9.0** - Type-Safe Variable Foundation & Runtime Contexts (enables better architecture)
+   - Type-safe variable system foundation
+   - Runtime Contexts API
+   - GameRules System
+   - Cross-context variable access
+
+2. **Phase 9.1+** - Visual Scripting Foundation (enables general-purpose scripting)
+   - Variable operations nodes
+   - Dynamic value resolution
+   - Math/logic operations
+   - Flow control nodes
+
+3. **Phase 6** - Editor Tools & UX (improves authoring experience)
+   - Graph validation tools
+   - Graph creation wizards
+   - Enhanced debugging tools
+
+**Recommendation:** Complete Phase 5 (Testing) before moving to new features. This ensures the solid foundation is well-tested before adding complexity.
 
 ---
 
@@ -398,16 +433,162 @@
 
 **Critical for:** Reactive event-driven systems where multiple game systems interact to create emergent gameplay 
 
+### 9.0 Type-Safe Variable Foundation & Runtime Contexts ⏳ **PLANNED** (Prerequisite for 9.1)
+
+**Goal:** Establish type-safe variable system foundation and clean context APIs before building variable nodes
+
+**Status:** Not yet implemented - See `SIMMY_FEATURE_EXTRACTION.md` for full design details
+
+**Why Critical:**
+- Phase 9.1 plans variable nodes, but they need type safety foundation
+- Current system uses string keys (`"variableName"`), which is error-prone
+- Need `VariableDefinition<T>` for compile-time type safety and default values
+- Need Runtime Contexts API for clean abstraction over raw `IGraphState` access
+- Prevents bugs from typos, type mismatches, and null reference exceptions
+
+**9.0.1 Type-Safe Variable Foundation:**
+
+**Implementation Tasks:**
+- [ ] Create `VariableDefinition<T>` sealed class
+  - Immutable, shared across instances (like Simmy)
+  - Type-safe key with default value
+  - `IEquatable<VariableDefinition<T>>` for dictionary keys
+  - See `SIMMY_FEATURE_EXTRACTION.md` section "Idempotent Variable System with Type Safety"
+
+- [ ] Create `IVariableStorage` interface
+  - `Get<T>(VariableDefinition<T> variable)` - Type-safe get with default value fallback
+  - `Set<T>(VariableDefinition<T> variable, T value)` - Type-safe set
+  - `Increment(VariableDefinition<int> variable, int amount)` - Idempotent increment
+  - `Decrement`, `Add`, `Multiply` operations
+  - See `SIMMY_FEATURE_EXTRACTION.md` for full interface design
+
+- [ ] Implement `VariableStorage` wrapping `IGraphState`
+  - Delegates to `IGraphState` but with type safety
+  - Handles default values from `VariableDefinition<T>`
+  - Idempotent operations (no null ref exceptions)
+
+- [ ] Update `GraphVariableSet` to use `VariableDefinition<T>`
+  - Replace string keys with type-safe definitions
+  - Maintain backward compatibility during transition
+
+**Files to Create:**
+- `Runtime/VisualGraphs/Variables/VariableDefinition.cs`
+- `Runtime/VisualGraphs/Variables/IVariableStorage.cs`
+- `Runtime/VisualGraphs/Variables/VariableStorage.cs`
+
+**Files to Modify:**
+- `Runtime/VisualGraphs/Variables/GraphVariableSet.cs` - Use `VariableDefinition<T>`
+
+**9.0.2 Runtime Contexts & Cross-Context Variable Access:**
+
+**Goal:** Provide clean API layer for quest/player contexts and enable cross-context variable access
+
+**Why Critical:**
+- Current code uses raw `IGraphState` access everywhere, making it hard to test and maintain
+- No clean API for quest-specific operations (get/set quest variables, fire quest events)
+- No way to access player-level variables from quest graphs
+- No abstraction for "quest context" vs "player context" vs "world context"
+
+**Implementation Tasks:**
+- [ ] Create Runtime Context interfaces
+  - `IQuestContext` - Clean API for quest operations (wraps `QuestDefinition` + `QuestRuntimeState`)
+  - `IPlayerContext` - Player-level state and operations
+  - `IWorldContext` - World-level state (future)
+  - See `SIMMY_FEATURE_EXTRACTION.md` section "Runtime Contexts"
+
+- [ ] Create `IContextFactory` and `IContextRegistry`
+  - Factory creates contexts from definitions + state
+  - Registry tracks active contexts
+  - VContainer integration for DI
+
+- [ ] Implement `IContextResolver` for cross-context access
+  - Quest → Player variable access
+  - Player → Quest variable access
+  - Context resolution with fallback logic
+  - See `SIMMY_FEATURE_EXTRACTION.md` section "Cross-Context Variable Access"
+
+- [ ] Refactor `QuestManager` to use `IQuestContext`
+  - Replace raw `IGraphState` access with context API
+  - Update quest lifecycle methods to use contexts
+  - Maintain backward compatibility during transition
+
+**Files to Create:**
+- `Runtime/VisualGraphs/Contexts/IQuestContext.cs`
+- `Runtime/VisualGraphs/Contexts/IPlayerContext.cs`
+- `Runtime/VisualGraphs/Contexts/QuestContext.cs`
+- `Runtime/VisualGraphs/Contexts/PlayerContext.cs`
+- `Runtime/VisualGraphs/Contexts/IContextFactory.cs`
+- `Runtime/VisualGraphs/Contexts/IContextRegistry.cs`
+- `Runtime/VisualGraphs/Contexts/ContextFactory.cs`
+- `Runtime/VisualGraphs/Contexts/ContextRegistry.cs`
+- `Runtime/VisualGraphs/Contexts/IContextResolver.cs`
+- `Runtime/VisualGraphs/Contexts/ContextResolver.cs`
+
+**Files to Modify:**
+- `Runtime/VisualGraphs/Quest/QuestManager.cs` - Use `IQuestContext` instead of raw state
+
+**9.0.3 GameRules System:**
+
+**Goal:** Global rule system for cross-quest analytics, achievements, and game-wide logic
+
+**Why Important:**
+- Need global event handlers that fire for all quests (analytics, achievements)
+- Avoid duplicating logic across multiple quest graphs
+- Centralize cross-quest behavior (e.g., "complete 10 quests" achievement)
+- Enable game-wide rules that react to any quest event
+
+**Implementation Tasks:**
+- [ ] Create `GameRuleDefinition` ScriptableObject
+  - Rule name, context type, event types to listen for
+  - Reference to `QuestGraphAsset` containing rule logic
+  - Condition for when rule is active
+  - Execution order and enable/disable flag
+
+- [ ] Create `GameRuleExecutor`
+  - Executes rule graphs when matching events fire
+  - Manages rule lifecycle (enable/disable, priority)
+  - Integrates with `GraphEventRouter`
+
+- [ ] Create `GameRuleRegistry`
+  - Registers all `GameRuleDefinition` assets
+  - Provides lookup by context type and event type
+  - VContainer integration
+
+- [ ] Integrate with `GraphEventRouter`
+  - Rules fire before/after quest-specific graphs
+  - Configurable execution order
+  - Error isolation (rule failures don't break quests)
+
+**Files to Create:**
+- `Runtime/VisualGraphs/Rules/GameRuleDefinition.cs`
+- `Runtime/VisualGraphs/Rules/GameRuleExecutor.cs`
+- `Runtime/VisualGraphs/Rules/GameRuleRegistry.cs`
+- `Editor/VisualGraphs/Rules/GameRuleDefinitionEditor.cs`
+
+**Files to Modify:**
+- `Runtime/VisualGraphs/Runtime/GraphEventRouter.cs` - Execute rules before/after quest graphs
+
+**Reference:** See `SIMMY_FEATURE_EXTRACTION.md` for complete design, implementation details, and Simmy lessons learned.
+
+**Note:** This phase must complete before Phase 9.1 variable nodes, as nodes will use `VariableDefinition<T>` instead of string keys.
+
+---
+
 ### 9.1 Core Programming Constructs
 
 **Current:** Linear/branching execution only  
 **Target:** Full programming capabilities
 
-- [ ] Create variable system nodes
-  - `GetVariableNode<T>` - Read any variable type
-  - `SetVariableNode<T>` - Write any variable type
-  - `IncrementNode`, `DecrementNode`, `ToggleNode`
+**Prerequisite:** Phase 9.0 (Type-Safe Variable Foundation) must be complete
+
+- [ ] Create variable system nodes (using `VariableDefinition<T>` from Phase 9.0)
+  - `GetVariableNode<T>` - Read any variable type using `VariableDefinition<T>`
+  - `SetVariableNode<T>` - Write any variable type using `VariableDefinition<T>`
+  - `IncrementVariableNode` - Increment int variable (idempotent)
+  - `DecrementVariableNode` - Decrement int variable (idempotent)
+  - `ToggleVariableNode` - Toggle bool variable
   - Support for: int, float, bool, string, Vector3, Quaternion, Color, etc.
+  - **Type-safe variable picker in editor** (select from `VariableDefinition<T>` assets)
 
 - [ ] Create flow control nodes
   - `BranchNode` - If/then/else logic
@@ -628,7 +809,7 @@ CropGraph:
 
 ---
 
-### 9.5 Advanced Condition System ⚠️ **BASIC VERSION EXISTS, ADVANCED VERSION NOT IMPLEMENTED**
+### 9.5 Advanced Condition System & Dynamic Value Resolution ⚠️ **BASIC VERSION EXISTS, ADVANCED VERSION NOT IMPLEMENTED**
 
 **Current Status:**
 - ✅ **Basic condition system exists** - `GenericStateSetNode`, `GenericStateCheckNode`, `GenericStateGetNode` provide state-based conditional branching
@@ -641,15 +822,40 @@ CropGraph:
 - ❌ No pluggable `IConditionEvaluator` interface for custom condition logic
 - ❌ No `ConditionRegistry` for sharing conditions across graphs
 - ❌ No world state abstraction (`IWorldStateReader`) - uses graph state directly
+- ❌ No dynamic value resolution (string interpolation, dynamic visibility conditions)
+- ❌ No `DynamicValueBuilder` pattern for complex conditions
 
 **Advanced Solution (Future Enhancement):**
+
+**9.5.1 Reusable Condition System:**
 - Create `IConditionEvaluator` interface for pluggable condition logic
 - Implement `ConditionRegistry` with ScriptableObject definitions for reusable conditions
 - Create `ConditionDefinition` ScriptableObjects that can be shared across graphs
 - Add world state abstraction (`IWorldStateReader`) for querying game state outside graph state
 - Enable conditions to be composed and reused (e.g., "HasItem" + "QuestComplete" = "CanStartDialogue")
 
-**Impact:** Medium - Basic functionality exists, advanced features would improve reusability and maintainability
+**9.5.2 Dynamic Value Resolution & Visibility Conditions:**
+- [ ] Create `VariableStringInterpolator` for runtime string interpolation
+  - Resolve `"Quest {questName} - {progress}/{total}"` at runtime
+  - Support for variable references in strings
+  - See `SIMMY_FEATURE_EXTRACTION.md` section "Dynamic Value Resolution"
+
+- [ ] Create `DynamicValueBuilder` pattern for complex conditions
+  - `IDynamicValueBuilder<T>` interface for building conditions
+  - `IDynamicValueResolver<T>` for resolving at runtime
+  - Builder types: concrete values, variable references, math operations, conditionals
+  - See `SIMMY_FEATURE_EXTRACTION.md` section "Dynamic Visibility/Availability Conditions"
+
+- [ ] Implement `VisibilityConditionBuilder` for quest/region visibility
+  - Dynamic visibility based on player state (level, quests, variables)
+  - Locked state conditions ("why is this locked?")
+  - Availability conditions (prerequisites evaluation)
+  - Replace static `EQuestVisibility` enum with dynamic conditions
+
+- [ ] Integrate with `QuestDefinition` and `QuestManager`
+  - `QuestDefinition.VisibilityCondition` uses `DynamicValueBuilder`
+  - `QuestManager.IsQuestLocked()` evaluates dynamic conditions
+  - UI can query "why is quest locked?" for tooltips
 
 **Files to Create:**
 - `Runtime/VisualGraphs/Conditions/IConditionEvaluator.cs`
@@ -658,10 +864,65 @@ CropGraph:
 - `Runtime/VisualGraphs/Conditions/IWorldStateReader.cs`
 - `Runtime/VisualGraphs/Authoring/Nodes/Conditions/ConditionCheckNode.cs`
 - `Runtime/VisualGraphs/Executors/Conditions/ConditionCheckNodeExecutor.cs`
+- `Runtime/VisualGraphs/Values/VariableStringInterpolator.cs`
+- `Runtime/VisualGraphs/Values/IDynamicValueBuilder.cs`
+- `Runtime/VisualGraphs/Values/IDynamicValueResolver.cs`
+- `Runtime/VisualGraphs/Values/DynamicValueBuilder.cs`
+- `Runtime/VisualGraphs/Values/VisibilityConditionBuilder.cs`
+
+**Files to Modify:**
+- `Runtime/VisualGraphs/Quest/Definitions/QuestDefinition.cs` - Add `VisibilityCondition` field
+- `Runtime/VisualGraphs/Quest/QuestManager.cs` - Evaluate dynamic visibility conditions
+
+**Impact:** High - Enables dynamic quest visibility, reduces hardcoded strings, improves maintainability
+
+**Reference:** See `SIMMY_FEATURE_EXTRACTION.md` sections "Dynamic Value Resolution" and "Dynamic Visibility/Availability Conditions" for complete design and Simmy's `DynamicValueBuilder` pattern.
 
 **Files Already Implemented:**
 - ✅ `Runtime/VisualGraphs/Authoring/Nodes/State/GenericState*.cs`
 - ✅ `Runtime/VisualGraphs/Executors/GenericState*Executor.cs`
+
+---
+
+### 9.6 Transaction System ⏳ **PLANNED** (Optional Enhancement)
+
+**Goal:** Atomic state changes with rollback capability for complex operations
+
+**Status:** Not yet implemented - See `SIMMY_FEATURE_EXTRACTION.md` for full design details
+
+**Why Useful:**
+- Prevents partial state updates if operation fails
+- Enables rollback for complex multi-step operations
+- Useful for complex quest logic, crafting, trading
+- May not be needed if operations are simple enough
+
+**Implementation Tasks:**
+- [ ] Create `IGraphStateTransaction` interface
+  - `BeginTransaction()` - Start atomic operation
+  - `Commit()` - Apply all changes
+  - `Rollback()` - Revert all changes
+  - Nested transaction support
+
+- [ ] Implement transaction-aware `IGraphState`
+  - Track changes during transaction
+  - Apply or revert on commit/rollback
+  - Thread-safe for async operations
+
+- [ ] Create transaction nodes
+  - `BeginTransactionNode` - Start transaction
+  - `CommitTransactionNode` - Commit changes
+  - `RollbackTransactionNode` - Rollback changes
+
+**Files to Create:**
+- `Runtime/VisualGraphs/Transactions/IGraphStateTransaction.cs`
+- `Runtime/VisualGraphs/Transactions/GraphStateTransaction.cs`
+- `Runtime/VisualGraphs/Authoring/Nodes/Transactions/BeginTransactionNode.cs`
+- `Runtime/VisualGraphs/Authoring/Nodes/Transactions/CommitTransactionNode.cs`
+- `Runtime/VisualGraphs/Authoring/Nodes/Transactions/RollbackTransactionNode.cs`
+
+**Reference:** See `SIMMY_FEATURE_EXTRACTION.md` section "Transaction System" for complete design.
+
+**Priority:** Medium - May not be needed if operations are simple. Evaluate based on actual use cases.
 
 ---
 
@@ -1484,12 +1745,12 @@ This aligns perfectly with MToolKit's mission of shipping production-quality gam
 - ✅ Dialogue system (Phase 3 - complete! Message-based architecture)
 - ❌ Test coverage (Phase 5 - remaining)
 
-### Version 0.6 (Phase 1-3 Complete)
-- Production-ready quest system with task tracking
-- Full MToolKit integration
-- Save system working (Phase 1.2)
-- Dialogue system complete (Phase 3 - message-based architecture)
-- Test coverage 30%+
+### Version 0.6 (Phase 1-3 Complete) ✅ **CURRENT**
+- Production-ready quest system with task tracking ✅
+- Full MToolKit integration ✅
+- Save system working (Phase 1.2) ✅
+- Dialogue system complete (Phase 3 - message-based architecture) ✅
+- Test coverage 0% (Phase 5 - next priority)
 
 ### Version 0.7 (Phase 9-10 Complete)
 - General-purpose visual scripting
