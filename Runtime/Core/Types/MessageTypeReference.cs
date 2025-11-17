@@ -32,9 +32,11 @@ namespace MToolKit.Runtime.Core.Types
     ///   The message type (must implement IGameMessage).
     /// </summary>
     [HideLabel]
+#if UNITY_EDITOR
     [ValueDropdown(nameof(GetMessageTypes), ExpandAllMenuItems = false,
                     DropdownTitle = "Select Message Type",
                     NumberOfItemsBeforeEnablingSearch = 10)]
+#endif
     [ShowInInspector]
     public Type Type
     {

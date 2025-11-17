@@ -20,9 +20,9 @@ namespace MToolKit.Runtime.Core.Types
       NumberOfItemsBeforeEnablingSearch = 10;
     }
 
-#if UNITY_EDITOR
     private static IEnumerable<ValueDropdownItem<Type>> GetMessageTypes()
     {
+#if UNITY_EDITOR
       var messageTypes = new List<Type>();
 
       foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
@@ -31,8 +31,8 @@ namespace MToolKit.Runtime.Core.Types
         {
           foreach (var type in assembly.GetTypes())
           {
-            if (typeof(IGameMessage).IsAssignableFrom(type) && 
-                !type.IsInterface && 
+            if (typeof(IGameMessage).IsAssignableFrom(type) &&
+                !type.IsInterface &&
                 !type.IsAbstract)
             {
               messageTypes.Add(type);
@@ -52,8 +52,10 @@ namespace MToolKit.Runtime.Core.Types
           $"{t.Namespace}/{t.Name}",
           t
         ));
-    }
+#else
+      return Enumerable.Empty<ValueDropdownItem<Type>>();
 #endif
+    }
   }
 }
 

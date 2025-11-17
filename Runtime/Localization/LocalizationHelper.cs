@@ -3,9 +3,7 @@ using Serilog;
 using Serilog.Core;
 using UnityEngine.Localization.Settings;
 using ILogger = Serilog.ILogger;
-using UnityEditor.Localization;
 using Cysharp.Threading.Tasks;
-using System.Threading.Tasks;
 
 namespace MToolKit.Runtime.Localization
 {

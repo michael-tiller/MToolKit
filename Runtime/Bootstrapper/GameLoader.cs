@@ -38,11 +38,12 @@ namespace MToolKit.Runtime.Bootstrapper
 
     public async UniTask LoadGameAsync(CancellationToken ct = default)
     {
-      // Load manifest from StreamingAssets
-      (RuntimeContentManifest manifest, string path) = await LoadManifestAsync(ct);
-
-      // Initialize Addressables
+      // Initialize Addressables first (required before loading any Addressable assets)
       await contentLoader.InitializeAsync(ct);
+
+      // Load manifest from Addressables (with "manifest" tag) or fallback to StreamingAssets
+      // The manifest has its own tag to avoid circular dependency with the labels it configures
+      (RuntimeContentManifest manifest, string path) = await LoadManifestAsync(ct);
 
       // Load remote catalogs
       foreach (string catalog in manifest.Catalogs)
@@ -140,7 +141,43 @@ namespace MToolKit.Runtime.Bootstrapper
 
     private static async UniTask<(RuntimeContentManifest, string)> LoadManifestAsync(CancellationToken ct)
     {
-      string manifestPath = Path.Combine(Application.streamingAssetsPath, "manifest.json");
+      const string manifestAddress = "manifest"; // Addressable address for the manifest
+      const string manifestTag = "manifest"; // Tag for the manifest (separate from content labels)
+
+      // Try to load from Addressables first (allows remote updates)
+      try
+      {
+        AsyncOperationHandle<TextAsset> handle = Addressables.LoadAssetAsync<TextAsset>(manifestAddress);
+        await handle.ToUniTask(cancellationToken: ct);
+
+        if (handle.Status == AsyncOperationStatus.Succeeded && handle.Result != null)
+        {
+          RuntimeContentManifest manifest = JsonUtility.FromJson<RuntimeContentManifest>(handle.Result.text);
+          log.ForMethod().Information("Loaded manifest from Addressables ({Address}) with {Catalogs} catalogs, {Labels} labels, {Scenes} scenes",
+            manifestAddress,
+            manifest.Catalogs?.Length ?? 0,
+            manifest.Labels?.Length ?? 0,
+            manifest.Scenes?.Length ?? 0);
+          
+          // Release the handle after we've extracted the text
+          Addressables.Release(handle);
+          return (manifest, $"Addressables://{manifestAddress}");
+        }
+        else
+        {
+          log.ForMethod().Debug("Manifest not found in Addressables at {Address}, trying StreamingAssets fallback", manifestAddress);
+          if (handle.IsValid())
+            Addressables.Release(handle);
+        }
+      }
+      catch (Exception ex)
+      {
+        log.ForMethod().Warning(ex, "Failed to load manifest from Addressables, trying StreamingAssets fallback: {Message}", ex.Message);
+      }
+
+      // Fallback to StreamingAssets (for development/local builds)
+      // Use .txt extension since Unity can import text files properly for Addressables
+      string manifestPath = Path.Combine(Application.streamingAssetsPath, "manifest.txt");
 
       if (!File.Exists(manifestPath))
       {
@@ -157,7 +194,7 @@ namespace MToolKit.Runtime.Bootstrapper
       {
         string text = await File.ReadAllTextAsync(manifestPath, ct);
         RuntimeContentManifest manifest = JsonUtility.FromJson<RuntimeContentManifest>(text);
-        log.ForMethod().Information("Loaded manifest {Path} with {Catalogs} catalogs, {Labels} labels, {Scenes} scenes",
+        log.ForMethod().Information("Loaded manifest from StreamingAssets ({Path}) with {Catalogs} catalogs, {Labels} labels, {Scenes} scenes",
           manifestPath,
           manifest.Catalogs?.Length ?? 0,
           manifest.Labels?.Length ?? 0,

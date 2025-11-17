@@ -35,7 +35,9 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Graphs
              "Entry nodes must exist for 'Required' subscriptions.")]
     [InfoBox("@GetValidationErrors()", InfoMessageType.Error, VisibleIf = "@!ValidateSubscriptionsForOdin(Subscriptions)")]
     [ListDrawerSettings(ShowIndexLabels = true, DraggableItems = true)]
+#if UNITY_EDITOR
     [ValidateInput(nameof(ValidateSubscriptionsForOdin))]
+#endif
     public List<MessageSubscription> Subscriptions = new();
 
 #if UNITY_EDITOR
@@ -160,13 +162,13 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Graphs
     public override Node CopyNode(Node original)
     {
       var copied = base.CopyNode(original);
-      
+
       // Regenerate GUID for VisualGraphNodeBase nodes to ensure uniqueness
       if (copied is VisualGraphNodeBase vgNode)
       {
         vgNode.RegenerateGuid();
       }
-      
+
       return copied;
     }
 
@@ -177,7 +179,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Graphs
     private void FixDuplicateGuids()
     {
       var guidCounts = new Dictionary<string, List<VisualGraphNodeBase>>();
-      
+
       // Find all VisualGraphNodeBase nodes and group by GUID
       foreach (var node in nodes)
       {
@@ -188,7 +190,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Graphs
           guidCounts[vgNode.Guid].Add(vgNode);
         }
       }
-      
+
       // Find duplicates and regenerate GUIDs (keep first occurrence, regenerate others)
       int fixedCount = 0;
       foreach (var kvp in guidCounts)
@@ -203,7 +205,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Graphs
           }
         }
       }
-      
+
       if (fixedCount > 0)
       {
         UnityEditor.EditorUtility.SetDirty(this);

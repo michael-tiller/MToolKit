@@ -5,7 +5,9 @@ using R3;
 using Serilog;
 using UnityEngine;
 using UnityEngine.Localization;
+using UnityEngine.Localization.Operations;
 using UnityEngine.Localization.Settings;
+using UnityEngine.ResourceManagement.AsyncOperations;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
 
@@ -45,15 +47,47 @@ namespace MToolKit.Runtime.Localization
       InitializeLocalization();
     }
 
-    public static bool LocalizationSettingsReady => LocalizationSettings.HasSettings &&
-                                                    LocalizationSettings.AvailableLocales != null &&
-                                                    LocalizationSettings.AvailableLocales.Locales != null &&
-                                                    LocalizationSettings.AvailableLocales.Locales.Count > 0;
+    public static bool LocalizationSettingsReady
+    {
+      get
+      {
+        if (!LocalizationSettings.HasSettings || LocalizationSettings.AvailableLocales == null)
+          return false;
+
+        // Wait for preload operation if needed (locales are loaded asynchronously from Addressables)
+        if (LocalizationSettings.AvailableLocales is IPreloadRequired localesProvider)
+        {
+          var preloadOp = localesProvider.PreloadOperation;
+          if (!preloadOp.IsDone)
+          {
+#if !UNITY_WEBGL
+            preloadOp.WaitForCompletion();
+#endif
+          }
+        }
+
+        return LocalizationSettings.AvailableLocales.Locales != null &&
+               LocalizationSettings.AvailableLocales.Locales.Count > 0;
+      }
+    }
 
     private void InitializeLocalization()
     {
       try
       {
+        // Wait for LocalizationSettings to be ready, especially important in Player mode
+        if (LocalizationSettings.HasSettings)
+        {
+          var initOp = LocalizationSettings.InitializationOperation;
+          if (!initOp.IsDone)
+          {
+            // Wait for initialization to complete synchronously (supported on Mono backend, not WebGL)
+#if !UNITY_WEBGL
+            initOp.WaitForCompletion();
+#endif
+          }
+        }
+
         // Check if localization settings are available and have locales
         if (LocalizationSettingsReady)
         {
@@ -96,8 +130,70 @@ namespace MToolKit.Runtime.Localization
         return;
       }
 
+      // Handle null or empty language code gracefully
+      if (string.IsNullOrEmpty(languageCode))
+      {
+        log.ForGameObject(gameObject).ForMethod().Warning("Language code is null or empty. Cannot set locale.");
+        return;
+      }
+
       try
       {
+        // Ensure LocalizationSettings is initialized before accessing AvailableLocales
+        if (LocalizationSettings.HasSettings)
+        {
+          var initOp = LocalizationSettings.InitializationOperation;
+          if (!initOp.IsDone)
+          {
+#if !UNITY_WEBGL
+            initOp.WaitForCompletion();
+#endif
+          }
+        }
+
+        // Check if AvailableLocales is ready
+        if (LocalizationSettings.AvailableLocales == null)
+        {
+          log.ForGameObject(gameObject).ForMethod().Warning("AvailableLocales is null. Cannot set locale to {0}", languageCode);
+          // Still save to PlayerPrefs so it can be restored later
+          PlayerPrefs.SetString("Language", languageCode);
+          return;
+        }
+
+        // Ensure locales are loaded - explicitly wait for PreloadOperation if needed
+        // The Locales property getter will wait, but only in play mode, so we ensure it here for Player mode
+        if (LocalizationSettings.AvailableLocales is IPreloadRequired localesProvider)
+        {
+          var preloadOp = localesProvider.PreloadOperation;
+          if (!preloadOp.IsDone)
+          {
+#if !UNITY_WEBGL
+            preloadOp.WaitForCompletion();
+#endif
+          }
+
+          // Check if the preload operation succeeded
+          if (preloadOp.Status == AsyncOperationStatus.Failed)
+          {
+            log.ForGameObject(gameObject).ForMethod().Error("Failed to load locales: {0}. Cannot set locale to {1}",
+              preloadOp.OperationException?.Message ?? "Unknown error", languageCode);
+            // Still save to PlayerPrefs so it can be restored later
+            PlayerPrefs.SetString("Language", languageCode);
+            return;
+          }
+        }
+
+        // Access Locales property (it will also wait, but we've already waited above)
+        var locales = LocalizationSettings.AvailableLocales.Locales;
+        if (locales == null || locales.Count == 0)
+        {
+          log.ForGameObject(gameObject).ForMethod().Warning("No locales available after preload. Cannot set locale to {0}. " +
+            "This may indicate that Addressables are not properly configured or locales are not built.", languageCode);
+          // Still save to PlayerPrefs so it can be restored later
+          PlayerPrefs.SetString("Language", languageCode);
+          return;
+        }
+
         // Try to find the locale by code
         Locale locale = LocalizationSettings.AvailableLocales.GetLocale(languageCode);
 
@@ -144,6 +240,37 @@ namespace MToolKit.Runtime.Localization
       if (!IsInitialized)
       {
         log.ForGameObject(gameObject).ForMethod().Warning("Localization system not initialized yet. Cannot get available locales.");
+        return new List<string>();
+      }
+
+      // Ensure LocalizationSettings is initialized before accessing AvailableLocales
+      if (LocalizationSettings.HasSettings)
+      {
+        var initOp = LocalizationSettings.InitializationOperation;
+        if (!initOp.IsDone)
+        {
+#if !UNITY_WEBGL
+          initOp.WaitForCompletion();
+#endif
+        }
+
+        // Wait for locales to be loaded from Addressables
+        if (LocalizationSettings.AvailableLocales is IPreloadRequired localesProvider)
+        {
+          var preloadOp = localesProvider.PreloadOperation;
+          if (!preloadOp.IsDone)
+          {
+#if !UNITY_WEBGL
+            preloadOp.WaitForCompletion();
+#endif
+          }
+        }
+      }
+
+      if (!LocalizationSettingsReady || LocalizationSettings.AvailableLocales == null ||
+          LocalizationSettings.AvailableLocales.Locales == null)
+      {
+        log.ForGameObject(gameObject).ForMethod().Warning("AvailableLocales is not ready. Returning empty list.");
         return new List<string>();
       }
 

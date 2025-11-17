@@ -36,16 +36,28 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Definitions
     [Tooltip("Initial variables for this dialogue (applied after global, before save)")]
     public GraphVariableSet InitialVariables;
 
+    [BoxGroup("Localization")]
+    [Required]
+    [Tooltip("Localization tables for this dialogue (should contain all relevant StringTables). This is NOT a table but a TableCollection.")]
+    [SerializeField]
+    private Object dialogueTableCollection;
+
 #if UNITY_EDITOR
     [BoxGroup("Localization")]
+    [ShowInInspector]
     [Required]
     [Tooltip("Localization tables for this dialogue (should contain all relevant StringTables). This is NOT a table but a TableCollection.")]
-    public StringTableCollection DialogueTableCollection;
+    public StringTableCollection DialogueTableCollection
+    {
+      get => dialogueTableCollection as StringTableCollection;
+      set => dialogueTableCollection = value;
+    }
 #else
-    [BoxGroup("Localization")]
-    [Required]
-    [Tooltip("Localization tables for this dialogue (should contain all relevant StringTables). This is NOT a table but a TableCollection.")]
-    public Object DialogueTableCollection;
+    public Object DialogueTableCollection
+    {
+      get => dialogueTableCollection;
+      set => dialogueTableCollection = value;
+    }
 #endif
 
 #if UNITY_EDITOR
