@@ -64,7 +64,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       // Return if already loaded
       if (loadedRunners.TryGetValue(graphId, out var existingRunner))
       {
-        log.Debug("Graph '{GraphId}' already loaded, returning existing runner", graphId);
+        log.ForMethod().Debug("Graph '{GraphId}' already loaded, returning existing runner", graphId);
         return existingRunner;
       }
 
@@ -81,7 +81,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
         }
         // Quest has no graph asset (optional) - this is valid, but can't load a runner
         // Return null runner - caller should handle this gracefully
-        log.Warning("Quest '{QuestId}' has no quest-level GraphAsset (optional). Returning null runner.",
+        log.ForMethod().Warning("Quest '{QuestId}' has no quest-level GraphAsset (optional). Returning null runner.",
           graphId);
         return null;
       }
@@ -117,7 +117,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
     {
       if (!loadedRunners.Remove(graphId, out var runner))
       {
-        log.Warning("Attempted to unload graph '{GraphId}' that is not loaded", graphId);
+        log.ForMethod().Warning("Attempted to unload graph '{GraphId}' that is not loaded", graphId);
         return;
       }
 
@@ -128,12 +128,12 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
         if (handle is AsyncOperationHandle opHandle)
         {
           Addressables.Release(opHandle);
-          log.Debug("Released Addressables handle for graph '{GraphId}'", graphId);
+          log.ForMethod().Debug("Released Addressables handle for graph '{GraphId}'", graphId);
         }
       }
 #endif
 
-      log.Information("Unloaded graph '{GraphId}'", graphId);
+      log.ForMethod().Information("Unloaded graph '{GraphId}'", graphId);
     }
 
     public bool IsLoaded(string graphId)
@@ -155,7 +155,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       // Load via Addressables if key is specified
       if (!string.IsNullOrEmpty(questDef.AddressableKey))
       {
-        log.Debug("Loading quest graph '{QuestId}' via Addressables key '{Key}'",
+        log.ForMethod().Debug("Loading quest graph '{QuestId}' via Addressables key '{Key}'",
           questDef.Guid, questDef.AddressableKey);
 
         var handle = Addressables.LoadAssetAsync<Authoring.Graphs.QuestGraphAsset>(questDef.AddressableKey);
@@ -164,7 +164,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
 
         if (graphAsset == null)
         {
-          log.Warning("Failed to load quest graph '{QuestId}' from Addressables key '{Key}' - quest-level graphs are optional, skipping",
+          log.ForMethod().Warning("Failed to load quest graph '{QuestId}' from Addressables key '{Key}' - quest-level graphs are optional, skipping",
             questDef.Guid, questDef.AddressableKey);
           return null;
         }
@@ -174,7 +174,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       // Quest-level graphs are OPTIONAL - return null if not assigned
       if (graphAsset == null)
       {
-        log.Debug("Quest '{QuestId}' has no quest-level GraphAsset (optional) - skipping graph load",
+        log.ForMethod().Debug("Quest '{QuestId}' has no quest-level GraphAsset (optional) - skipping graph load",
           questDef.Guid);
         return null;
       }
@@ -196,7 +196,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       questDef.InitialVariables?.ApplyTo(state);
 
       var runner = new GraphRunner(runtimeDef, state, executorRegistry, services, eventEmitter);
-      log.Information("Loaded quest graph '{QuestId}': {NodeCount} nodes, {SubscriptionCount} subscriptions",
+      log.ForMethod().Information("Loaded quest graph '{QuestId}': {NodeCount} nodes, {SubscriptionCount} subscriptions",
         questDef.Guid, runtimeDef.Nodes.Count, runtimeDef.Subscriptions.Count);
 
       return runner;
@@ -211,7 +211,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       // Load via Addressables if key is specified
       if (!string.IsNullOrEmpty(dialogueDef.AddressableKey))
       {
-        log.Debug("Loading dialogue graph '{DialogueId}' via Addressables key '{Key}'",
+        log.ForMethod().Debug("Loading dialogue graph '{DialogueId}' via Addressables key '{Key}'",
           dialogueDef.DialogueId, dialogueDef.AddressableKey);
 
         var handle = Addressables.LoadAssetAsync<Authoring.Graphs.DialogueGraphAsset>(dialogueDef.AddressableKey);
@@ -245,7 +245,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
           DomainFilter = null, // Match any domain
           Required = true // Entry node (DialogueStartNode) is required
         });
-        log.Debug("Auto-added DialogueStartMessage subscription to dialogue graph '{DialogueId}'", dialogueDef.DialogueId);
+        log.ForMethod().Debug("Auto-added DialogueStartMessage subscription to dialogue graph '{DialogueId}'", dialogueDef.DialogueId);
       }
 
       var baseState = new InMemoryGraphState();
@@ -260,17 +260,17 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       dialogueDef.InitialVariables?.ApplyTo(state);
 
       // Log all nodes for debugging
-      log.Information("Dialogue graph '{DialogueId}' nodes:", dialogueDef.DialogueId);
+      log.ForMethod().Information("Dialogue graph '{DialogueId}' nodes:", dialogueDef.DialogueId);
       foreach (var node in runtimeDef.Nodes)
       {
         var nodeText = node.NodeType == "DialogueLineNode" && node.Parameters.TryGetValue("Text", out var txt)
           ? txt as string ?? ""
           : "N/A";
-        log.Information("  Node: {NodeId} ({NodeType}) - Text: '{Text}'", node.NodeId, node.NodeType, nodeText);
+        log.ForMethod().Information("  Node: {NodeId} ({NodeType}) - Text: '{Text}'", node.NodeId, node.NodeType, nodeText);
       }
 
       // Log all connections for debugging
-      log.Information("Dialogue graph '{DialogueId}' connections:", dialogueDef.DialogueId);
+      log.ForMethod().Information("Dialogue graph '{DialogueId}' connections:", dialogueDef.DialogueId);
       foreach (var conn in runtimeDef.Connections)
       {
         var fromNode = runtimeDef.GetNodeById(conn.FromNodeId);
@@ -280,12 +280,12 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
         var toText = toNode?.NodeType == "DialogueLineNode" && toNode.Parameters.TryGetValue("Text", out var txt)
           ? txt as string ?? ""
           : "N/A";
-        log.Information("  Connection: {FromNodeId} ({FromType}) -> {ToNodeId} ({ToType}) via '{PortName}' (Text: '{Text}')",
+        log.ForMethod().Information("  Connection: {FromNodeId} ({FromType}) -> {ToNodeId} ({ToType}) via '{PortName}' (Text: '{Text}')",
           conn.FromNodeId, fromType, conn.ToNodeId, toType, conn.PortName, toText);
       }
 
       var runner = new GraphRunner(runtimeDef, state, executorRegistry, services, eventEmitter);
-      log.Information("Loaded dialogue graph '{DialogueId}': {NodeCount} nodes, {ConnectionCount} connections, {SubscriptionCount} subscriptions",
+      log.ForMethod().Information("Loaded dialogue graph '{DialogueId}': {NodeCount} nodes, {ConnectionCount} connections, {SubscriptionCount} subscriptions",
         dialogueDef.DialogueId, runtimeDef.Nodes.Count, runtimeDef.Connections.Count, runtimeDef.Subscriptions.Count);
 
       return runner;

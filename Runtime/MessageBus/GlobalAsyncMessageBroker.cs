@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
@@ -27,6 +28,12 @@ namespace MToolKit.Runtime.MessageBus
     // Dictionary to store pending async requests with their expected response types
     // Using ConcurrentQueue to maintain FIFO order for proper request/response matching
     private static readonly ConcurrentDictionary<Type, ConcurrentQueue<(string RequestId, TaskCompletionSource<object> Tcs)>> pendingRequestsByType = new();
+
+#if UNITY_EDITOR
+    // Track accessed publishers and subscribers for diagnostics
+    private static readonly ConcurrentDictionary<Type, bool> accessedPublishers = new();
+    private static readonly ConcurrentDictionary<Type, bool> accessedSubscribers = new();
+#endif
 
     /// <summary>
     ///   Initialize the global message broker with the resolver from GlobalInstaller
@@ -58,6 +65,9 @@ namespace MToolKit.Runtime.MessageBus
       try
       {
         IPublisher<T> publisher = globalResolver.Resolve<IPublisher<T>>();
+#if UNITY_EDITOR
+        accessedPublishers.TryAdd(typeof(T), true);
+#endif
         return publisher;
       }
       catch (Exception ex)
@@ -81,6 +91,9 @@ namespace MToolKit.Runtime.MessageBus
       try
       {
         ISubscriber<T> subscriber = globalResolver.Resolve<ISubscriber<T>>();
+#if UNITY_EDITOR
+        accessedSubscribers.TryAdd(typeof(T), true);
+#endif
         log.ForMethod().Verbose("Resolved subscriber for {0}", typeof(T).Name);
         return subscriber;
       }
@@ -234,7 +247,146 @@ namespace MToolKit.Runtime.MessageBus
       }
       pendingRequestsByType.Clear();
 
+#if UNITY_EDITOR
+      accessedPublishers.Clear();
+      accessedSubscribers.Clear();
+#endif
+
       log.ForMethod().Verbose("GlobalAsyncMessageBroker reset");
     }
+
+#if UNITY_EDITOR
+    /// <summary>
+    ///   Get diagnostic information about the broker (Editor only)
+    /// </summary>
+    public static MessageBrokerDiagnosticInfo GetDiagnosticInfo()
+    {
+      var info = new MessageBrokerDiagnosticInfo
+      {
+        BrokerName = "GlobalAsyncMessageBroker",
+        IsInitialized = isInitialized,
+        HasResolver = globalResolver != null,
+        PendingRequestCount = 0,
+        PendingRequestsByType = new Dictionary<string, int>(),
+        AccessedPublishers = new List<string>(),
+        AccessedSubscribers = new List<string>(),
+        RegisteredMessageTypes = new List<MessageTypeInfo>()
+      };
+
+      // Count pending requests
+      foreach (KeyValuePair<Type, ConcurrentQueue<(string RequestId, TaskCompletionSource<object> Tcs)>> kvp in pendingRequestsByType)
+      {
+        int count = kvp.Value.Count;
+        if (count > 0)
+        {
+          info.PendingRequestCount += count;
+          info.PendingRequestsByType[kvp.Key.Name] = count;
+        }
+      }
+
+      // Track accessed publishers
+      foreach (Type type in accessedPublishers.Keys)
+        info.AccessedPublishers.Add(type.Name);
+
+      // Track accessed subscribers
+      foreach (Type type in accessedSubscribers.Keys)
+        info.AccessedSubscribers.Add(type.Name);
+
+      // Try to introspect resolver for registered message types
+      if (globalResolver != null)
+        info.RegisteredMessageTypes = IntrospectRegisteredMessageTypes(globalResolver);
+
+      return info;
+    }
+
+    /// <summary>
+    ///   Introspect the resolver to find registered message types (Editor only)
+    /// </summary>
+    private static List<MessageTypeInfo> IntrospectRegisteredMessageTypes(IObjectResolver resolver)
+    {
+      var messageTypes = new List<MessageTypeInfo>();
+
+      try
+      {
+        // Use reflection to try to access VContainer's internal registry
+        var resolverType = resolver.GetType();
+        var containerProperty = resolverType.GetProperty("Container", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        
+        if (containerProperty != null)
+        {
+          var container = containerProperty.GetValue(resolver);
+          if (container != null)
+          {
+            // Try to get registrations
+            var registrationsProperty = container.GetType().GetProperty("Registrations", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            if (registrationsProperty == null)
+            {
+              // Try alternative property names
+              var allRegistrationsProperty = container.GetType().GetProperty("AllRegistrations", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+              if (allRegistrationsProperty != null)
+                registrationsProperty = allRegistrationsProperty;
+            }
+
+            if (registrationsProperty != null)
+            {
+              var registrations = registrationsProperty.GetValue(container);
+              if (registrations is System.Collections.IEnumerable enumerable)
+              {
+                foreach (var registration in enumerable)
+                {
+                  try
+                  {
+                    var implementationTypeProperty = registration.GetType().GetProperty("ImplementationType", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    var serviceTypeProperty = registration.GetType().GetProperty("ServiceType", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    
+                    if (serviceTypeProperty != null)
+                    {
+                      var serviceType = serviceTypeProperty.GetValue(registration) as Type;
+                      if (serviceType != null && serviceType.IsGenericType)
+                      {
+                        var genericTypeDef = serviceType.GetGenericTypeDefinition();
+                        if (genericTypeDef == typeof(IPublisher<>) || genericTypeDef == typeof(ISubscriber<>))
+                        {
+                          var messageType = serviceType.GetGenericArguments()[0];
+                          var messageTypeName = messageType.Name;
+                          
+                          var existing = messageTypes.FirstOrDefault(m => m.MessageTypeName == messageTypeName);
+                          if (existing == null)
+                          {
+                            existing = new MessageTypeInfo
+                            {
+                              MessageTypeName = messageTypeName,
+                              HasPublisher = false,
+                              HasSubscriber = false
+                            };
+                            messageTypes.Add(existing);
+                          }
+
+                          if (genericTypeDef == typeof(IPublisher<>))
+                            existing.HasPublisher = true;
+                          else if (genericTypeDef == typeof(ISubscriber<>))
+                            existing.HasSubscriber = true;
+                        }
+                      }
+                    }
+                  }
+                  catch
+                  {
+                    // Skip registrations we can't introspect
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      catch
+      {
+        // If introspection fails, that's okay - we'll just show accessed types
+      }
+
+      return messageTypes;
+    }
+#endif
   }
 }

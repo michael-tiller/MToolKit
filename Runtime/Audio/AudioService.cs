@@ -424,7 +424,7 @@ namespace MToolKit.Runtime.Audio
         defaultCapacity: config.InitialPoolSize,
         maxSize: config.MaxPoolSize
         );
-      log.ForMethod().Information("AudioSource pool initialized with capacity: {Capacity}, maxSize: {MaxSize}", config.InitialPoolSize, config.MaxPoolSize);
+      log.ForMethod().Debug("AudioSource pool initialized with capacity: {Capacity}, maxSize: {MaxSize}", config.InitialPoolSize, config.MaxPoolSize);
     }
 
     private AudioSource CreateAudioSource()
@@ -470,7 +470,7 @@ namespace MToolKit.Runtime.Audio
         return;
       }
 
-      log.ForMethod().Information("Subscribing to volume changes - MasterMixerGroup: {MixerGroup}", config.MasterMixerGroup?.name ?? "NULL");
+      log.ForMethod().Debug("Subscribing to volume changes - MasterMixerGroup: {MixerGroup}", config.MasterMixerGroup?.name ?? "NULL");
 
       // Subscribe to volume changes and apply them to mixer groups
       subscriptions.Add(settingsSystem.AudioSettings.MasterVolume.Property.Subscribe(volume =>
@@ -486,7 +486,7 @@ namespace MToolKit.Runtime.Audio
         SetMixerVolume("InterfaceVolume", volume)));
 
       // Apply initial volume values to mixer
-      log.ForMethod().Information("Applying initial volume values...");
+      log.ForMethod().Debug("Applying initial volume values...");
       SetMixerVolume("MasterVolume", settingsSystem.AudioSettings.MasterVolume.Value);
       SetMixerVolume("MusicVolume", settingsSystem.AudioSettings.MusicVolume.Value);
       SetMixerVolume("GameVolume", settingsSystem.AudioSettings.GameVolume.Value);
@@ -522,7 +522,7 @@ namespace MToolKit.Runtime.Audio
         EAudioTypes.Game => config.GameMixerGroup,
         EAudioTypes.Interface => config.InterfaceMixerGroup,
         _ => config.MasterMixerGroup
-        };
+      };
     }
 
     private float GetVolumeForAudioType(EAudioTypes audioType)
@@ -536,7 +536,7 @@ namespace MToolKit.Runtime.Audio
         EAudioTypes.Game => settingsSystem.AudioSettings.GameVolume.Value,
         EAudioTypes.Interface => settingsSystem.AudioSettings.InterfaceVolume.Value,
         _ => 1f
-        };
+      };
     }
 
     public static AudioClip PickRandomClip(IReadOnlyList<AudioClip> clips)
