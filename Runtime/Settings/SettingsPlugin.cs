@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using MToolKit.Runtime.Core.Abstractions;
 using MToolKit.Runtime.Input;
 using MToolKit.Runtime.Installer;
+using MToolKit.Runtime.Settings.Ini;
 using MToolKit.Runtime.Settings.Interfaces;
 using Serilog;
 using Sirenix.OdinInspector;
@@ -24,7 +25,7 @@ namespace MToolKit.Runtime.Settings
     /// <summary>
     ///   Optional services for dependency validation.
     /// </summary>
-    public override IEnumerable<Type> OptionalServices => Array.Empty<Type>();
+    public override IEnumerable<Type> OptionalServices => new[] { typeof(IIniService) };
 
     protected override SettingsSystem CreateService(IObjectResolver resolver)
     {
@@ -32,7 +33,19 @@ namespace MToolKit.Runtime.Settings
 
       // Create the InputRebinderService instance
       InputRebinderService inputRebinderService = new();
-      return new SettingsSystem(inputRebinderService);
+      
+      // Try to resolve INI service (optional)
+      IIniService iniService = null;
+      try
+      {
+        iniService = resolver.Resolve<IIniService>();
+      }
+      catch (VContainerException)
+      {
+        log.ForGameObject(gameObject).ForMethod().Verbose("IIniService not available, SettingsSystem will work without INI integration");
+      }
+
+      return new SettingsSystem(inputRebinderService, iniService);
     }
 
     /// <summary>

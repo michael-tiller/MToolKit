@@ -29,6 +29,7 @@ using MToolKit.Runtime.Persistence;
 using MToolKit.Runtime.Persistence.ES3Integration;
 using MToolKit.Runtime.Persistence.Interfaces;
 using MToolKit.Runtime.Settings;
+using MToolKit.Runtime.Settings.Ini;
 using Serilog;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -304,6 +305,46 @@ namespace MToolKit.Runtime.Installer
       builder.Register<IContentLoaderService, ContentLoaderService>(Lifetime.Singleton);
       builder.Register<IGameLoader, GameLoader>(Lifetime.Singleton);
 
+      // Register INI Service globally so it's available before Settings
+      builder.Register<IIniService>(resolver =>
+      {
+        try
+        {
+          // Try to load IniConfig from Resources
+          IniConfig iniConfig = Resources.Load<IniConfig>("IniConfig");
+          if (iniConfig == null)
+          {
+            log.ForGameObject(gameObject).ForMethod().Warning("IniConfig not found in Resources, creating default config");
+            iniConfig = ScriptableObject.CreateInstance<IniConfig>();
+          }
+
+          return new IniService(iniConfig);
+        }
+        catch (Exception ex)
+        {
+          log.ForGameObject(gameObject).ForMethod().Error(ex, "Failed to create INI service: {Message}", ex.Message);
+          // Create with default config as fallback
+          IniConfig defaultConfig = ScriptableObject.CreateInstance<IniConfig>();
+          return new IniService(defaultConfig);
+        }
+      }, Lifetime.Singleton);
+
+      // Load INI file asynchronously after container is built
+      builder.RegisterBuildCallback(async resolver =>
+      {
+        try
+        {
+          IIniService iniService = resolver.Resolve<IIniService>();
+          await iniService.LoadAsync();
+          log.ForGameObject(gameObject).ForMethod().Information("INI service loaded successfully");
+        }
+        catch (Exception ex)
+        {
+          log.ForGameObject(gameObject).ForMethod().Error(ex, "Failed to load INI file: {Message}", ex.Message);
+        }
+      });
+
+      log.ForGameObject(gameObject).ForMethod().Verbose("Registered IIniService globally");
 
       log.ForGameObject(gameObject).ForMethod().Verbose("Registered ProfileManager globally");
 
