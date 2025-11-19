@@ -21,7 +21,23 @@ namespace MToolKit.Runtime.Core.Host
     private void OnDestroy()
     {
       runtime.Shutdown();
-      Destroy(gameObject);
+      // Only destroy the GameObject if it still exists (prevents errors when OnDestroy is called multiple times in tests)
+      try
+      {
+        // Check if GameObject is still valid by accessing it
+        if (gameObject != null)
+        {
+          // Use DestroyImmediate in EditMode, Destroy in PlayMode
+          if (Application.isPlaying)
+            Destroy(gameObject);
+          else
+            DestroyImmediate(gameObject);
+        }
+      }
+      catch (MissingReferenceException)
+      {
+        // GameObject was already destroyed, ignore
+      }
     }
 
     private void Update()
