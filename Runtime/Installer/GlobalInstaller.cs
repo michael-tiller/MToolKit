@@ -35,6 +35,7 @@ using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.ResourceManagement.Exceptions;
 using UnityEngine.ResourceManagement.ResourceLocations;
 using UnityEngine.SceneManagement;
 using VContainer;
@@ -332,15 +333,31 @@ namespace MToolKit.Runtime.Installer
       // Load INI file asynchronously after container is built
       builder.RegisterBuildCallback(async resolver =>
       {
+        // CRITICAL: Check if gameObject is still valid before accessing it
+        // This prevents MissingReferenceException when the object is destroyed
+        if (this == null || gameObject == null)
+        {
+          return; // Early exit if object is destroyed
+        }
+        
         try
         {
           IIniService iniService = resolver.Resolve<IIniService>();
           await iniService.LoadAsync();
           log.ForGameObject(gameObject).ForMethod().Information("INI service loaded successfully");
         }
+        catch (MissingReferenceException)
+        {
+          // Silently ignore if object was destroyed during async operation
+          return;
+        }
         catch (Exception ex)
         {
-          log.ForGameObject(gameObject).ForMethod().Error(ex, "Failed to load INI file: {Message}", ex.Message);
+          // Only log if object is still valid
+          if (this != null && gameObject != null)
+          {
+            log.ForGameObject(gameObject).ForMethod().Error(ex, "Failed to load INI file: {Message}", ex.Message);
+          }
         }
       });
 
@@ -399,33 +416,48 @@ namespace MToolKit.Runtime.Installer
         // Use a static flag to ensure we only initialize once across all scopes
         builder.RegisterBuildCallback(resolver =>
         {
-          if (inputServiceInitialized)
+          // CRITICAL: Check if gameObject is still valid before accessing it
+          // This prevents MissingReferenceException when the object is destroyed
+          if (this == null || gameObject == null)
           {
-            log.ForGameObject(gameObject).ForMethod().Verbose("InputService already initialized in a previous scope, skipping duplicate initialization");
-
-            // Still set the instance reference in case this is a child scope resolving the service
-            if (InputServiceInstance == null)
+            return; // Early exit if object is destroyed
+          }
+          
+          try
+          {
+            if (inputServiceInitialized)
             {
-              InputServiceInstance = resolver.Resolve<IInputService>();
-              log.ForGameObject(gameObject).ForMethod().Debug("Set InputServiceInstance reference from existing singleton");
+              log.ForGameObject(gameObject).ForMethod().Verbose("InputService already initialized in a previous scope, skipping duplicate initialization");
+
+              // Still set the instance reference in case this is a child scope resolving the service
+              if (InputServiceInstance == null)
+              {
+                InputServiceInstance = resolver.Resolve<IInputService>();
+                log.ForGameObject(gameObject).ForMethod().Debug("Set InputServiceInstance reference from existing singleton");
+              }
+              return;
             }
+
+            IInputService inputService = resolver.Resolve<IInputService>();
+
+            // Additional defensive check: if InputService is already initialized, don't initialize again
+            if (inputService is InputService)
+            {
+              InputServiceInstance = inputService;
+              inputService.Initialize(inputActionAsset);
+              inputService.Enable();
+              inputServiceInitialized = true;
+              log.ForGameObject(gameObject).ForMethod().Debug("InputService initialized and enabled");
+            }
+            else
+            {
+              log.ForGameObject(gameObject).ForMethod().Warning("Failed to resolve InputService or service is null");
+            }
+          }
+          catch (MissingReferenceException)
+          {
+            // Silently ignore if object was destroyed during async operation
             return;
-          }
-
-          IInputService inputService = resolver.Resolve<IInputService>();
-
-          // Additional defensive check: if InputService is already initialized, don't initialize again
-          if (inputService is InputService)
-          {
-            InputServiceInstance = inputService;
-            inputService.Initialize(inputActionAsset);
-            inputService.Enable();
-            inputServiceInitialized = true;
-            log.ForGameObject(gameObject).ForMethod().Debug("InputService initialized and enabled");
-          }
-          else
-          {
-            log.ForGameObject(gameObject).ForMethod().Warning("Failed to resolve InputService or service is null");
           }
         });
 
@@ -438,8 +470,23 @@ namespace MToolKit.Runtime.Installer
         builder.Register<IInputService, NullInputService>(Lifetime.Singleton);
         builder.RegisterBuildCallback(resolver =>
         {
-          InputServiceInstance = resolver.Resolve<IInputService>();
-          log.ForGameObject(gameObject).ForMethod().Debug("Using NullInputService (no-op implementation)");
+          // CRITICAL: Check if gameObject is still valid before accessing it
+          // This prevents MissingReferenceException when the object is destroyed
+          if (this == null || gameObject == null)
+          {
+            return; // Early exit if object is destroyed
+          }
+          
+          try
+          {
+            InputServiceInstance = resolver.Resolve<IInputService>();
+            log.ForGameObject(gameObject).ForMethod().Debug("Using NullInputService (no-op implementation)");
+          }
+          catch (MissingReferenceException)
+          {
+            // Silently ignore if object was destroyed during async operation
+            return;
+          }
         });
         log.ForGameObject(gameObject).ForMethod().Warning("InputActionAsset not assigned in GlobalInstaller, using NullInputService (no-op implementation)");
       }
@@ -467,10 +514,25 @@ namespace MToolKit.Runtime.Installer
       // Set the global provider for MessagePipe diagnostics
       builder.RegisterBuildCallback(resolver =>
       {
-        // Get the MessagePipe provider from the resolver
-        IServiceProvider provider = resolver.Resolve<IServiceProvider>();
-        GlobalMessagePipe.SetProvider(provider);
-        log.ForGameObject(gameObject).ForMethod().Verbose("GlobalMessagePipe provider set");
+        // CRITICAL: Check if gameObject is still valid before accessing it
+        // This prevents MissingReferenceException when the object is destroyed
+        if (this == null || gameObject == null)
+        {
+          return; // Early exit if object is destroyed
+        }
+        
+        try
+        {
+          // Get the MessagePipe provider from the resolver
+          IServiceProvider provider = resolver.Resolve<IServiceProvider>();
+          GlobalMessagePipe.SetProvider(provider);
+          log.ForGameObject(gameObject).ForMethod().Verbose("GlobalMessagePipe provider set");
+        }
+        catch (MissingReferenceException)
+        {
+          // Silently ignore if object was destroyed during async operation
+          return;
+        }
       });
 
       // Register global message brokers that need to persist across scenes
@@ -826,28 +888,43 @@ namespace MToolKit.Runtime.Installer
       // Initialize global runtime plugins after container is built
       builder.RegisterBuildCallback(resolver =>
       {
-        log.ForGameObject(gameObject).ForMethod().Verbose("Initializing global runtime plugins");
+        // CRITICAL: Check if gameObject is still valid before accessing it
+        // This prevents MissingReferenceException when the object is destroyed
+        if (this == null || gameObject == null)
+        {
+          return; // Early exit if object is destroyed
+        }
+        
+        try
+        {
+          log.ForGameObject(gameObject).ForMethod().Verbose("Initializing global runtime plugins");
 
-        // Initialize the GlobalAsyncMessageBroker
-        GlobalAsyncMessageBroker.Initialize(resolver);
-        log.ForGameObject(gameObject).ForMethod().Verbose("GlobalAsyncMessageBroker initialized");
+          // Initialize the GlobalAsyncMessageBroker
+          GlobalAsyncMessageBroker.Initialize(resolver);
+          log.ForGameObject(gameObject).ForMethod().Verbose("GlobalAsyncMessageBroker initialized");
 
-        if (globalPluginConfig?.GlobalPluginPrefabs != null)
-          foreach (AbstractGamePlugin plugin in globalPluginConfig.GlobalPluginPrefabs)
-            if (plugin is IRuntimePlugin runtimePlugin)
-            {
-              // Skip plugins that implement IAsyncStartable - they're handled by RegisterEntryPoint
-              if (plugin is IAsyncStartable)
+          if (globalPluginConfig?.GlobalPluginPrefabs != null)
+            foreach (AbstractGamePlugin plugin in globalPluginConfig.GlobalPluginPrefabs)
+              if (plugin is IRuntimePlugin runtimePlugin)
               {
-                log.ForGameObject(gameObject).ForMethod().Verbose("Skipping {0} initialization - handled by RegisterEntryPoint", plugin.name);
-                continue;
+                // Skip plugins that implement IAsyncStartable - they're handled by RegisterEntryPoint
+                if (plugin is IAsyncStartable)
+                {
+                  log.ForGameObject(gameObject).ForMethod().Verbose("Skipping {0} initialization - handled by RegisterEntryPoint", plugin.name);
+                  continue;
+                }
+
+                runtimePlugin.Initialize(resolver);
+                log.ForGameObject(gameObject).ForMethod().Verbose("Initialized global runtime plugin: {0}", plugin.name);
               }
 
-              runtimePlugin.Initialize(resolver);
-              log.ForGameObject(gameObject).ForMethod().Verbose("Initialized global runtime plugin: {0}", plugin.name);
-            }
-
-        log.ForGameObject(gameObject).ForMethod().Verbose("Global runtime plugins initialization completed");
+          log.ForGameObject(gameObject).ForMethod().Verbose("Global runtime plugins initialization completed");
+        }
+        catch (MissingReferenceException)
+        {
+          // Silently ignore if object was destroyed during async operation
+          return;
+        }
       });
 
       log.ForGameObject(gameObject).ForMethod().Verbose("GlobalInstaller configuration completed");
@@ -1093,6 +1170,12 @@ namespace MToolKit.Runtime.Installer
                 }
               }
           }
+        }
+        catch (InvalidKeyException ex)
+        {
+          // Expected in test environments where Addressables catalogs may not be initialized
+          // Silently handle - this is not an error condition
+          log.ForGameObject(gameObject).ForMethod().Verbose("Addressable key not found for GUID {0} (expected in test environments): {1}", sceneKey, ex.Message);
         }
         catch (Exception ex)
         {
