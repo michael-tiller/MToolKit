@@ -4,6 +4,7 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Core.Abstractions;
 using MToolKit.Runtime.Installer;
+using MToolKit.Runtime.Persistence.Interfaces;
 using R3;
 using Serilog;
 using Sirenix.OdinInspector;
@@ -13,12 +14,12 @@ using VContainer.Unity;
 
 namespace MToolKit.Runtime.Persistence.ES3Integration
 {
-    /// <summary>
-    ///   ES3-based game save plugin that manages save system configuration and auto-discovery.
-    ///   Uses ConfigPlugin pattern for consistent service management and configuration.
-    ///   Implements IAsyncStartable for VContainer's UniTask integration.
-    /// </summary>
-    public class ES3GameSavePlugin : ConfigPlugin<ES3GameSaveSystem, IES3GameSaveSystem, ES3SaveConfig>, IAsyncStartable
+  /// <summary>
+  ///   ES3-based game save plugin that manages save system configuration and auto-discovery.
+  ///   Uses ConfigPlugin pattern for consistent service management and configuration.
+  ///   Implements IAsyncStartable for VContainer's UniTask integration.
+  /// </summary>
+  public class ES3GameSavePlugin : ConfigPlugin<ES3GameSaveSystem, IES3GameSaveSystem, ES3SaveConfig>, IAsyncStartable
   {
     [SerializeField]
     [Required]
@@ -36,25 +37,25 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     [ReadOnly]
     private ES3GameSaveSystem Service => GetService();
 
-        /// <summary>
-        ///   Required services for dependency validation.
-        /// </summary>
-        public override IEnumerable<Type> RequiredServices => new[]
-    {
+    /// <summary>
+    ///   Required services for dependency validation.
+    /// </summary>
+    public override IEnumerable<Type> RequiredServices => new[]
+{
       typeof(SaveSystemCoordinator),
       typeof(IES3Service)
     };
 
-        /// <summary>
-        ///   Optional services for dependency validation.
-        /// </summary>
-        public override IEnumerable<Type> OptionalServices => Array.Empty<Type>();
+    /// <summary>
+    ///   Optional services for dependency validation.
+    /// </summary>
+    public override IEnumerable<Type> OptionalServices => Array.Empty<Type>();
 
-        /// <summary>
-        ///   Async startup method for VContainer's UniTask integration.
-        ///   Replaces PerformRuntimeInitialization with proper async/await support.
-        /// </summary>
-        public async UniTask StartAsync(CancellationToken cancellation)
+    /// <summary>
+    ///   Async startup method for VContainer's UniTask integration.
+    ///   Replaces PerformRuntimeInitialization with proper async/await support.
+    /// </summary>
+    public async UniTask StartAsync(CancellationToken cancellation)
     {
       if (isRuntimeInitialized)
       {
@@ -135,10 +136,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
-        /// <summary>
-        ///   Create the ES3GameSaveSystem service with configuration.
-        /// </summary>
-        protected override ES3GameSaveSystem CreateService(IObjectResolver resolver)
+    /// <summary>
+    ///   Create the ES3GameSaveSystem service with configuration.
+    /// </summary>
+    protected override ES3GameSaveSystem CreateService(IObjectResolver resolver)
     {
       log.ForGameObject(gameObject).ForMethod().Debug("Creating ES3GameSaveSystem with config");
 
@@ -150,11 +151,11 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       return new ES3GameSaveSystem(config, resolvedEs3Service);
     }
 
-        /// <summary>
-        ///   Performs any additional async initialization specific to ES3GameSavePlugin.
-        ///   Override this method to add custom async initialization logic.
-        /// </summary>
-        protected virtual async UniTask PerformAsyncInitialization(CancellationToken cancellation)
+    /// <summary>
+    ///   Performs any additional async initialization specific to ES3GameSavePlugin.
+    ///   Override this method to add custom async initialization logic.
+    /// </summary>
+    protected virtual async UniTask PerformAsyncInitialization(CancellationToken cancellation)
     {
       // Default implementation - no additional async work needed
       await UniTask.CompletedTask;
@@ -167,12 +168,12 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       base.Shutdown();
     }
 
-        /// <summary>
-        ///   Gets the service, ensuring it's properly resolved for this instance.
-        ///   This ensures the Inspector shows the correct service even if this instance
-        ///   wasn't properly initialized during the normal flow.
-        /// </summary>
-        private ES3GameSaveSystem GetService()
+    /// <summary>
+    ///   Gets the service, ensuring it's properly resolved for this instance.
+    ///   This ensures the Inspector shows the correct service even if this instance
+    ///   wasn't properly initialized during the normal flow.
+    /// </summary>
+    private ES3GameSaveSystem GetService()
     {
       // If this instance has a service, return it
       if (service != null)

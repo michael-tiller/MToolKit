@@ -1,14 +1,15 @@
 using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using MToolKit.Runtime.Persistence.ES3Integration;
 using R3;
 
-namespace MToolKit.Runtime.Persistence.ES3Integration
+namespace MToolKit.Runtime.Persistence.Interfaces
 {
-    /// <summary>
-    ///   Service interface for managing multiple save profiles using ES3
-    /// </summary>
-    public interface IProfileManager
+  /// <summary>
+  ///   Service interface for managing multiple save profiles using ES3
+  /// </summary>
+  public interface IProfileManager
   {
     ReactiveProperty<string> CurrentProfile { get; }
     ReactiveProperty<List<string>> AvailableProfiles { get; }

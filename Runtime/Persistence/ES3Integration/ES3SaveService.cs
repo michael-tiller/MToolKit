@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using MToolKit.Runtime.Persistence.Interfaces;
 using R3;
 using Serilog;
 using Serilog.Core;
@@ -9,11 +10,11 @@ using ILogger = Serilog.ILogger;
 
 namespace MToolKit.Runtime.Persistence.ES3Integration
 {
-    /// <summary>
-    ///   Easy Save 3 service implementation with reactive state management
-    ///   Updated to use string versions instead of int
-    /// </summary>
-    public class ES3SaveService : IES3Service, IDisposable
+  /// <summary>
+  ///   Easy Save 3 service implementation with reactive state management
+  ///   Updated to use string versions instead of int
+  /// </summary>
+  public class ES3SaveService : IES3Service, IDisposable
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<ES3SaveService>().ForFeature("Persistence.ES3"));
     private static ILogger log => logLazy.Value ?? Logger.None;
@@ -77,10 +78,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
 
     #region IDisposable Members
 
-        /// <summary>
-        ///   Disposes of reactive properties and other resources
-        /// </summary>
-        public void Dispose()
+    /// <summary>
+    ///   Disposes of reactive properties and other resources
+    /// </summary>
+    public void Dispose()
     {
       if (isDisposed)
       {
@@ -535,18 +536,18 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
-        /// <summary>
-        ///   Gets the current save format version
-        /// </summary>
-        public string GetSaveFormatVersion()
+    /// <summary>
+    ///   Gets the current save format version
+    /// </summary>
+    public string GetSaveFormatVersion()
     {
       return saveFormatVersion;
     }
 
-        /// <summary>
-        ///   Gets the version from the save file if it exists
-        /// </summary>
-        public string GetSavedFormatVersion()
+    /// <summary>
+    ///   Gets the version from the save file if it exists
+    /// </summary>
+    public string GetSavedFormatVersion()
     {
       try
       {
@@ -563,10 +564,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       return "1.0.0"; // Default version for legacy saves
     }
 
-        /// <summary>
-        ///   Creates a backup of the current save file using ES3's native backup functionality
-        /// </summary>
-        public bool CreateBackup()
+    /// <summary>
+    ///   Creates a backup of the current save file using ES3's native backup functionality
+    /// </summary>
+    public bool CreateBackup()
     {
       try
       {
@@ -589,10 +590,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
-        /// <summary>
-        ///   Restores from the most recent backup using ES3's native restore functionality
-        /// </summary>
-        public bool RestoreFromBackup()
+    /// <summary>
+    ///   Restores from the most recent backup using ES3's native restore functionality
+    /// </summary>
+    public bool RestoreFromBackup()
     {
       try
       {
@@ -616,11 +617,11 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
-        /// <summary>
-        ///   Gets all available backup files for the current save file
-        ///   Note: ES3 doesn't expose backup listing directly, so this returns empty array
-        /// </summary>
-        public string[] GetAvailableBackups()
+    /// <summary>
+    ///   Gets all available backup files for the current save file
+    ///   Note: ES3 doesn't expose backup listing directly, so this returns empty array
+    /// </summary>
+    public string[] GetAvailableBackups()
     {
       try
       {
@@ -637,10 +638,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
 
     #endregion
 
-        /// <summary>
-        ///   Initialize the service by checking for existing save data
-        /// </summary>
-        private void InitializeFromExistingSave()
+    /// <summary>
+    ///   Initialize the service by checking for existing save data
+    /// </summary>
+    private void InitializeFromExistingSave()
     {
       try
       {
@@ -683,10 +684,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
-        /// <summary>
-        ///   Ensures that the directory for the save file exists
-        /// </summary>
-        private void EnsureDirectoryExists()
+    /// <summary>
+    ///   Ensures that the directory for the save file exists
+    /// </summary>
+    private void EnsureDirectoryExists()
     {
       try
       {

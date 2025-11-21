@@ -26,6 +26,7 @@ using VContainer;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
 using MToolKit.Runtime.VisualGraphs.Quest;
+using MToolKit.Runtime.Persistence.Interfaces;
 
 namespace MToolKit.Runtime.VisualGraphs
 {

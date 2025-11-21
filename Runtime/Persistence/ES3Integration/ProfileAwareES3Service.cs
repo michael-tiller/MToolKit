@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using MToolKit.Runtime.Persistence.Interfaces;
 using R3;
 using Serilog;
 using Serilog.Core;
@@ -9,10 +10,10 @@ using ILogger = Serilog.ILogger;
 
 namespace MToolKit.Runtime.Persistence.ES3Integration
 {
-    /// <summary>
-    ///   Profile-aware ES3 service that can switch between different save file paths based on the current profile
-    /// </summary>
-    public class ProfileAwareES3Service : IES3Service, IDisposable
+  /// <summary>
+  ///   Profile-aware ES3 service that can switch between different save file paths based on the current profile
+  /// </summary>
+  public class ProfileAwareES3Service : IES3Service, IDisposable
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<ProfileAwareES3Service>().ForFeature("Persistence.ES3"));
     private static ILogger log => logLazy.Value ?? Logger.None;
@@ -369,10 +370,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
 
     #endregion
 
-        /// <summary>
-        ///   Gets the current save file path based on the active profile
-        /// </summary>
-        private string GetCurrentSaveFilePath()
+    /// <summary>
+    ///   Gets the current save file path based on the active profile
+    /// </summary>
+    private string GetCurrentSaveFilePath()
     {
       string currentProfile = ProfileManager.CurrentProfile.Value;
       if (!string.IsNullOrEmpty(currentProfile))
@@ -388,10 +389,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       return defaultFilePath;
     }
 
-        /// <summary>
-        ///   Gets ES3Settings for the current save file path
-        /// </summary>
-        private ES3Settings GetCurrentES3Settings()
+    /// <summary>
+    ///   Gets ES3Settings for the current save file path
+    /// </summary>
+    private ES3Settings GetCurrentES3Settings()
     {
       string filePath = GetCurrentSaveFilePath();
       return new ES3Settings(filePath)
@@ -402,10 +403,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       };
     }
 
-        /// <summary>
-        ///   Called when the current profile changes
-        /// </summary>
-        private void OnCurrentProfileChanged(string newProfile)
+    /// <summary>
+    ///   Called when the current profile changes
+    /// </summary>
+    private void OnCurrentProfileChanged(string newProfile)
     {
       log.ForMethod().Debug("Profile changed to: {0}, updating save file path", string.IsNullOrWhiteSpace(newProfile) ? "null" : newProfile);
 
@@ -413,10 +414,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       InitializeFromExistingSave();
     }
 
-        /// <summary>
-        ///   Initialize the service by checking for existing save data
-        /// </summary>
-        private void InitializeFromExistingSave()
+    /// <summary>
+    ///   Initialize the service by checking for existing save data
+    /// </summary>
+    private void InitializeFromExistingSave()
     {
       try
       {

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using MToolKit.Runtime.Persistence.Interfaces;
 using R3;
 using Serilog;
 using Sirenix.OdinInspector;
@@ -13,11 +14,11 @@ using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.Persistence.ES3Integration
 {
-    /// <summary>
-    ///   Manages multiple save profiles using ES3, where each profile is a separate save file
-    ///   Integrates with the existing ES3GameSavePlugin architecture
-    /// </summary>
-    [Serializable]
+  /// <summary>
+  ///   Manages multiple save profiles using ES3, where each profile is a separate save file
+  ///   Integrates with the existing ES3GameSavePlugin architecture
+  /// </summary>
+  [Serializable]
   public class ProfileManager : IProfileManager, IDisposable
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<ProfileManager>().ForFeature("Persistence.ES3"));
@@ -83,11 +84,11 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     public ReactiveProperty<List<string>> AvailableProfiles { get; } = new(new List<string>());
     public ReactiveProperty<ProfileMetaData> CurrentProfileMetadata { get; } = new(null);
 
-        /// <summary>
-        ///   Closes the current profile (clears it without deleting the save file)
-        ///   This should be called when exiting the game or returning to menu
-        /// </summary>
-        public void CloseCurrentProfile()
+    /// <summary>
+    ///   Closes the current profile (clears it without deleting the save file)
+    ///   This should be called when exiting the game or returning to menu
+    /// </summary>
+    public void CloseCurrentProfile()
     {
       if (isDisposed)
         return;
@@ -111,10 +112,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
-        /// <summary>
-        ///   Gets the file path for a specific profile
-        /// </summary>
-        public string GetProfileFilePath(string profileName)
+    /// <summary>
+    ///   Gets the file path for a specific profile
+    /// </summary>
+    public string GetProfileFilePath(string profileName)
     {
       if (string.IsNullOrEmpty(profileName))
         throw new ArgumentException("Profile name cannot be null or empty", nameof(profileName));
@@ -122,10 +123,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       return Path.Combine(profilesDirectory, $"{profileName}.es3");
     }
 
-        /// <summary>
-        ///   Checks if a profile exists
-        /// </summary>
-        public bool ProfileExists(string profileName)
+    /// <summary>
+    ///   Checks if a profile exists
+    /// </summary>
+    public bool ProfileExists(string profileName)
     {
       if (string.IsNullOrEmpty(profileName))
         return false;
@@ -134,10 +135,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       return File.Exists(filePath);
     }
 
-        /// <summary>
-        ///   Generates a unique profile name by appending a numeric suffix if the name already exists
-        /// </summary>
-        public string GenerateUniqueProfileName(string baseName)
+    /// <summary>
+    ///   Generates a unique profile name by appending a numeric suffix if the name already exists
+    /// </summary>
+    public string GenerateUniqueProfileName(string baseName)
     {
       if (string.IsNullOrEmpty(baseName))
         return "Player_0001";
@@ -164,10 +165,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       return fallbackName;
     }
 
-        /// <summary>
-        ///   Creates a new profile with initial metadata and returns the actual profile name used
-        /// </summary>
-        public (bool success, string actualProfileName) CreateProfileWithName(string profileName, CancellationToken ct = default)
+    /// <summary>
+    ///   Creates a new profile with initial metadata and returns the actual profile name used
+    /// </summary>
+    public (bool success, string actualProfileName) CreateProfileWithName(string profileName, CancellationToken ct = default)
     {
       if (isDisposed)
         throw new ObjectDisposedException(nameof(ProfileManager));
@@ -223,19 +224,19 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
-        /// <summary>
-        ///   Creates a new profile with initial metadata
-        /// </summary>
-        public bool CreateProfile(string profileName, CancellationToken ct = default)
+    /// <summary>
+    ///   Creates a new profile with initial metadata
+    /// </summary>
+    public bool CreateProfile(string profileName, CancellationToken ct = default)
     {
       (bool success, _) = CreateProfileWithName(profileName, ct);
       return success;
     }
 
-        /// <summary>
-        ///   Deletes a profile and its save file
-        /// </summary>
-        public bool DeleteProfile(string profileName, CancellationToken ct = default)
+    /// <summary>
+    ///   Deletes a profile and its save file
+    /// </summary>
+    public bool DeleteProfile(string profileName, CancellationToken ct = default)
     {
       if (isDisposed)
         throw new ObjectDisposedException(nameof(ProfileManager));
@@ -276,10 +277,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
-        /// <summary>
-        ///   Loads a profile (sets it as current and loads its data)
-        /// </summary>
-        public UniTask<bool> LoadProfileAsync(string profileName, CancellationToken ct = default)
+    /// <summary>
+    ///   Loads a profile (sets it as current and loads its data)
+    /// </summary>
+    public UniTask<bool> LoadProfileAsync(string profileName, CancellationToken ct = default)
     {
       if (isDisposed)
         throw new ObjectDisposedException(nameof(ProfileManager));
@@ -327,10 +328,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
-        /// <summary>
-        ///   Saves the current profile
-        /// </summary>
-        public bool SaveProfile(string profileName, CancellationToken ct = default)
+    /// <summary>
+    ///   Saves the current profile
+    /// </summary>
+    public bool SaveProfile(string profileName, CancellationToken ct = default)
     {
       if (isDisposed)
         throw new ObjectDisposedException(nameof(ProfileManager));
@@ -382,10 +383,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
-        /// <summary>
-        ///   Gets metadata for a specific profile
-        /// </summary>
-        public ProfileMetaData GetProfileMetaData(string profileName, CancellationToken ct = default)
+    /// <summary>
+    ///   Gets metadata for a specific profile
+    /// </summary>
+    public ProfileMetaData GetProfileMetaData(string profileName, CancellationToken ct = default)
     {
       if (isDisposed)
         throw new ObjectDisposedException(nameof(ProfileManager));
@@ -493,10 +494,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
-        /// <summary>
-        ///   Gets metadata for all available profiles
-        /// </summary>
-        public List<ProfileMetaData> GetAllProfileMetadata(CancellationToken ct = default)
+    /// <summary>
+    ///   Gets metadata for all available profiles
+    /// </summary>
+    public List<ProfileMetaData> GetAllProfileMetadata(CancellationToken ct = default)
     {
       if (isDisposed)
         throw new ObjectDisposedException(nameof(ProfileManager));
@@ -531,10 +532,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }).ToList();
     }
 
-        /// <summary>
-        ///   Gets the most recent profile by last save time
-        /// </summary>
-        public UniTask<string> GetMostRecentProfileAsync(CancellationToken ct = default)
+    /// <summary>
+    ///   Gets the most recent profile by last save time
+    /// </summary>
+    public UniTask<string> GetMostRecentProfileAsync(CancellationToken ct = default)
     {
       if (isDisposed)
         throw new ObjectDisposedException(nameof(ProfileManager));
@@ -583,10 +584,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
-        /// <summary>
-        ///   Forces repair of all profile metadata - useful for fixing corrupted save files
-        /// </summary>
-        public void RepairAllProfileMetadata()
+    /// <summary>
+    ///   Forces repair of all profile metadata - useful for fixing corrupted save files
+    /// </summary>
+    public void RepairAllProfileMetadata()
     {
       if (isDisposed)
         throw new ObjectDisposedException(nameof(ProfileManager));
@@ -621,10 +622,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       log.ForMethod().Information("Completed repair of all profile metadata");
     }
 
-        /// <summary>
-        ///   Handles changes to the current profile by updating the metadata
-        /// </summary>
-        private void OnCurrentProfileChanged(string profileName)
+    /// <summary>
+    ///   Handles changes to the current profile by updating the metadata
+    /// </summary>
+    private void OnCurrentProfileChanged(string profileName)
     {
       if (isDisposed)
         return;
@@ -650,11 +651,11 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
-        /// <summary>
-        ///   Notifies the ES3Service about the profile change
-        ///   The ProfileAwareES3Service will automatically handle the file path switching
-        /// </summary>
-        private void NotifyES3ServiceOfProfileChange(string profileFilePath)
+    /// <summary>
+    ///   Notifies the ES3Service about the profile change
+    ///   The ProfileAwareES3Service will automatically handle the file path switching
+    /// </summary>
+    private void NotifyES3ServiceOfProfileChange(string profileFilePath)
     {
       try
       {
@@ -671,10 +672,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
-        /// <summary>
-        ///   Repairs metadata once during initialization without triggering additional saves
-        /// </summary>
-        private void RepairAllProfileMetadataOnce()
+    /// <summary>
+    ///   Repairs metadata once during initialization without triggering additional saves
+    /// </summary>
+    private void RepairAllProfileMetadataOnce()
     {
       if (isDisposed)
         return;
@@ -733,11 +734,11 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       log.ForMethod().Information("Completed one-time metadata repair");
     }
 
-        /// <summary>
-        ///   Migrates existing save files to remove redundant individual field storage
-        ///   This should be called once to clean up old save files
-        /// </summary>
-        public void MigrateSaveFilesToCleanFormat()
+    /// <summary>
+    ///   Migrates existing save files to remove redundant individual field storage
+    ///   This should be called once to clean up old save files
+    /// </summary>
+    public void MigrateSaveFilesToCleanFormat()
     {
       if (isDisposed)
         throw new ObjectDisposedException(nameof(ProfileManager));
@@ -810,10 +811,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       log.ForMethod().Information("Completed migration of save files to clean format");
     }
 
-        /// <summary>
-        ///   Repairs corrupted profile metadata by creating a new ProfileMetaData object with proper values
-        /// </summary>
-        private ProfileMetaData RepairProfileMetadata(string profileName, ES3Settings es3Settings)
+    /// <summary>
+    ///   Repairs corrupted profile metadata by creating a new ProfileMetaData object with proper values
+    /// </summary>
+    private ProfileMetaData RepairProfileMetadata(string profileName, ES3Settings es3Settings)
     {
       try
       {
@@ -889,10 +890,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
-        /// <summary>
-        ///   Refreshes the list of available profiles from the file system
-        /// </summary>
-        private void RefreshAvailableProfiles()
+    /// <summary>
+    ///   Refreshes the list of available profiles from the file system
+    /// </summary>
+    private void RefreshAvailableProfiles()
     {
       try
       {
