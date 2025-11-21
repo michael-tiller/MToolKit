@@ -40,7 +40,17 @@ namespace MToolKit.Runtime.Bootstrapper
     public async UniTask LoadGameAsync(CancellationToken ct = default)
     {
       // Initialize Addressables first (required before loading any Addressable assets)
-      await contentLoader.InitializeAsync(ct);
+      try
+      {
+        await contentLoader.InitializeAsync(ct);
+      }
+      catch (Exception ex)
+      {
+        // Log and rethrow - don't suppress exceptions from InitializeAsync
+        // This ensures callers can handle initialization failures appropriately
+        log.ForMethod().Error(ex, "Failed to initialize content loader: {Message}", ex.Message);
+        throw;
+      }
 
       // Load manifest from Addressables (with "manifest" tag) or fallback to StreamingAssets
       // The manifest has its own tag to avoid circular dependency with the labels it configures
