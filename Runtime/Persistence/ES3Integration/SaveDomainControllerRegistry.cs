@@ -7,10 +7,10 @@ using ILogger = Serilog.ILogger;
 
 namespace MToolKit.Runtime.Persistence.ES3Integration
 {
-    /// <summary>
-    ///   Registry for save domain controllers that can be populated by plugins
-    /// </summary>
-    public class SaveDomainControllerRegistry
+  /// <summary>
+  ///   Registry for save domain controllers that can be populated by plugins
+  /// </summary>
+  public class SaveDomainControllerRegistry
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<SaveDomainControllerRegistry>().ForFeature("Persistence.ES3"));
     private static ILogger log => logLazy.Value ?? Logger.None;
