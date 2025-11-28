@@ -18,7 +18,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
 
     public int Count => controllers.Count;
 
-    public void RegisterController(ISaveDomainController controller)
+    public virtual void RegisterController(ISaveDomainController controller)
     {
       if (controller != null && !controllers.Contains(controller))
       {
