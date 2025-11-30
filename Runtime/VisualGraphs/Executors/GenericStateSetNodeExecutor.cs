@@ -88,12 +88,19 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
 
     private object ParseValue(string value, string valueType)
     {
+      // For string type, preserve empty strings as-is
+      if (valueType?.ToLowerInvariant() == "string")
+        return value ?? string.Empty;
+
+      // For other types, default empty to "0"
       if (string.IsNullOrEmpty(value))
-        value = "0"; // Default to 0 if empty
+        value = "0";
 
       return valueType?.ToLowerInvariant() switch
       {
-        "bool" => Convert.ToBoolean(value),
+        "bool" => value == "1" || value.Equals("true", System.StringComparison.OrdinalIgnoreCase) ? true :
+                  value == "0" || value.Equals("false", System.StringComparison.OrdinalIgnoreCase) ? false :
+                  Convert.ToBoolean(value),
         "int" => Convert.ToInt32(value),
         "float" => Convert.ToSingle(value),
         "string" => value,
