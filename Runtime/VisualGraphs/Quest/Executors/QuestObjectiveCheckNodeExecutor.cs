@@ -13,7 +13,7 @@ using UnityEngine.AddressableAssets;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
 
-namespace MToolKit.Runtime.VisualGraphs.Executors
+namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
 {
   /// <summary>
   ///   Executor for QuestObjectiveCheckNode.
