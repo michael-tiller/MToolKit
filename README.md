@@ -147,9 +147,9 @@ Lessons from past hard-to-test stacks are baked into the architecture: core syst
 
 Tested with:
 
-- Unity 6.000.58f2
+- Unity 2021.3 or higher
 - API Compatibility Level: .NET Framework
-- Scripting Backend: Mono and IL2CPP
+- Scripting Backend: Mono and IL2CPP are supported
 
 ### Open Source
 

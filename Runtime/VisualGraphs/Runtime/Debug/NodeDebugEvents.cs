@@ -8,6 +8,10 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Debug
   ///   Static event system for runtime graph debugging.
   ///   Emits events that editor tools can subscribe to.
   /// </summary>
+  /// <remarks>
+  ///   <para>Subscribers should unsubscribe from events when they are no longer needed to prevent memory leaks.</para>
+  ///   <para>Use <see cref="ClearAllSubscribers"/> to clear all event handlers (useful for testing or cleanup).</para>
+  /// </remarks>
   public static class NodeDebugEvents
   {
     public static event Action<INodeExecutionDebugEvent>? NodeExecuted;
@@ -58,6 +62,17 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Debug
         isStarting,
         triggerMessageType);
       GraphExecutionChanged?.Invoke(evt);
+    }
+
+    /// <summary>
+    ///   Clears all event subscribers. Useful for testing or cleanup scenarios.
+    ///   Subscribers should normally unsubscribe individually when they are no longer needed.
+    /// </summary>
+    public static void ClearAllSubscribers()
+    {
+      NodeExecuted = null;
+      StateChanged = null;
+      GraphExecutionChanged = null;
     }
   }
 

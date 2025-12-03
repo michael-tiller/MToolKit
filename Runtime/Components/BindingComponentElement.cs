@@ -92,6 +92,7 @@ namespace MToolKit.Runtime.Components
     private CompositeBindingHelper.BindingComponent bindingComponent;
 
     private InputRebinderService rebinderService;
+    private IDisposable rebindingSubscription;
 
     // When the action system re-resolves bindings, we want to update our UI in response
     private static void OnActionChange(object obj, InputActionChange change)
@@ -147,6 +148,8 @@ namespace MToolKit.Runtime.Components
 
     private void OnDestroy()
     {
+      rebindingSubscription?.Dispose();
+      rebindingSubscription = null;
       OnBindingChanged?.Dispose();
       OnRebindingStarted?.Dispose();
       OnRebindingCompleted?.Dispose();
@@ -287,8 +290,11 @@ namespace MToolKit.Runtime.Components
         OnRebindingStarted.OnNext((this, slotIndex));
         ShowRebindingState(true, slotIndex);
 
+        // Dispose any existing rebinding subscription before creating a new one
+        rebindingSubscription?.Dispose();
+
         // Subscribe to rebinding completion
-        rebinderService.OnRebindingCompleted
+        rebindingSubscription = rebinderService.OnRebindingCompleted
           .Where(x => x.action == action && x.bindingIndex == bindingIndex)
           .Take(1)
           .Subscribe(x =>
@@ -296,6 +302,9 @@ namespace MToolKit.Runtime.Components
             OnRebindingCompleted.OnNext((this, slotIndex, x.completed));
             ShowRebindingState(false, slotIndex, !x.completed);
             RefreshDisplay();
+            // Dispose subscription after completion
+            rebindingSubscription?.Dispose();
+            rebindingSubscription = null;
           });
       }
     }

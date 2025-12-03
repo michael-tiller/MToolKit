@@ -91,6 +91,7 @@ namespace MToolKit.Runtime.Components
     public GamepadIconsData GamepadIconsData { get; private set; }
 
     private InputRebinderService rebinderService;
+    private IDisposable rebindingSubscription;
 
     // When the action system re-resolves bindings, we want to update our UI in response
     private static void OnActionChange(object obj, InputActionChange change)
@@ -146,6 +147,8 @@ namespace MToolKit.Runtime.Components
 
     private void OnDestroy()
     {
+      rebindingSubscription?.Dispose();
+      rebindingSubscription = null;
       OnBindingChanged?.Dispose();
       OnRebindingStarted?.Dispose();
       OnRebindingCompleted?.Dispose();
@@ -296,8 +299,11 @@ namespace MToolKit.Runtime.Components
         OnRebindingStarted.OnNext((this, bindingIndex));
         ShowRebindingState(true, bindingIndex);
 
+        // Dispose any existing rebinding subscription before creating a new one
+        rebindingSubscription?.Dispose();
+
         // Subscribe to rebinding completion
-        rebinderService.OnRebindingCompleted
+        rebindingSubscription = rebinderService.OnRebindingCompleted
           .Where(x => x.action == action && x.bindingIndex == bindingIndex)
           .Take(1)
           .Subscribe(x =>
@@ -305,6 +311,10 @@ namespace MToolKit.Runtime.Components
             OnRebindingCompleted.OnNext((this, bindingIndex, x.completed));
             ShowRebindingState(false, bindingIndex, !x.completed);
             RefreshDisplay();
+
+            // Dispose subscription after completion (before potential recursive call)
+            rebindingSubscription?.Dispose();
+            rebindingSubscription = null;
 
             // If there's more composite parts we should bind, initiate a rebind for the next part
             if (allCompositeParts && x.completed)

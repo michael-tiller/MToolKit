@@ -103,7 +103,7 @@ namespace MToolKit.Editor.VisualGraphs
     private void RefreshRouter()
     {
       // Try to find GraphEventRouter in the scene
-      // This is a bit hacky but necessary since we're in editor
+      // Uses reflection to access private fields since we're in editor context
       router = null;
       var bridge = FindFirstObjectByType<EventBusBridge>();
       if (bridge != null)

@@ -28,6 +28,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     private readonly IES3Service es3Service;
     private readonly string profilesDirectory;
     private volatile bool isDisposed;
+    private IDisposable currentProfileSubscription;
 
     public ProfileManager(IES3Service es3Service, ES3SaveConfig config)
     {
@@ -50,7 +51,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       RefreshAvailableProfiles();
 
       // Subscribe to CurrentProfile changes to update CurrentProfileMetadata
-      CurrentProfile.Subscribe(OnCurrentProfileChanged);
+      currentProfileSubscription = CurrentProfile.Subscribe(OnCurrentProfileChanged);
     }
 
     [ShowInInspector]
@@ -71,6 +72,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         return;
 
       isDisposed = true;
+
+      // Dispose subscriptions
+      currentProfileSubscription?.Dispose();
+      currentProfileSubscription = null;
 
       // Dispose reactive properties
       CurrentProfile?.Dispose();
