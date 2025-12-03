@@ -4,8 +4,6 @@
 
 Implemented a **QuestCampaign → QuestDefinition → QuestObjective** hierarchy for quest management.
 
-This follows the original Simmy system naming (QuestlineDefinition, QuestDefinition, QuestTaskDefinition) but uses more RPG-standard terminology: **Campaign, Quest, Objective**.
-
 ---
 
 ## ✅ What Was Implemented

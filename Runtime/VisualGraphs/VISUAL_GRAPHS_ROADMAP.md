@@ -437,7 +437,7 @@
 
 **Goal:** Establish type-safe variable system foundation and clean context APIs before building variable nodes
 
-**Status:** Not yet implemented - See `SIMMY_FEATURE_EXTRACTION.md` for full design details
+**Status:** Not yet implemented
 
 **Why Critical:**
 - Phase 9.1 plans variable nodes, but they need type safety foundation
@@ -450,17 +450,15 @@
 
 **Implementation Tasks:**
 - [ ] Create `VariableDefinition<T>` sealed class
-  - Immutable, shared across instances (like Simmy)
+  - Immutable, shared across instances
   - Type-safe key with default value
   - `IEquatable<VariableDefinition<T>>` for dictionary keys
-  - See `SIMMY_FEATURE_EXTRACTION.md` section "Idempotent Variable System with Type Safety"
 
 - [ ] Create `IVariableStorage` interface
   - `Get<T>(VariableDefinition<T> variable)` - Type-safe get with default value fallback
   - `Set<T>(VariableDefinition<T> variable, T value)` - Type-safe set
   - `Increment(VariableDefinition<int> variable, int amount)` - Idempotent increment
   - `Decrement`, `Add`, `Multiply` operations
-  - See `SIMMY_FEATURE_EXTRACTION.md` for full interface design
 
 - [ ] Implement `VariableStorage` wrapping `IGraphState`
   - Delegates to `IGraphState` but with type safety
@@ -494,7 +492,6 @@
   - `IQuestContext` - Clean API for quest operations (wraps `QuestDefinition` + `QuestRuntimeState`)
   - `IPlayerContext` - Player-level state and operations
   - `IWorldContext` - World-level state (future)
-  - See `SIMMY_FEATURE_EXTRACTION.md` section "Runtime Contexts"
 
 - [ ] Create `IContextFactory` and `IContextRegistry`
   - Factory creates contexts from definitions + state
@@ -505,7 +502,6 @@
   - Quest → Player variable access
   - Player → Quest variable access
   - Context resolution with fallback logic
-  - See `SIMMY_FEATURE_EXTRACTION.md` section "Cross-Context Variable Access"
 
 - [ ] Refactor `QuestManager` to use `IQuestContext`
   - Replace raw `IGraphState` access with context API
@@ -567,8 +563,6 @@
 
 **Files to Modify:**
 - `Runtime/VisualGraphs/Runtime/GraphEventRouter.cs` - Execute rules before/after quest graphs
-
-**Reference:** See `SIMMY_FEATURE_EXTRACTION.md` for complete design, implementation details, and Simmy lessons learned.
 
 **Note:** This phase must complete before Phase 9.1 variable nodes, as nodes will use `VariableDefinition<T>` instead of string keys.
 
@@ -838,13 +832,11 @@ CropGraph:
 - [ ] Create `VariableStringInterpolator` for runtime string interpolation
   - Resolve `"Quest {questName} - {progress}/{total}"` at runtime
   - Support for variable references in strings
-  - See `SIMMY_FEATURE_EXTRACTION.md` section "Dynamic Value Resolution"
 
 - [ ] Create `DynamicValueBuilder` pattern for complex conditions
   - `IDynamicValueBuilder<T>` interface for building conditions
   - `IDynamicValueResolver<T>` for resolving at runtime
   - Builder types: concrete values, variable references, math operations, conditionals
-  - See `SIMMY_FEATURE_EXTRACTION.md` section "Dynamic Visibility/Availability Conditions"
 
 - [ ] Implement `VisibilityConditionBuilder` for quest/region visibility
   - Dynamic visibility based on player state (level, quests, variables)
@@ -876,8 +868,6 @@ CropGraph:
 
 **Impact:** High - Enables dynamic quest visibility, reduces hardcoded strings, improves maintainability
 
-**Reference:** See `SIMMY_FEATURE_EXTRACTION.md` sections "Dynamic Value Resolution" and "Dynamic Visibility/Availability Conditions" for complete design and Simmy's `DynamicValueBuilder` pattern.
-
 **Files Already Implemented:**
 - ✅ `Runtime/VisualGraphs/Authoring/Nodes/State/GenericState*.cs`
 - ✅ `Runtime/VisualGraphs/Executors/GenericState*Executor.cs`
@@ -888,7 +878,7 @@ CropGraph:
 
 **Goal:** Atomic state changes with rollback capability for complex operations
 
-**Status:** Not yet implemented - See `SIMMY_FEATURE_EXTRACTION.md` for full design details
+**Status:** Not yet implemented 
 
 **Why Useful:**
 - Prevents partial state updates if operation fails
@@ -919,8 +909,6 @@ CropGraph:
 - `Runtime/VisualGraphs/Authoring/Nodes/Transactions/BeginTransactionNode.cs`
 - `Runtime/VisualGraphs/Authoring/Nodes/Transactions/CommitTransactionNode.cs`
 - `Runtime/VisualGraphs/Authoring/Nodes/Transactions/RollbackTransactionNode.cs`
-
-**Reference:** See `SIMMY_FEATURE_EXTRACTION.md` section "Transaction System" for complete design.
 
 **Priority:** Medium - May not be needed if operations are simple. Evaluate based on actual use cases.
 
