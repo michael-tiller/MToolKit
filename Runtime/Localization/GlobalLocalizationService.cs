@@ -13,15 +13,16 @@ using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.Localization
 {
-  public class LocalizationSystem : Singleton<LocalizationSystem>
+  public class GlobalLocalizationService : Singleton<GlobalLocalizationService>, ILocalizationService
   {
-    private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<LocalizationSystem>().ForFeature("Localization"));
+    private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<GlobalLocalizationService>().ForFeature("Localization"));
     private static ILogger log => logLazy.Value ?? Logger.None;
-
     protected override bool selfCreate => true;
     protected override bool dontDestroyOnLoad => true;
 
-    public readonly Subject<string> Language = new();
+    private readonly Subject<string> _language = new();
+
+    public Observable<string> Language => _language;
 
     /// <summary>
     ///   Gets whether the localization system has been initialized
@@ -29,24 +30,14 @@ namespace MToolKit.Runtime.Localization
     private bool isInitialized;
 
     // ReSharper disable once ConvertToAutoPropertyWithPrivateSetter
+    /// <summary>
+    ///   Gets whether the localization system has been initialized
+    /// </summary>
     public bool IsInitialized => isInitialized;
 
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-    private static void OnRuntimeMethodLoad()
-    {
-      log.ForMethod().Information("Creating {0} singleton", nameof(LocalizationSystem));
-      // Create the singleton directly to avoid the Instance property's temporary GameObject issue
-      GameObject singletonObject = new($"[Singleton] {nameof(LocalizationSystem)}");
-      singletonObject.AddComponent<LocalizationSystem>();
-    }
-
-    protected override void Awake()
-    {
-      base.Awake();
-      // Initialize immediately and synchronously to prevent race conditions
-      InitializeLocalization();
-    }
-
+    /// <summary>
+    ///   Gets whether the localization settings are ready
+    /// </summary>
     public static bool LocalizationSettingsReady
     {
       get
@@ -71,7 +62,30 @@ namespace MToolKit.Runtime.Localization
       }
     }
 
-    private void InitializeLocalization()
+    /// <summary>
+    ///   OnRuntimeMethodLoad is called when the first scene is being loaded
+    /// </summary>
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void OnRuntimeMethodLoad()
+    {
+      log.ForMethod().Information("Creating {0} singleton", nameof(GlobalLocalizationService));
+      // Create the singleton directly to avoid the Instance property's temporary GameObject issue
+      GameObject singletonObject = new($"[Singleton] {nameof(GlobalLocalizationService)}");
+      singletonObject.AddComponent<GlobalLocalizationService>();
+    }
+
+    /// <summary>
+    ///   Awake is called when the script instance is being loaded
+    /// </summary>
+    protected override void Awake()
+    {
+      base.Awake();
+      // Initialize immediately and synchronously to prevent race conditions
+      InitializeLocalization();
+    }
+
+    #region ILocalizationService Implementation
+    public void InitializeLocalization()
     {
       try
       {
@@ -112,7 +126,7 @@ namespace MToolKit.Runtime.Localization
           log.ForGameObject(gameObject).ForMethod().Information("No language preference found. Using system default");
           // Let Unity's localization system handle the default locale selection
           string currentLocale = LocalizationSettings.SelectedLocale?.Identifier.Code ?? "en";
-          Language.OnNext(currentLocale);
+          _language.OnNext(currentLocale);
         }
       }
       catch (Exception ex)
@@ -122,19 +136,19 @@ namespace MToolKit.Runtime.Localization
       }
     }
 
-    public void SetNewLocale(string languageCode)
+    public bool SetNewLocale(string languageCode)
     {
       if (!IsInitialized)
       {
         log.ForGameObject(gameObject).ForMethod().Warning("Localization system not initialized yet. Cannot set locale to {0}", languageCode);
-        return;
+        return false;
       }
 
       // Handle null or empty language code gracefully
       if (string.IsNullOrEmpty(languageCode))
       {
         log.ForGameObject(gameObject).ForMethod().Warning("Language code is null or empty. Cannot set locale.");
-        return;
+        return false;
       }
 
       try
@@ -157,7 +171,7 @@ namespace MToolKit.Runtime.Localization
           log.ForGameObject(gameObject).ForMethod().Warning("AvailableLocales is null. Cannot set locale to {0}", languageCode);
           // Still save to PlayerPrefs so it can be restored later
           PlayerPrefs.SetString("Language", languageCode);
-          return;
+          return false;
         }
 
         // Ensure locales are loaded - explicitly wait for PreloadOperation if needed
@@ -179,7 +193,7 @@ namespace MToolKit.Runtime.Localization
               preloadOp.OperationException?.Message ?? "Unknown error", languageCode);
             // Still save to PlayerPrefs so it can be restored later
             PlayerPrefs.SetString("Language", languageCode);
-            return;
+            return false;
           }
         }
 
@@ -191,7 +205,7 @@ namespace MToolKit.Runtime.Localization
             "This may indicate that Addressables are not properly configured or locales are not built.", languageCode);
           // Still save to PlayerPrefs so it can be restored later
           PlayerPrefs.SetString("Language", languageCode);
-          return;
+          return false;
         }
 
         // Try to find the locale by code
@@ -200,9 +214,10 @@ namespace MToolKit.Runtime.Localization
         if (locale != null)
         {
           LocalizationSettings.SelectedLocale = locale;
-          Language.OnNext(languageCode);
+          _language.OnNext(languageCode);
           PlayerPrefs.SetString("Language", languageCode);
           log.ForGameObject(gameObject).ForMethod().Information("Successfully set locale to {0}", languageCode);
+          return true;
         }
         else
         {
@@ -216,25 +231,25 @@ namespace MToolKit.Runtime.Localization
             Locale fallbackLocale = LocalizationSettings.AvailableLocales.Locales[0];
             LocalizationSettings.SelectedLocale = fallbackLocale;
             string fallbackCode = fallbackLocale.Identifier.Code;
-            Language.OnNext(fallbackCode);
+            _language.OnNext(fallbackCode);
             PlayerPrefs.SetString("Language", fallbackCode);
             log.ForGameObject(gameObject).ForMethod().Information("Falling back to locale: {0}", fallbackCode);
+            return true;
           }
           else
           {
             log.ForGameObject(gameObject).ForMethod().Error("No available locales found!");
+            return false;
           }
         }
       }
       catch (Exception ex)
       {
         log.ForGameObject(gameObject).ForMethod().Error(ex, "Error setting locale to {0}", languageCode);
+        return false;
       }
     }
 
-    /// <summary>
-    ///   Gets the list of available locale codes
-    /// </summary>
     public List<string> GetAvailableLocaleCodes()
     {
       if (!IsInitialized)
@@ -280,9 +295,6 @@ namespace MToolKit.Runtime.Localization
       return codes;
     }
 
-    /// <summary>
-    ///   Gets the currently selected locale code
-    /// </summary>
     public string GetCurrentLocaleCode()
     {
       if (!IsInitialized)
@@ -290,5 +302,6 @@ namespace MToolKit.Runtime.Localization
 
       return LocalizationSettings.SelectedLocale?.Identifier.Code ?? "en";
     }
+    #endregion //ILocalizationService Implementation
   }
 }

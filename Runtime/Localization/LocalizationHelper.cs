@@ -12,6 +12,8 @@ namespace MToolKit.Runtime.Localization
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext(typeof(LocalizationHelper)).ForFeature("Localization"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 
+    public static ILocalizationService LocalizationService => GlobalLocalizationService.Instance ?? throw new Exception("Localization service not found");
+
     public static string GetLocalizedString(string key, params object[] args)
     {
       log.ForMethod().Debug("Getting localized string for key: {0}", key);

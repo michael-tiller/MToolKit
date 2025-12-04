@@ -167,7 +167,7 @@ namespace MToolKit.Runtime.Bootstrapper
       progressText.SetText(GetLocalizedTextSafely(preparingText, "Preparing..."));
 
       // Wait for localization system to be ready
-      LocalizationSystem localizationSystem = LocalizationSystem.Instance;
+      GlobalLocalizationService localizationSystem = GlobalLocalizationService.Instance;
       if (localizationSystem != null)
       {
         if (!localizationSystem.IsInitialized)
@@ -193,7 +193,7 @@ namespace MToolKit.Runtime.Bootstrapper
       PreloadNonUIDependenciesAsync().Forget();
 
       // Get AutoLoad setting from GlobalConstants config
-      bool autoLoad = GlobalConstants.Instance?.GlobalConstantsConfig?.AutoLoad ?? false;
+      bool autoLoad = GlobalConstantsHelper.Instance?.GlobalConstantsConfig?.AutoLoad ?? false;
 
       if (autoLoad)
       {
@@ -220,7 +220,7 @@ namespace MToolKit.Runtime.Bootstrapper
       try
       {
         // Wait for non-UI required dependencies with timeout
-        float timeout = GlobalConstants.Instance?.GlobalConstantsConfig?.BootstrapperTimeout ?? 5f;
+        float timeout = GlobalConstantsHelper.Instance?.GlobalConstantsConfig?.BootstrapperTimeout ?? 5f;
         try
         {
           await WaitForNonUIRequiredDependenciesAsync().Timeout(TimeSpan.FromSeconds(timeout));
@@ -265,7 +265,7 @@ namespace MToolKit.Runtime.Bootstrapper
       bootstrapDisposable = IsBootstrapped.Subscribe(OnBootstrapValueChangedHandler);
 
       // Get timeout from GlobalConstants config
-      float timeout = GlobalConstants.Instance?.GlobalConstantsConfig?.BootstrapperTimeout ?? 5f;
+      float timeout = GlobalConstantsHelper.Instance?.GlobalConstantsConfig?.BootstrapperTimeout ?? 5f;
 
       // Load manifest-driven content (scenes are loaded via IGameLoader from manifest.json)
       LoadSceneWithTimeout(timeout).Forget();

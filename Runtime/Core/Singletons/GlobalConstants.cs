@@ -1,5 +1,6 @@
 using System;
 using MToolKit.Runtime.Core.Config;
+using MToolKit.Runtime.Core.Interfaces;
 using MToolKit.Runtime.Utilities;
 using Serilog;
 using UnityEngine;
@@ -9,7 +10,16 @@ using Object = UnityEngine.Object;
 
 namespace MToolKit.Runtime.Core.Singletons
 {
-  public class GlobalConstants : Singleton<GlobalConstants>
+
+  public static class GlobalConstantsHelper
+  {
+    public static IGlobalConstants Instance => GlobalConstants.Instance;
+  }
+
+  /// <summary>
+  ///   Singleton that loads the global constants
+  /// </summary>
+  public class GlobalConstants : Singleton<GlobalConstants>, IGlobalConstants
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<GlobalConstants>().ForFeature("Core"));
     private static ILogger log => logLazy.Value ?? Logger.None;

@@ -72,9 +72,9 @@ namespace MToolKit.Runtime.Bootstrapper
 
       // Load Addressable scenes
       // Check if GlobalConstantsConfig has a MenuSceneReference configured
-      if (GlobalConstants.Instance?.GlobalConstantsConfig?.MenuSceneReference != null)
+      if (GlobalConstantsHelper.Instance?.GlobalConstantsConfig?.MenuSceneReference != null)
       {
-        AssetReferenceScene menuSceneRef = GlobalConstants.Instance.GlobalConstantsConfig.MenuSceneReference;
+        AssetReferenceScene menuSceneRef = GlobalConstantsHelper.Instance.GlobalConstantsConfig.MenuSceneReference;
         if (menuSceneRef.RuntimeKeyIsValid())
         {
           log.ForMethod().Information("Loading menu scene from GlobalConstantsConfig: {SceneGuid}", menuSceneRef.AssetGUID);

@@ -21,7 +21,9 @@ using MToolKit.Runtime.ErrorSystem;
 using MToolKit.Runtime.ErrorSystem.Messages;
 using MToolKit.Runtime.Input;
 using MToolKit.Runtime.Input.Interfaces;
+using MToolKit.Runtime.Localization;
 using MToolKit.Runtime.MessageBus;
+using MToolKit.Runtime.Music;
 using MToolKit.Runtime.MessageBus.Events;
 using MToolKit.Runtime.Navigation;
 using MToolKit.Runtime.Navigation.Events;
@@ -232,7 +234,7 @@ namespace MToolKit.Runtime.Installer
 
       // Use local field if already set (e.g., in tests), otherwise get from GlobalConfigLoader
       if (!globalPluginConfigSetByTest)
-        globalPluginConfig = GlobalConfigLoader.Instance?.GlobalPluginConfig;
+        globalPluginConfig = GlobalConfigLoaderHelper.Instance?.GlobalPluginConfig;
       log.ForGameObject(gameObject).ForMethod().Verbose("GlobalPluginConfig: {0}", globalPluginConfig != null ? "not null" : "null");
 
       // Set up MessagePipe for global communication
@@ -339,7 +341,7 @@ namespace MToolKit.Runtime.Installer
         {
           return; // Early exit if object is destroyed
         }
-        
+
         try
         {
           IIniService iniService = resolver.Resolve<IIniService>();
@@ -364,6 +366,14 @@ namespace MToolKit.Runtime.Installer
       log.ForGameObject(gameObject).ForMethod().Verbose("Registered IIniService globally");
 
       log.ForGameObject(gameObject).ForMethod().Verbose("Registered ProfileManager globally");
+
+      // Register ILocalizationService using the adapter pattern
+      builder.Register<ILocalizationService, LocalizationServiceAdapter>(Lifetime.Singleton);
+      log.ForGameObject(gameObject).ForMethod().Verbose("Registered ILocalizationService with LocalizationServiceAdapter");
+
+      // Register IMusicManager using the adapter pattern
+      builder.Register<IMusicManager, MusicManagerAdapter>(Lifetime.Singleton);
+      log.ForGameObject(gameObject).ForMethod().Verbose("Registered IMusicManager with MusicManagerAdapter");
 
       // Register SaveSystemCoordinator globally so it's available in all scenes
       builder.Register(resolver =>
@@ -422,7 +432,7 @@ namespace MToolKit.Runtime.Installer
           {
             return; // Early exit if object is destroyed
           }
-          
+
           try
           {
             if (inputServiceInitialized)
@@ -476,7 +486,7 @@ namespace MToolKit.Runtime.Installer
           {
             return; // Early exit if object is destroyed
           }
-          
+
           try
           {
             InputServiceInstance = resolver.Resolve<IInputService>();
@@ -520,7 +530,7 @@ namespace MToolKit.Runtime.Installer
         {
           return; // Early exit if object is destroyed
         }
-        
+
         try
         {
           // Get the MessagePipe provider from the resolver
@@ -894,7 +904,7 @@ namespace MToolKit.Runtime.Installer
         {
           return; // Early exit if object is destroyed
         }
-        
+
         try
         {
           log.ForGameObject(gameObject).ForMethod().Verbose("Initializing global runtime plugins");
@@ -996,7 +1006,7 @@ namespace MToolKit.Runtime.Installer
         return;
 
       // Get scene references from GlobalConstants
-      GlobalConstantsConfigAsset globalConstants = GlobalConstants.Instance?.GlobalConstantsConfig;
+      GlobalConstantsConfigAsset globalConstants = GlobalConstantsHelper.Instance?.GlobalConstantsConfig;
       if (globalConstants == null)
         return;
 
@@ -1053,7 +1063,7 @@ namespace MToolKit.Runtime.Installer
       }
 
       // Get scene references from GlobalConstants
-      GlobalConstantsConfigAsset globalConstants = GlobalConstants.Instance?.GlobalConstantsConfig;
+      GlobalConstantsConfigAsset globalConstants = GlobalConstantsHelper.Instance?.GlobalConstantsConfig;
       if (globalConstants == null)
       {
         log.ForGameObject(gameObject).ForMethod().Warning("GlobalConstantsConfig not available, cannot determine scene type");

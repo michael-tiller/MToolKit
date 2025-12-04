@@ -38,9 +38,9 @@ namespace MToolKit.Runtime.Music
   ///     </item>
   ///   </list>
   /// </remarks>
-  public class MusicManager : Singleton<MusicManager>
+  public class GlobalMusicManager : Singleton<GlobalMusicManager>, IMusicManager
   {
-    private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<MusicManager>().ForFeature("Music"));
+    private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<GlobalMusicManager>().ForFeature("Music"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 
     protected override bool selfCreate => true;
@@ -110,51 +110,51 @@ namespace MToolKit.Runtime.Music
       base.OnDestroy();
     }
 
-    #region Static Public API
+    #region IMusicManager Implementation
 
     /// <summary>
     ///   Plays music with optional crossfade duration. Returns immediately.
     /// </summary>
     /// <param name="audioClip">The audio clip to play</param>
     /// <param name="duration">Crossfade duration in seconds (default: 2f)</param>
-    public static void PlayMusic(AudioClip audioClip, float duration = 2f)
+    public void PlayMusic(AudioClip audioClip, float duration = 2f)
     {
-      Instance.PlayMusicInternal(audioClip, duration);
+      PlayMusicInternal(audioClip, duration);
     }
 
     /// <summary>
     ///   Pauses the currently playing music.
     /// </summary>
-    public static void Pause()
+    public void Pause()
     {
-      Instance.PauseInternal();
+      PauseInternal();
     }
 
     /// <summary>
     ///   Resumes the paused music.
     /// </summary>
-    public static void Resume()
+    public void Resume()
     {
-      Instance.ResumeInternal();
+      ResumeInternal();
     }
 
     /// <summary>
     ///   Stops the currently playing music and cancels any ongoing crossfade.
     /// </summary>
-    public static void Stop()
+    public void Stop()
     {
-      Instance.StopInternal();
+      StopInternal();
     }
 
     /// <summary>
     ///   Gets whether music is currently playing.
     /// </summary>
-    public static bool IsPlaying => Instance != null && Instance.isPlayingInternal;
+    public bool IsPlaying => isPlayingInternal;
 
     /// <summary>
     ///   Gets whether music is currently paused.
     /// </summary>
-    public static bool IsPaused => Instance != null && Instance.isPausedInternal;
+    public bool IsPaused => isPausedInternal;
 
     #endregion
 
