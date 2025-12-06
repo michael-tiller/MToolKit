@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.MessageBus.Interfaces;
@@ -58,15 +57,30 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
       // This allows dialogue execution to resume after pausing
       if (messageType == typeof(DialogueContinueMessage))
       {
-        return Definition.GraphDomain == "Dialogue" ||
-               Definition.Nodes.Any(n => n.NodeType == "DialogueStartNode" || n.NodeType == "DialogueLineNode" || n.NodeType == "DialogueChoiceNode");
+        if (Definition.GraphDomain == "Dialogue")
+          return true;
+
+        // Check nodes manually to avoid LINQ allocation
+        foreach (var node in Definition.Nodes)
+        {
+          if (node.NodeType == "DialogueStartNode" || node.NodeType == "DialogueLineNode" || node.NodeType == "DialogueChoiceNode")
+            return true;
+        }
+        return false;
       }
 
       var domainFilter = domain ?? string.Empty;
-      return Definition.Subscriptions.Any(s =>
-        s.MessageType != null &&
-        s.MessageType.Type == messageType &&
-        (string.IsNullOrEmpty(s.DomainFilter) || s.DomainFilter == domainFilter));
+      // Check subscriptions manually to avoid LINQ allocation
+      foreach (var subscription in Definition.Subscriptions)
+      {
+        if (subscription.MessageType != null &&
+            subscription.MessageType.Type == messageType &&
+            (string.IsNullOrEmpty(subscription.DomainFilter) || subscription.DomainFilter == domainFilter))
+        {
+          return true;
+        }
+      }
+      return false;
     }
 
     public async UniTask HandleMessageAsync(IGameMessage message, string domain = null, CancellationToken ct = default)
@@ -180,23 +194,40 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
 
           // Check if this is a dialogue graph - if so, store next node IDs in state
           // Otherwise, enqueue directly (for quests and other systems)
-          var connections = Definition.GetConnectionsFrom(nodeId).ToList();
+          // Iterate connections directly to avoid LINQ allocations in hot path
+          var connectionCount = 0;
+          var nextNodeIds = new List<string>();
+
+          foreach (var connection in Definition.GetConnectionsFrom(nodeId))
+          {
+            connectionCount++;
+
+            if (Definition.GraphDomain == "Dialogue" || nodeDef.NodeType == "DialogueStartNode")
+            {
+              // For dialogue, collect node IDs to store in state
+              nextNodeIds.Add(connection.ToNodeId);
+
+              // Log connection details for debugging
+              var targetNode = Definition.GetNodeById(connection.ToNodeId);
+              var targetText = targetNode?.NodeType == "DialogueLineNode" && targetNode.Parameters.TryGetValue("Text", out var txt)
+                ? txt as string ?? ""
+                : "N/A";
+              log.ForMethod().Information("Dialogue: Entry node connection: {FromNodeId} -> {ToNodeId} (Port: {PortName}, Target Text: '{Text}')",
+                connection.FromNodeId, connection.ToNodeId, connection.PortName, targetText);
+            }
+            else
+            {
+              // For non-dialogue graphs, enqueue directly
+              queue.Enqueue(connection.ToNodeId);
+              log.ForMethod().Information("Quest: Enqueued node {ToNodeId} from entry node {FromNodeId}",
+                connection.ToNodeId, nodeId);
+            }
+          }
+
           if (Definition.GraphDomain == "Dialogue" || nodeDef.NodeType == "DialogueStartNode")
           {
-            var nextNodeIds = connections.Select(c => c.ToNodeId).ToList();
             if (nextNodeIds.Count > 0)
             {
-              // Log connection details for debugging
-              foreach (var conn in connections)
-              {
-                var targetNode = Definition.GetNodeById(conn.ToNodeId);
-                var targetText = targetNode?.NodeType == "DialogueLineNode" && targetNode.Parameters.TryGetValue("Text", out var txt)
-                  ? txt as string ?? ""
-                  : "N/A";
-                log.ForMethod().Information("Dialogue: Entry node connection: {FromNodeId} -> {ToNodeId} (Port: {PortName}, Target Text: '{Text}')",
-                  conn.FromNodeId, conn.ToNodeId, conn.PortName, targetText);
-              }
-
               state.Set("Dialogue.NextNodeIds", nextNodeIds);
               log.ForMethod().Information("Dialogue: Entry node {NodeId} stored {Count} next node ID(s) in state: {NodeIds}. Will process when DialogueContinueMessage is received.",
                 nodeId, nextNodeIds.Count, string.Join(", ", nextNodeIds));
@@ -206,15 +237,6 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
           }
           else
           {
-            // For non-dialogue graphs, enqueue directly (original behavior)
-            var connectionCount = 0;
-            foreach (var connection in connections)
-            {
-              queue.Enqueue(connection.ToNodeId);
-              connectionCount++;
-              log.ForMethod().Information("Quest: Enqueued node {ToNodeId} from entry node {FromNodeId}",
-                connection.ToNodeId, nodeId);
-            }
             log.ForMethod().Information("Quest: Entry node {NodeId} enqueued {ConnectionCount} connected node(s)",
               nodeId, connectionCount);
           }

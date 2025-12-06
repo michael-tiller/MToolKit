@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.MessageBus.Interfaces;
@@ -145,12 +144,12 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
 
     private void BranchToOutput(IRuntimeGraphDefinition graph, RuntimeNodeDefinition node, GraphNodeExecutionContext context, string portName)
     {
-      var matchingConnections = graph.GetConnectionsFrom(node.NodeId)
-        .Where(c => c.PortName == portName)
-        .ToList();
-
-      foreach (var connection in matchingConnections)
-        context.EnqueueNext(connection.ToNodeId);
+      // Filter connections manually to avoid LINQ allocation in hot path
+      foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
+      {
+        if (connection.PortName == portName)
+          context.EnqueueNext(connection.ToNodeId);
+      }
     }
 
     private void ContinueToAllOutputs(IRuntimeGraphDefinition graph, RuntimeNodeDefinition node, GraphNodeExecutionContext context)

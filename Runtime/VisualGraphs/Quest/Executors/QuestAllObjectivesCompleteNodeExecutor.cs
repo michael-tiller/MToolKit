@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.MessageBus.Interfaces;
@@ -40,12 +39,12 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       // Branch based on completion
       var targetPort = allComplete ? "AllComplete" : "Incomplete";
 
-      var matchingConnections = graph.GetConnectionsFrom(node.NodeId)
-        .Where(c => c.PortName == targetPort)
-        .ToList();
-
-      foreach (var connection in matchingConnections)
-        context.EnqueueNext(connection.ToNodeId);
+      // Filter connections manually to avoid LINQ allocation in hot path
+      foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
+      {
+        if (connection.PortName == targetPort)
+          context.EnqueueNext(connection.ToNodeId);
+      }
 
       // TODO: Emit QuestCompleteMessage if emitEvent is true and all complete
       // context.Emitter.Emit(new QuestCompleteMessage { QuestId = graph.GraphId });

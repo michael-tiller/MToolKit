@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.AssetLoader.Interfaces;
@@ -56,10 +55,19 @@ namespace MToolKit.Runtime.AssetLoader
 
         // Log all available resource locators
         IEnumerable<IResourceLocator> locators = Addressables.ResourceLocators;
-        List<IResourceLocator> resourceLocators = locators.ToList();
-        log.ForMethod().Debug("Available resource locators: {Count}", resourceLocators.Count());
+        // Build list manually to avoid LINQ allocation (initialization code, but consistent with performance posture)
+        var resourceLocators = new List<IResourceLocator>();
+        foreach (var locator in locators)
+          resourceLocators.Add(locator);
+        log.ForMethod().Debug("Available resource locators: {Count}", resourceLocators.Count);
         foreach (IResourceLocator locator in resourceLocators)
-          log.ForMethod().Debug("Locator: {Locator}, Keys: {Keys}", locator, locator.Keys.Count());
+        {
+          // Count keys manually to avoid LINQ allocation
+          int keyCount = 0;
+          foreach (var key in locator.Keys)
+            keyCount++;
+          log.ForMethod().Debug("Locator: {Locator}, Keys: {Keys}", locator, keyCount);
+        }
       }
       catch (Exception ex)
       {
@@ -76,7 +84,7 @@ namespace MToolKit.Runtime.AssetLoader
       AsyncOperationHandle<IResourceLocator> handle = Addressables.LoadContentCatalogAsync(url);
       await handle.ToUniTask(cancellationToken: ct);
 
-      if (handle is {Status:AsyncOperationStatus.Succeeded,Result: not null})
+      if (handle is { Status: AsyncOperationStatus.Succeeded, Result: not null })
         catalogLocators[url] = handle.Result;
       else
         throw new InvalidOperationException($"Failed to load catalog: {url}");
@@ -201,11 +209,14 @@ namespace MToolKit.Runtime.AssetLoader
     public void ClearAllCaches()
     {
       // Release all cached dependencies
-      foreach (string label in cachedHandles.Keys.ToList())
+      // Build list manually to avoid LINQ allocation (even though this is cleanup code, not hot path)
+      var labels = new List<string>(cachedHandles.Keys);
+      foreach (string label in labels)
         ReleaseDependencies(label);
 
       // Release all cached assets
-      foreach (string key in cachedAssets.Keys.ToList())
+      var keys = new List<string>(cachedAssets.Keys);
+      foreach (string key in keys)
         ReleaseCached(key);
 
       // Clear preloaded assets
@@ -346,8 +357,13 @@ namespace MToolKit.Runtime.AssetLoader
         // Wait for all assets to load in parallel
         Object[] results = await UniTask.WhenAll(loadTasks);
 
-        // Filter out null results (failed loads)
-        List<Object> loadedAssets = results.OfType<Object>().Where(a => a != null).ToList();
+        // Filter out null results (failed loads) - manual filtering to avoid LINQ allocation
+        var loadedAssets = new List<Object>(results.Length);
+        foreach (var result in results)
+        {
+          if (result is Object obj && obj != null)
+            loadedAssets.Add(obj);
+        }
         Progress.Value = 1f;
 
         log.ForMethod().Information("Successfully loaded {Count} assets for label: {Label}", loadedAssets.Count, label);

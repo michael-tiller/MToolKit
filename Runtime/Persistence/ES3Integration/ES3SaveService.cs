@@ -159,6 +159,13 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
 
         try
         {
+          // Read reactive property on main thread before background work
+          var currentSaveCounter = SaveCounter.Value;
+          
+          // Perform file I/O on background thread, capture values to set on main thread
+          string timestamp = null;
+          int newSaveCounter = currentSaveCounter + 1;
+          
           await UniTask.RunOnThreadPool(() =>
           {
             // Check if disposed before proceeding
@@ -181,20 +188,20 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
               }
             }
 
-            var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-            var newSaveCounter = SaveCounter.Value + 1;
+            timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
             ES3.Save("LastSaveTime", timestamp, es3Settings);
             ES3.Save("SaveFormatVersion", saveFormatVersion, es3Settings);
             ES3.Save("SaveCounter", newSaveCounter, es3Settings);
-
-            // Check disposal again before setting reactive properties
-            if (!isDisposed)
-            {
-              LastSaveTime.Value = timestamp;
-              SaveCounter.Value = newSaveCounter;
-            }
           }, cancellationToken: timeoutCts.Token);
+
+          // Marshal reactive property updates back to main thread
+          // After await, we're back on the calling thread (main thread for Unity)
+          if (!isDisposed && timestamp != null)
+          {
+            LastSaveTime.Value = timestamp;
+            SaveCounter.Value = newSaveCounter;
+          }
 
           // Check if file exists
           if (!ES3.FileExists(filePath))
@@ -280,6 +287,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
 
         try
         {
+          // Perform file I/O on background thread, capture values to set on main thread
+          string loadedTimestamp = null;
+          int? loadedSaveCounter = null;
+          
           await UniTask.RunOnThreadPool(() =>
           {
             // Check if disposed before proceeding
@@ -291,25 +302,13 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
             // Load timestamp if it exists
             if (ES3.KeyExists("LastSaveTime", es3Settings))
             {
-              var timestamp = ES3.Load<string>("LastSaveTime", es3Settings);
-
-              // Check disposal again before setting reactive property
-              if (!isDisposed)
-              {
-                LastLoadTime.Value = timestamp;
-              }
+              loadedTimestamp = ES3.Load<string>("LastSaveTime", es3Settings);
             }
 
             // Load save counter if it exists
             if (ES3.KeyExists("SaveCounter", es3Settings))
             {
-              var saveCounter = ES3.Load<int>("SaveCounter", es3Settings);
-
-              // Check disposal again before setting reactive property
-              if (!isDisposed)
-              {
-                SaveCounter.Value = saveCounter;
-              }
+              loadedSaveCounter = ES3.Load<int>("SaveCounter", es3Settings);
             }
 
             // Check for version mismatch
@@ -330,6 +329,20 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
               log.ForMethod().Information("No version information found in save file (likely version 1.0.0 or legacy save)");
             }
           }, cancellationToken: timeoutCts.Token);
+
+          // Marshal reactive property updates back to main thread
+          // After await, we're back on the calling thread (main thread for Unity)
+          if (!isDisposed)
+          {
+            if (loadedTimestamp != null)
+            {
+              LastLoadTime.Value = loadedTimestamp;
+            }
+            if (loadedSaveCounter.HasValue)
+            {
+              SaveCounter.Value = loadedSaveCounter.Value;
+            }
+          }
 
           // Get the full path for logging
           var fullPath = es3Settings.FullPath;

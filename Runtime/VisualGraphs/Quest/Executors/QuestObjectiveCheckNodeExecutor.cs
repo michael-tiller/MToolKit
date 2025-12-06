@@ -1,5 +1,5 @@
 using System;
-using System.Linq;
+using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.MessageBus.Interfaces;
@@ -122,9 +122,13 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       // Branch based on completion
       var targetPort = isComplete ? "Complete" : "Incomplete";
 
-      var matchingConnections = graph.GetConnectionsFrom(node.NodeId)
-        .Where(c => c.PortName == targetPort)
-        .ToList();
+      // Filter connections manually to avoid LINQ allocation in hot path
+      var matchingConnections = new List<RuntimeConnectionDefinition>();
+      foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
+      {
+        if (connection.PortName == targetPort)
+          matchingConnections.Add(connection);
+      }
 
       log.ForMethod().Information("Quest: QuestObjectiveCheckNode branching to '{TargetPort}' port ({ConnectionCount} connection(s)) for objective {ObjectiveGuid}",
         targetPort, matchingConnections.Count, objectiveGuid);

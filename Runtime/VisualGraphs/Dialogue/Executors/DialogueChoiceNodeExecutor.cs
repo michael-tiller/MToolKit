@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MessagePipe;
@@ -136,11 +135,18 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
       // The exporter now stores connections with predictable port names: "Choice_{index}"
       if (selectedChoiceIndex >= 0 && selectedChoiceIndex < choices.Count)
       {
-        // Get all connections from this node
-        var allConnections = graph.GetConnectionsFrom(node.NodeId).ToList();
+        // Get all connections from this node - iterate directly to avoid LINQ allocations
+        var allConnections = new List<RuntimeConnectionDefinition>();
+        var portNames = new List<string>();
+        
+        foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
+        {
+          allConnections.Add(connection);
+          portNames.Add(connection.PortName);
+        }
 
         log.ForMethod().Information("Choice {ChoiceIndex} selected. Found {ConnectionCount} total connections from node {NodeId}. Port names: {PortNames}",
-          selectedChoiceIndex, allConnections.Count, node.NodeId, string.Join(", ", allConnections.Select(c => c.PortName)));
+          selectedChoiceIndex, allConnections.Count, node.NodeId, string.Join(", ", portNames));
 
         // Try multiple port name formats:
         // 1. "Choice_{index}" - format used by exporter in RuntimeConnectionDefinition
@@ -156,13 +162,18 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
 
         foreach (var portNameFormat in portNameFormats)
         {
-          var matches = allConnections
-            .Where(c => c.PortName == portNameFormat || c.PortName.StartsWith(portNameFormat + " "))
-            .ToList();
-
-          if (matches.Count > 0)
+          // Filter connections manually to avoid LINQ allocations
+          matchingConnections.Clear();
+          foreach (var connection in allConnections)
           {
-            matchingConnections = matches;
+            if (connection.PortName == portNameFormat || connection.PortName.StartsWith(portNameFormat + " "))
+            {
+              matchingConnections.Add(connection);
+            }
+          }
+
+          if (matchingConnections.Count > 0)
+          {
             matchedPortName = portNameFormat;
             break;
           }
@@ -203,9 +214,13 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
           bool found = false;
           foreach (var portFormat in legacyPortFormats)
           {
-            var legacyConnections = allConnections
-              .Where(c => c.PortName == portFormat || c.PortName.StartsWith(portFormat + " "))
-              .ToList();
+            // Filter connections manually to avoid LINQ allocation in hot path
+            var legacyConnections = new List<RuntimeConnectionDefinition>();
+            foreach (var connection in allConnections)
+            {
+              if (connection.PortName == portFormat || connection.PortName.StartsWith(portFormat + " "))
+                legacyConnections.Add(connection);
+            }
 
             if (legacyConnections.Count > 0)
             {
@@ -229,8 +244,13 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
           if (!found)
           {
             // Last resort: match by connection order (assumes connections are in choice order)
+            // Build port names list manually to avoid LINQ allocation
+            var portNamesList = new List<string>(allConnections.Count);
+            foreach (var connection in allConnections)
+              portNamesList.Add(connection.PortName);
+            
             log.ForMethod().Warning("Could not match port name for choice {ChoiceIndex}. Using connection order fallback. Available ports: {PortNames}",
-              selectedChoiceIndex, string.Join(", ", allConnections.Select(c => c.PortName)));
+              selectedChoiceIndex, string.Join(", ", portNamesList));
 
             if (selectedChoiceIndex < allConnections.Count)
             {

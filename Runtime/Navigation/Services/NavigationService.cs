@@ -49,10 +49,13 @@ namespace MToolKit.Runtime.Navigation.Services
       string targetName = prefab.name.Replace("(Clone)", "");
 
       // --- 1) Search the stack for an existing view with same prefab name ---
+      // Iterate stack directly to avoid ToArray() allocation in hot path
+      // Stack enumerator iterates top-to-bottom (LIFO), which matches ToArray() behavior
       T foundView = null;
-      IView[] allInStack = stacks[canvasType].ToArray(); // top is last in array
-
-      foreach (IView item in allInStack)
+      var stack = stacks[canvasType];
+      
+      foreach (var item in stack)
+      {
         if (item is T candidate)
         {
           string candidateName = candidate.gameObject.name.Replace("(Clone)", "");
@@ -62,6 +65,7 @@ namespace MToolKit.Runtime.Navigation.Services
             break;
           }
         }
+      }
 
       // --- 2) If found, move that existing view to top (pop everything above it) ---
       if (foundView != null)
