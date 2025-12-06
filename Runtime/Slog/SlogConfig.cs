@@ -42,15 +42,33 @@ namespace MToolKit.Runtime.Slog
       if (configurationAsset.IsFeatureFilteringEnabled) loggerConfig = loggerConfig.Filter.ByIncludingOnly(IsFeatureAllowed);
 
       Log.Logger = loggerConfig.CreateLogger();
+
+      // Get environment from environment variables (loaded by EnvironmentLoader)
+      // EnvironmentLoader runs BeforeSceneLoad, so env vars should be available here
+      string environment = Environment.GetEnvironmentVariable("ENVIRONMENT") ??
+                          Environment.GetEnvironmentVariable("MT_ENVIRONMENT") ??
+                          "default";
+
+      // Build version details - Application.version is the primary version
+      // Additional build metadata can be added via custom build scripts if needed
+      string buildVersion = Application.version;
+#if UNITY_EDITOR
+      string buildType = "Editor";
+#else
+      string buildType = "Release";
+#endif
+
       Log.Logger = Log.Logger
         .ForContext("appName", Application.productName)
         .ForContext("deviceType", SystemInfo.deviceType)
         .ForContext("deviceID", SystemInfo.deviceUniqueIdentifier)
         .ForContext("appSessionID", AnalyticsSessionInfo.sessionId)
-        .ForContext("appVersion", Application.version)
+        .ForContext("appVersion", buildVersion)
+        .ForContext("buildType", buildType)
         .ForContext("appPlatform", Application.platform)
         .ForContext("appLanguage", Application.systemLanguage)
         .ForContext("appSessionStart", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+        .ForContext("environment", environment)
         ;
     }
 
@@ -171,7 +189,7 @@ namespace MToolKit.Runtime.Slog
         if (request.isDone)
           config = (SlogConfigAsset)request.asset;
         else
-        // Fallback to synchronous loading if async isn't immediately available
+          // Fallback to synchronous loading if async isn't immediately available
           config = Resources.Load<SlogConfigAsset>(path);
       }
       catch (Exception ex)

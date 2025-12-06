@@ -45,11 +45,5 @@ namespace MToolKit.Runtime.Core.Config
     [TabGroup("Environment Settings")]
     [field: SerializeField]
     public bool EnablePerformanceProfiling { get; private set; }
-
-    [TabGroup("Environment Settings")]
-    [Tooltip("Override configs can be used for different environments (dev/staging/prod)")]
-    [field: SerializeField]
-    [field: ReadOnly]
-    public string EnvironmentOverride { get; private set; } = "default";
   }
 }

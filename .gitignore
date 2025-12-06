@@ -1,1 +1,7 @@
 /.idea
+
+# Environment files - never commit .env files with real values
+.env
+.env.dev
+.env.prod
+.env.stage

@@ -219,9 +219,10 @@ namespace MToolKit.Runtime.Installer
 
       if (Instance == this)
       {
+        log.ForGameObject(gameObject).ForMethod().Information("GlobalInstaller shutdown");
         Instance = null;
-        log.ForGameObject(gameObject).ForMethod().Verbose("GlobalInstaller destroyed");
       }
+
       base.OnDestroy();
     }
 

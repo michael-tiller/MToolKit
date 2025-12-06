@@ -2,8 +2,10 @@ using System;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Bootstrapper.Interfaces;
 using MToolKit.Runtime.Core.Singletons;
+using MToolKit.Runtime.ErrorSystem.Messages;
 using MToolKit.Runtime.Installer;
 using MToolKit.Runtime.Localization;
+using MToolKit.Runtime.MessageBus;
 using MToolKit.Runtime.Slog;
 using R3;
 using Serilog;
@@ -237,7 +239,7 @@ namespace MToolKit.Runtime.Bootstrapper
       }
       catch (Exception e)
       {
-        log.ForMethod().Error(e, "Failed to preload non-UI dependencies");
+        log.ForMethod().Error(e, "Failed to preload non-UI dependencies - treating as hard fault");
         ForceQuit();
       }
     }
@@ -331,7 +333,7 @@ namespace MToolKit.Runtime.Bootstrapper
           }
           catch (TimeoutException)
           {
-            log.ForMethod().Error("Non-UI dependencies failed to initialize within {0} seconds", timeout);
+            log.ForMethod().Error("Non-UI dependencies failed to initialize within {0} seconds - treating as hard fault", timeout);
             ForceQuit();
             return;
           }
@@ -358,7 +360,7 @@ namespace MToolKit.Runtime.Bootstrapper
       }
       catch (Exception e)
       {
-        log.ForMethod().Error(e, "Required dependency failed or error loading manifest content.");
+        log.ForMethod().Error(e, "Required dependency failed or error loading manifest content - treating as hard fault");
         ForceQuit();
         throw; // Re-throw the exception for required dependency failures
       }
@@ -437,9 +439,21 @@ namespace MToolKit.Runtime.Bootstrapper
 
     private void ForceQuit()
     {
-      log.ForMethod().Information("Halting execution.");
+      log.ForMethod().Information("Halting execution due to fatal error.");
       progressText.SetText(GetLocalizedTextSafely(errorText, "Error occurred"));
       IsLoading.Value = false;
+
+      // Route fatal error through ErrorSystem if available
+      try
+      {
+        var publisher = GlobalAsyncMessageBroker.GetPublisher<ErrorRequestMessage>();
+        publisher?.Publish(new ErrorRequestMessage("Application startup failed. Please check logs for details.", fatal: true));
+      }
+      catch (Exception ex)
+      {
+        // ErrorSystem may not be initialized yet during bootstrapper failures
+        log.ForMethod().Warning(ex, "Failed to route error through ErrorSystem (may not be initialized)");
+      }
 
       // Don't actually quit during tests - just log the error
 #if UNITY_INCLUDE_TESTS

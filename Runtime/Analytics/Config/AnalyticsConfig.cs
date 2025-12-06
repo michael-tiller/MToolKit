@@ -1,4 +1,3 @@
-using System;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -41,9 +40,5 @@ namespace MToolKit.Runtime.Analytics.Config
     public bool EnableGameAnalytics => enableGameAnalytics;
     public bool EnableAtt => enableAtt;
     public bool EnableGdpr => enableGdpr;
-
-    // Keys loaded from environment variables at runtime
-    public string GameKey => Environment.GetEnvironmentVariable("GA_GAME_KEY") ?? "";
-    public string SecretKey => Environment.GetEnvironmentVariable("GA_SECRET_KEY") ?? "";
   }
 }

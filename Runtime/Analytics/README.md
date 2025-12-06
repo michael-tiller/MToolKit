@@ -132,16 +132,9 @@ analytics.SetConsent(analyticsEnabled: true, adsEnabled: false);
 
 ## Configuration
 
-### Environment Variables
+### GameAnalytics Configuration
 
-Create a `.env` file in your project root:
-
-```env
-GA_GAME_KEY=your_game_key_here
-GA_SECRET_KEY=your_secret_key_here
-```
-
-**Important**: Never commit `.env` files with real keys!
+GameAnalytics keys are configured through Unity's GameAnalytics Settings asset (created via GameAnalytics → Settings). The SDK reads keys from this asset automatically - no environment variables are required.
 
 ### Creating Analytics Config
 

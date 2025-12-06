@@ -57,7 +57,7 @@ The goal is long-lived, testable systems that can ship real games and non-game p
 | [VisualGraphs](Runtime/VisualGraphs/README.md) | xNode-based graph authoring → runtime DTO, event-driven workflows, quests/dialogue | Production (Quest/Dialogue), WIP (general workflows) |
 | [Slog](Runtime/Slog/README.md) | Serilog-based structured logging, environment-aware sinks | Production |
 | [Utilities](Runtime/Utilities/README.md) | Common helpers, collections, extension methods | Production |
-| Accessibility | High-contrast/large text modes, platform accessibility hooks | In Progress |
+| Accessibility | Global text size scaling, high-contrast themes, keyboard/controller navigation | In Progress |
 | Save Migrations | Versioned save formats, migration registry per domain | Planned |
 
 ## Getting Started
@@ -207,12 +207,92 @@ You may use, modify, and distribute this framework in commercial and non-commerc
 
 Copyright (c) 2025 Michael Tiller.
 
+### Operational Model
+
+MToolKit assumes a minimum operations posture:
+
+* **Logging**
+  * All core modules log via Serilog with structured events.
+  * Startup, shutdown, save/load, and critical errors are always logged at `Information` or above.
+  * Log enrichment includes environment, build version, and session/user identifiers where available.
+
+* **Error Handling**
+  * All fatal errors route through `ErrorSystem` for:
+    * User-facing messaging (where appropriate).
+    * Logging at `Error` level with stack traces.
+    * Optional analytics reporting.
+  * Module initialization failures are treated as hard faults; MToolKit will not silently continue in a half-initialized state.
+
+* **Health / Watchdog**
+  * Bootstrapper runs module-level health checks at startup.
+  * Failures during boot are surfaced via `ErrorSystem` and logs and can be wired to crash-reporting / analytics sinks.
+
+---
+
+### Threading Model
+
+MToolKit is explicitly main-thread-first:
+
+* All gameplay, UI, and most framework code run on the Unity main thread.
+* Background work is limited to:
+  * Persistence I/O
+  * Asset loading
+  * Logging and analytics dispatch
+* No Unity API calls are made off the main thread.
+* Cross-thread work is marshalled back to the main thread via:
+  * UniTask's main-thread scheduler
+  * MessagePipe's main-thread dispatch configuration
+
+Any new background work must follow the same pattern and never touch Unity types directly.
+
+---
+
+### Performance Posture
+
+Baseline performance rules:
+
+* Business logic must not rely on per-frame `Update()` polling; reactive streams and events are preferred.
+* Hot paths avoid:
+  * LINQ allocations
+  * Boxing-heavy APIs
+  * Per-frame heap allocations in tight loops
+* VisualGraphs runtime:
+  * Designed for use in gameplay and quest/trigger flows.
+  * Graphs must operate on preallocated state where used in per-frame or per-tick contexts.
+
+Performance-sensitive modules (Navigation, VisualGraphs runtime, Persistence, AssetLoader) are treated as "on-budget" and monitored in profiling sessions.
+
+---
+
+### Versioning & Compatibility
+
+MToolKit itself follows a stability policy:
+
+* **Semantic-ish versioning**
+  * Minor versions may add APIs and modules.
+  * Breaking changes to public interfaces are reserved for major version bumps or are introduced with a documented migration path.
+* **Public vs internal APIs**
+  * Modules and games are expected to depend on public interfaces only.
+  * Concrete implementations and internals are not API-stable and may change between versions.
+* **Deprecation**
+  * Deprecated APIs are marked Obsolete and kept for at least one minor version before removal, where feasible.
+
+The goal is to keep long-lived projects upgradeable without constant rewrites.
+
+---
+
 ## Current Status
 
 **Status**: 16 / 18 core systems complete (~89%)
 
 - **Complete**: 16 systems  
 - **In Progress**: Settings polish, Accessibility module  
+  * **Accessibility (In Progress)**
+    * Baseline goals:
+      * Global text size scaling hooks
+      * High-contrast/low-contrast theme support via settings
+      * Keyboard/controller navigation paths for core UI flows
+    * Integrated with Settings, Input, and Navigation modules
 - **Planned**: Save Migrations
 
 **VisualGraphs Subsystem: Runtime-Ready, Test-Hardened**
@@ -224,6 +304,26 @@ Copyright (c) 2025 Michael Tiller.
 - Quest and dialogue integration verified end-to-end  
 - Unit + property-style tests for plugin lifecycle, loader integration, and error boundaries  
 - **Planned**: Additional integration scenarios (multi-graph orchestration, bulk workflows) as needed
+
+### VisualGraphs Runtime Contracts
+
+VisualGraphs runtime is designed with the following guarantees:
+
+* **Determinism**
+  * Given the same inputs and RNG seed, graphs produce the same outputs.
+
+* **Side-Effect Discipline**
+  * Graphs operate on DTO context and service interfaces; they do not directly invoke Unity APIs.
+  * External side-effects are confined to well-defined extension points (e.g., quest state updates).
+
+* **Failure Behavior**
+  * Structural validation is performed before execution.
+  * Invalid graphs fail fast with controlled errors rather than partial world-state mutation.
+
+* **Testability**
+  * Runtime has no Unity dependencies and is fully testable headless via DI.
+
+These contracts are what make VisualGraphs safe to use for quests, triggers, and other systemic workflows.
 
 **Foundation Systems**
 

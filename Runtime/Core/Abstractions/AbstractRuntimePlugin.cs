@@ -11,6 +11,8 @@ namespace MToolKit.Runtime.Core.Abstractions
   /// </summary>
   public abstract class AbstractRuntimePlugin : AbstractGamePlugin, IRuntimeSystem, IRuntimePlugin
   {
+    private bool isRuntimeInitialized;
+
     /// <summary>
     ///   Phase 2: Setup subscriptions and early initialization.
     ///   Override in derived classes to implement setup logic.
@@ -23,7 +25,13 @@ namespace MToolKit.Runtime.Core.Abstractions
     ///   Override in derived classes to implement runtime initialization.
     /// </summary>
     /// <param name="resolver">The object resolver.</param>
-    public virtual void PerformRuntimeInitialization(IObjectResolver resolver) { }
+    public virtual void PerformRuntimeInitialization(IObjectResolver resolver)
+    {
+      if (isRuntimeInitialized)
+        return;
+
+      isRuntimeInitialized = true;
+    }
 
     /// <summary>
     ///   Check if dependencies are ready for runtime initialization.
