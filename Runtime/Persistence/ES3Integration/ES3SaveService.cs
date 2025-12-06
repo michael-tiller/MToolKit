@@ -161,11 +161,11 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         {
           // Read reactive property on main thread before background work
           var currentSaveCounter = SaveCounter.Value;
-          
+
           // Perform file I/O on background thread, capture values to set on main thread
           string timestamp = null;
           int newSaveCounter = currentSaveCounter + 1;
-          
+
           await UniTask.RunOnThreadPool(() =>
           {
             // Check if disposed before proceeding
@@ -290,7 +290,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
           // Perform file I/O on background thread, capture values to set on main thread
           string loadedTimestamp = null;
           int? loadedSaveCounter = null;
-          
+
           await UniTask.RunOnThreadPool(() =>
           {
             // Check if disposed before proceeding

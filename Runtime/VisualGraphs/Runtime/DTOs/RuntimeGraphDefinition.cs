@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -41,9 +40,10 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.DTOs
     public IEnumerable<RuntimeConnectionDefinition> GetConnectionsFrom(string nodeId)
     {
       if (connectionsByFrom == null) BuildLookupCaches();
-      return connectionsByFrom != null && connectionsByFrom.TryGetValue(nodeId, out var list)
-        ? list
-        : Enumerable.Empty<RuntimeConnectionDefinition>();
+      if (connectionsByFrom != null && connectionsByFrom.TryGetValue(nodeId, out var list))
+        return list;
+      // Return empty array instead of Enumerable.Empty to avoid IL2CPP issues
+      return Array.Empty<RuntimeConnectionDefinition>();
     }
 
     /// <summary>

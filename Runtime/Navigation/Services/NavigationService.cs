@@ -53,7 +53,7 @@ namespace MToolKit.Runtime.Navigation.Services
       // Stack enumerator iterates top-to-bottom (LIFO), which matches ToArray() behavior
       T foundView = null;
       var stack = stacks[canvasType];
-      
+
       foreach (var item in stack)
       {
         if (item is T candidate)

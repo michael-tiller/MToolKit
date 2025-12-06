@@ -43,11 +43,21 @@ namespace MToolKit.Runtime.Slog
 
       Log.Logger = loggerConfig.CreateLogger();
 
-      // Get environment from environment variables (loaded by EnvironmentLoader)
-      // EnvironmentLoader runs BeforeSceneLoad, so env vars should be available here
-      string environment = Environment.GetEnvironmentVariable("ENVIRONMENT") ??
-                          Environment.GetEnvironmentVariable("MT_ENVIRONMENT") ??
-                          "default";
+      // Get environment from scripting defines (set at build time) or environment variables
+      // Scripting defines take precedence - they're baked into the build, no .env file needed
+      string environment;
+#if MT_ENVIRONMENT_PROD
+      environment = "prod";
+#elif MT_ENVIRONMENT_STAGE
+      environment = "stage";
+#elif MT_ENVIRONMENT_DEV
+      environment = "dev";
+#else
+      // Fallback to environment variables (for editor/development)
+      environment = System.Environment.GetEnvironmentVariable("ENVIRONMENT") ??
+                   System.Environment.GetEnvironmentVariable("MT_ENVIRONMENT") ??
+                   "default";
+#endif
 
       // Build version details - Application.version is the primary version
       // Additional build metadata can be added via custom build scripts if needed

@@ -138,7 +138,7 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
         // Get all connections from this node - iterate directly to avoid LINQ allocations
         var allConnections = new List<RuntimeConnectionDefinition>();
         var portNames = new List<string>();
-        
+
         foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
         {
           allConnections.Add(connection);
@@ -248,7 +248,7 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Executors
             var portNamesList = new List<string>(allConnections.Count);
             foreach (var connection in allConnections)
               portNamesList.Add(connection.PortName);
-            
+
             log.ForMethod().Warning("Could not match port name for choice {ChoiceIndex}. Using connection order fallback. Available ports: {PortNames}",
               selectedChoiceIndex, string.Join(", ", portNamesList));
 

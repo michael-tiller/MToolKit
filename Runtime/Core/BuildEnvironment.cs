@@ -25,6 +25,15 @@ namespace MToolKit.Runtime.Core
       {
         if (_environment == null)
         {
+          // Check scripting defines first (set at build time, no .env file needed)
+#if MT_ENVIRONMENT_PROD
+          _environment = "prod";
+#elif MT_ENVIRONMENT_STAGE
+          _environment = "stage";
+#elif MT_ENVIRONMENT_DEV
+          _environment = "dev";
+#else
+          // Fallback to environment variables (for editor/development)
           string envValue = System.Environment.GetEnvironmentVariable("ENVIRONMENT") ??
                            System.Environment.GetEnvironmentVariable("MT_ENVIRONMENT") ??
                            "default";
@@ -42,6 +51,7 @@ namespace MToolKit.Runtime.Core
           }
 #else
           _environment = envValue;
+#endif
 #endif
         }
         return _environment;

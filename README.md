@@ -264,6 +264,21 @@ Performance-sensitive modules (Navigation, VisualGraphs runtime, Persistence, As
 
 ---
 
+### Secrets & Configuration Management
+
+MToolKit supports environment-aware configuration with a clear separation between non-sensitive and sensitive data:
+
+* **Environment Detection**
+  * Environment name (dev/stage/prod) is baked into builds via scripting defines (`MT_ENVIRONMENT_*`).
+  * No `.env` files need to be distributed with builds.
+
+* **Current Status**
+  * Environment detection via scripting defines: ✅ Implemented
+  * `.env` file loading for development: ✅ Implemented
+  * OS environment variable support: ✅ Implemented (takes precedence over `.env` files)
+
+---
+
 ### Versioning & Compatibility
 
 MToolKit itself follows a stability policy:
