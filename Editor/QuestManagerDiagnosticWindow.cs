@@ -22,7 +22,7 @@ namespace MToolKit.Runtime.Editor
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<QuestManagerDiagnosticWindow>().ForFeature("Editor"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 
-    private bool autoRefresh = true;
+    private bool autoRefresh = false;
     private double lastRefreshTime;
     private float refreshInterval = 1.0f;
     private Vector2 scrollPosition;

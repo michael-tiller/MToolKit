@@ -8,12 +8,15 @@ using MToolKit.Runtime.Core.Types;
 using MToolKit.Runtime.VisualGraphs.Config;
 using MToolKit.Runtime.VisualGraphs.Dialogue.Definitions;
 using MToolKit.Runtime.VisualGraphs.Dialogue.Messages;
+using MToolKit.Runtime.VisualGraphs.Event.Definitions;
+using MToolKit.Runtime.VisualGraphs.Event.Graphs;
 using MToolKit.Runtime.VisualGraphs.Export;
 using MToolKit.Runtime.VisualGraphs.Quest.Definitions;
 using MToolKit.Runtime.VisualGraphs.Runtime.DTOs;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime.State;
+using MToolKit.Runtime.VisualGraphs.Variables;
 using Serilog;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
@@ -64,12 +67,12 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       // Return if already loaded
       if (loadedRunners.TryGetValue(graphId, out var existingRunner))
       {
-        log.ForMethod().Debug("Graph '{GraphId}' already loaded, returning existing runner", graphId);
+        log.ForMethod().Verbose("Graph '{GraphId}' already loaded, returning existing runner", graphId);
         return existingRunner;
       }
 
       // Try self-registered quest definitions first (preferred)
-      var questDef = Runtime.GraphDefinitionRegistry.GetQuestDefinition(graphId);
+      QuestDefinition? questDef = GraphDefinitionRegistry.GetQuestDefinition(graphId);
       if (questDef != null)
       {
         var runner = await LoadQuestGraphAsync(questDef, ct);
@@ -87,7 +90,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       }
 
       // Try self-registered dialogue definitions
-      var dialogueDef = Runtime.GraphDefinitionRegistry.GetDialogueDefinition(graphId);
+      DialogueDefinition? dialogueDef = GraphDefinitionRegistry.GetDialogueDefinition(graphId);
       if (dialogueDef != null)
       {
         var runner = await LoadDialogueGraphAsync(dialogueDef, ct);
@@ -100,11 +103,31 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       // GraphDefinitionRegistry during initialization. If a quest isn't found here, it means
       // it wasn't in the registry or failed to load during initialization.
 
+      // Try self-registered event definitions
+      EventDefinition? eventDef = GraphDefinitionRegistry.GetEventDefinition(graphId);
+      if (eventDef != null)
+      {
+        IGraphRunner? runner = await LoadEventGraphAsync(eventDef, ct);
+        loadedRunners[graphId] = runner;
+        router.RegisterRunner(runner);
+        return runner;
+      }
+
       // Fallback to registry asset for dialogue (backward compatibility)
       dialogueDef = registry.DialogueDefinitions?.Find(d => d.DialogueId == graphId);
       if (dialogueDef != null)
       {
         var runner = await LoadDialogueGraphAsync(dialogueDef, ct);
+        loadedRunners[graphId] = runner;
+        router.RegisterRunner(runner);
+        return runner;
+      }
+
+      // Fallback to registry asset for events (backward compatibility)
+      eventDef = registry.EventDefinitions?.Find(d => d.EventId == graphId);
+      if (eventDef != null)
+      {
+        IGraphRunner? runner = await LoadEventGraphAsync(eventDef, ct);
         loadedRunners[graphId] = runner;
         router.RegisterRunner(runner);
         return runner;
@@ -128,7 +151,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
         if (handle is AsyncOperationHandle opHandle)
         {
           Addressables.Release(opHandle);
-          log.ForMethod().Debug("Released Addressables handle for graph '{GraphId}'", graphId);
+          log.ForMethod().Verbose("Released Addressables handle for graph '{GraphId}'", graphId);
         }
       }
 #endif
@@ -155,7 +178,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       // Load via Addressables if key is specified
       if (!string.IsNullOrEmpty(questDef.AddressableKey))
       {
-        log.ForMethod().Debug("Loading quest graph '{QuestId}' via Addressables key '{Key}'",
+        log.ForMethod().Verbose("Loading quest graph '{QuestId}' via Addressables key '{Key}'",
           questDef.Guid, questDef.AddressableKey);
 
         var handle = Addressables.LoadAssetAsync<Authoring.Graphs.QuestGraphAsset>(questDef.AddressableKey);
@@ -174,7 +197,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       // Quest-level graphs are OPTIONAL - return null if not assigned
       if (graphAsset == null)
       {
-        log.ForMethod().Debug("Quest '{QuestId}' has no quest-level GraphAsset (optional) - skipping graph load",
+        log.ForMethod().Verbose("Quest '{QuestId}' has no quest-level GraphAsset (optional) - skipping graph load",
           questDef.Guid);
         return null;
       }
@@ -196,7 +219,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       questDef.InitialVariables?.ApplyTo(state);
 
       var runner = new GraphRunner(runtimeDef, state, executorRegistry, services, eventEmitter);
-      log.ForMethod().Information("Loaded quest graph '{QuestId}': {NodeCount} nodes, {SubscriptionCount} subscriptions",
+      log.ForMethod().Verbose("Loaded quest graph '{QuestId}': {NodeCount} nodes, {SubscriptionCount} subscriptions",
         questDef.Guid, runtimeDef.Nodes.Count, runtimeDef.Subscriptions.Count);
 
       return runner;
@@ -211,7 +234,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       // Load via Addressables if key is specified
       if (!string.IsNullOrEmpty(dialogueDef.AddressableKey))
       {
-        log.ForMethod().Debug("Loading dialogue graph '{DialogueId}' via Addressables key '{Key}'",
+        log.ForMethod().Verbose("Loading dialogue graph '{DialogueId}' via Addressables key '{Key}'",
           dialogueDef.DialogueId, dialogueDef.AddressableKey);
 
         var handle = Addressables.LoadAssetAsync<Authoring.Graphs.DialogueGraphAsset>(dialogueDef.AddressableKey);
@@ -232,7 +255,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       runtimeDef.GraphId = dialogueDef.DialogueId;
 
       // Automatically subscribe dialogue graphs to DialogueStartMessage if not already subscribed
-      var dialogueStartMessageType = typeof(Dialogue.Messages.DialogueStartMessage);
+      Type dialogueStartMessageType = typeof(DialogueStartMessage);
       var hasDialogueStartSubscription = runtimeDef.Subscriptions.Any(s =>
         s.MessageType != null &&
         s.MessageType.Type == dialogueStartMessageType);
@@ -245,7 +268,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
           DomainFilter = null, // Match any domain
           Required = true // Entry node (DialogueStartNode) is required
         });
-        log.ForMethod().Debug("Auto-added DialogueStartMessage subscription to dialogue graph '{DialogueId}'", dialogueDef.DialogueId);
+        log.ForMethod().Verbose("Auto-added DialogueStartMessage subscription to dialogue graph '{DialogueId}'", dialogueDef.DialogueId);
       }
 
       var baseState = new InMemoryGraphState();
@@ -260,17 +283,17 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       dialogueDef.InitialVariables?.ApplyTo(state);
 
       // Log all nodes for debugging
-      log.ForMethod().Information("Dialogue graph '{DialogueId}' nodes:", dialogueDef.DialogueId);
+      log.ForMethod().Verbose("Dialogue graph '{DialogueId}' nodes:", dialogueDef.DialogueId);
       foreach (var node in runtimeDef.Nodes)
       {
         var nodeText = node.NodeType == "DialogueLineNode" && node.Parameters.TryGetValue("Text", out var txt)
           ? txt as string ?? ""
           : "N/A";
-        log.ForMethod().Information("  Node: {NodeId} ({NodeType}) - Text: '{Text}'", node.NodeId, node.NodeType, nodeText);
+        log.ForMethod().Verbose("  Node: {NodeId} ({NodeType}) - Text: '{Text}'", node.NodeId, node.NodeType, nodeText);
       }
 
       // Log all connections for debugging
-      log.ForMethod().Information("Dialogue graph '{DialogueId}' connections:", dialogueDef.DialogueId);
+      log.ForMethod().Verbose("Dialogue graph '{DialogueId}' connections:", dialogueDef.DialogueId);
       foreach (var conn in runtimeDef.Connections)
       {
         var fromNode = runtimeDef.GetNodeById(conn.FromNodeId);
@@ -280,13 +303,43 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
         var toText = toNode?.NodeType == "DialogueLineNode" && toNode.Parameters.TryGetValue("Text", out var txt)
           ? txt as string ?? ""
           : "N/A";
-        log.ForMethod().Information("  Connection: {FromNodeId} ({FromType}) -> {ToNodeId} ({ToType}) via '{PortName}' (Text: '{Text}')",
+        log.ForMethod().Verbose("  Connection: {FromNodeId} ({FromType}) -> {ToNodeId} ({ToType}) via '{PortName}' (Text: '{Text}')",
           conn.FromNodeId, fromType, conn.ToNodeId, toType, conn.PortName, toText);
       }
 
       var runner = new GraphRunner(runtimeDef, state, executorRegistry, services, eventEmitter);
-      log.ForMethod().Information("Loaded dialogue graph '{DialogueId}': {NodeCount} nodes, {ConnectionCount} connections, {SubscriptionCount} subscriptions",
+      log.ForMethod().Verbose("Loaded dialogue graph '{DialogueId}': {NodeCount} nodes, {ConnectionCount} connections, {SubscriptionCount} subscriptions",
         dialogueDef.DialogueId, runtimeDef.Nodes.Count, runtimeDef.Connections.Count, runtimeDef.Subscriptions.Count);
+
+      return runner;
+    }
+
+    private async UniTask<IGraphRunner> LoadEventGraphAsync(EventDefinition eventDef, CancellationToken ct)
+    {
+      await UniTask.WaitForEndOfFrame(ct);
+      EventGraphAsset? graphAsset = eventDef.GraphAsset;
+
+      if (graphAsset == null)
+        throw new InvalidOperationException($"Event graph '{eventDef.EventId}' has no GraphAsset assigned");
+
+      // Export and initialize
+      XNodeGraphExporter exporter = new(executorRegistry);
+      RuntimeGraphDefinition? runtimeDef = exporter.Export(graphAsset);
+      runtimeDef.GraphId = eventDef.EventId;
+
+      InMemoryGraphState baseState = new();
+      DebuggableGraphState state = new(baseState, runtimeDef.GraphId);
+
+      // Apply global variables if available
+      if (registry.GlobalVariables != null)
+      {
+        GraphVariableSet? globalVars = registry.GlobalVariables.GetFor(eventDef.EventId);
+        globalVars?.ApplyTo(state);
+      }
+
+      GraphRunner runner = new(runtimeDef, state, executorRegistry, services, eventEmitter);
+      log.ForMethod().Information("Loaded event graph '{EventId}': {NodeCount} nodes, {SubscriptionCount} subscriptions",
+        eventDef.EventId, runtimeDef.Nodes.Count, runtimeDef.Subscriptions.Count);
 
       return runner;
     }

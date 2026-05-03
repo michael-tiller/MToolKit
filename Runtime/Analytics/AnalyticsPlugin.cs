@@ -69,7 +69,7 @@ namespace MToolKit.Runtime.Analytics
 
     public override void Register(IContainerBuilder builder)
     {
-      log.ForMethod().Debug("AnalyticsPlugin Register called");
+      log.ForMethod().Verbose("AnalyticsPlugin Register called");
 
       // Register the config
       builder.RegisterInstance(config).As<AnalyticsConfig>();
@@ -81,7 +81,7 @@ namespace MToolKit.Runtime.Analytics
       // Register the event bridge as a singleton service
       builder.Register<AnalyticsEventBridge>(Lifetime.Singleton);
 
-      log.ForMethod().Information("AnalyticsPlugin Register completed - IAnalyticsService registered");
+      log.ForMethod().Verbose("AnalyticsPlugin Register completed - IAnalyticsService registered");
     }
 
     public void PerformSetup(IObjectResolver objectResolver)
@@ -92,7 +92,7 @@ namespace MToolKit.Runtime.Analytics
 
     public void PerformRuntimeInitialization(IObjectResolver objectResolver)
     {
-      log.ForMethod().Information("AnalyticsPlugin PerformRuntimeInitialization called, EnableOnStartup: {0}, RuntimeInitialized: {1}", config.EnableOnStartup, runtimeInitialized);
+      log.ForMethod().Verbose("AnalyticsPlugin PerformRuntimeInitialization called, EnableOnStartup: {0}, RuntimeInitialized: {1}", config.EnableOnStartup, runtimeInitialized);
       if (!config.EnableOnStartup || runtimeInitialized) return;
 
       runtimeInitialized = true;
@@ -105,7 +105,7 @@ namespace MToolKit.Runtime.Analytics
 
     public void Initialize(IObjectResolver resolver)
     {
-      log.ForMethod().Information("AnalyticsPlugin Initialize called");
+      log.ForMethod().Verbose("AnalyticsPlugin Initialize called");
 
       // Ensure resolver is set
       this.resolver ??= resolver;
@@ -120,7 +120,7 @@ namespace MToolKit.Runtime.Analytics
 
     private async UniTaskVoid InitializeAsync(CancellationToken ct)
     {
-      log.ForMethod().Information("AnalyticsPlugin InitializeAsync started");
+      log.ForMethod().Verbose("AnalyticsPlugin InitializeAsync started");
       analyticsService = resolver.Resolve<IAnalyticsService>() as AnalyticsService;
       ISettingsSystem settingsSystem = resolver.Resolve<ISettingsSystem>();
       GameSettingsModule gameSettings = settingsSystem.GameSettings;

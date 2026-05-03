@@ -2,7 +2,7 @@ using UnityEngine.AddressableAssets;
 using MToolKit.Runtime.Core.Abstractions;
 using System;
 
-namespace MToolKit.Runtime.AssetLoader {  
+namespace MToolKit.Runtime.AssetLoader {
 
   /// <summary>
   /// Concrete implementation of the AssetReference for AbstractGamePlugin
@@ -11,7 +11,6 @@ namespace MToolKit.Runtime.AssetLoader {
   public class AssetReferenceGamePlugin : AssetReferenceBase<AbstractGamePlugin> {
     public AssetReferenceGamePlugin(string guid) : base(guid) { }
   }
-
 
   /// <summary>
   /// Type-safe AssetReference specifically for Scene assets

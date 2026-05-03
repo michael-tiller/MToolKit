@@ -52,11 +52,11 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
         list.Add(runner);
         subscriptionCount++;
 
-        log.Debug("Registered graph '{GraphId}' subscription: {MessageType} (domain: '{Domain}')",
+        log.Verbose("Registered graph '{GraphId}' subscription: {MessageType} (domain: '{Domain}')",
           runner.GraphId, sub.MessageType.Name, sub.DomainFilter ?? "(any)");
       }
 
-      log.Information("Registered graph '{GraphId}' with {SubscriptionCount} subscription(s) (total graphs: {TotalGraphs})",
+      log.Verbose("Registered graph '{GraphId}' with {SubscriptionCount} subscription(s) (total graphs: {TotalGraphs})",
         runner.GraphId, subscriptionCount, all.Count);
     }
 
@@ -73,7 +73,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
       var domainFilter = domain ?? string.Empty;
       var key = (messageType, domainFilter);
 
-      log.Debug("Routing message '{MessageType}' (domain: '{Domain}') to graphs", messageType.Name, domainFilter);
+      log.Verbose("Routing message '{MessageType}' (domain: '{Domain}') to graphs", messageType.Name, domainFilter);
 
       var matchedGraphs = new List<IGraphRunner>();
       var routingStrategy = "";
@@ -97,7 +97,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
 
       if (matchedGraphs.Count == 0)
       {
-        log.Debug("No graphs subscribed to message '{MessageType}' (domain: '{Domain}'). Available subscriptions: {Subscriptions}",
+        log.Verbose("No graphs subscribed to message '{MessageType}' (domain: '{Domain}'). Available subscriptions: {Subscriptions}",
           messageType.Name, domainFilter, GetAvailableSubscriptionsForType(messageType));
         return;
       }
@@ -110,7 +110,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
       {
         if (ct.IsCancellationRequested)
         {
-          log.Debug("Message routing cancelled for '{MessageType}'", messageType.Name);
+          log.Verbose("Message routing cancelled for '{MessageType}'", messageType.Name);
           break;
         }
 

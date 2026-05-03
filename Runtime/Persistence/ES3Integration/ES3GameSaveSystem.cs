@@ -44,7 +44,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       LastLoadTime = es3Service.LastLoadTime;
       SaveCounter = es3Service.SaveCounter;
 
-      log.ForMethod().Debug("ES3GameSaveSystem created with config: {0}", config.name);
+      log.ForMethod().Verbose("ES3GameSaveSystem created with config: {0}", config.name);
     }
 
         /// <summary>
@@ -62,7 +62,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       LastLoadTime = es3Service.LastLoadTime;
       SaveCounter = es3Service.SaveCounter;
 
-      log.ForMethod().Debug("ES3GameSaveSystem created with {0} domain controllers", domainControllers.Count());
+          log.ForMethod().Verbose("ES3GameSaveSystem created with {0} domain controllers", domainControllers.Count());
     }
 
     [ShowInInspector]
@@ -148,7 +148,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         // Update the main load timestamp
         await es3Service.LoadAsync(ct);
 
-        log.ForMethod().Debug("ES3 load operation completed successfully");
+        log.ForMethod().Verbose("ES3 load operation completed successfully");
       }
       catch (ObjectDisposedException ex) when (ex.ObjectName == "ES3SaveService")
       {

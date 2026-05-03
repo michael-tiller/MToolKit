@@ -94,7 +94,7 @@ namespace MToolKit.Runtime.Navigation
       if (interstitialAlertView == null)
         log.ForGameObject(gameObject).ForMethod().Error("interstitialAlertView is null in Start()! Check NavigationPlugin prefab configuration.");
       else
-        log.ForGameObject(gameObject).ForMethod().Debug("interstitialAlertView prefab assigned: {0}, Canvas: {1}",
+        log.ForGameObject(gameObject).ForMethod().Verbose("interstitialAlertView prefab assigned: {0}, Canvas: {1}",
           interstitialAlertView.name, interstitialAlertView.Canvas);
 
       InitializeCanvasConfigs();
@@ -415,12 +415,12 @@ namespace MToolKit.Runtime.Navigation
 
       try
       {
-        log.ForGameObject(gameObject).ForMethod().Information("Pushing view: {0} (type: {1}) for canvas type: {2}",
+        log.ForGameObject(gameObject).ForMethod().Verbose("Pushing view: {0} (type: {1}) for canvas type: {2}",
           prefab.name, prefab.GetType().Name, type);
 
         View result = await PushAsync(type, prefab, token);
 
-        log.ForGameObject(gameObject).ForMethod().Debug("PushAsync returned view: {0} (type: {1})",
+        log.ForGameObject(gameObject).ForMethod().Verbose("PushAsync returned view: {0} (type: {1})",
           result?.name ?? "NULL", result?.GetType().Name ?? "NULL");
 
         return result;
@@ -574,7 +574,7 @@ namespace MToolKit.Runtime.Navigation
           return;
         }
 
-        log.ForGameObject(gameObject).ForMethod().Debug("interstitialAlertView prefab: {0}, Canvas: {1}",
+        log.ForGameObject(gameObject).ForMethod().Verbose("interstitialAlertView prefab: {0}, Canvas: {1}",
           interstitialAlertView.name, interstitialAlertView.Canvas);
 
         UniTask.Void(async () =>
@@ -605,7 +605,7 @@ namespace MToolKit.Runtime.Navigation
             }
 
             // Debug: Log the actual type of the returned view
-            log.ForGameObject(gameObject).ForMethod().Debug("ShowViewAsync returned view type: {0}, name: {1}",
+            log.ForGameObject(gameObject).ForMethod().Verbose("ShowViewAsync returned view type: {0}, name: {1}",
               view?.GetType().Name ?? "NULL", view?.name ?? "NULL");
 
             InterstitialAlertView alertView = view as InterstitialAlertView;

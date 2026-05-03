@@ -1,16 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Serilog;
 using Serilog.Events;
-using Serilog.Formatting.Compact;
 using Serilog.Sinks.Unity3D;
 using UnityEngine;
 using UnityEngine.Analytics;
 using Object = UnityEngine.Object;
-
-// for compact json formatter
 
 namespace MToolKit.Runtime.Slog
 {
@@ -25,14 +23,20 @@ namespace MToolKit.Runtime.Slog
     public SlogConfig()
     {
       // start serilog config
-      LoggerConfiguration loggerConfig = new LoggerConfiguration().Enrich.FromGlobalLogContext();
+      // SourceContext flow: shorten value to class name, then rename property to "Source".
+      // The file sink remaps "Source" → "src" at format time (see ConfigLoggingToFile).
+      LoggerConfiguration loggerConfig = new LoggerConfiguration()
+        .Enrich.FromGlobalLogContext()
+        .Enrich.With(new ShortSourceContextEnricher())
+        .Enrich.With(new RenamePropertyEnricher("SourceContext", "Source"))
+        .Enrich.With(new MethodFromStackEnricher());
 
       LoadSerilogConfiguration(CONFIG_FILE, OVERRIDE_CONFIG_FILE);
       ConfigMininumLevel(ref loggerConfig);
       ConfigLoggingToFile(ref loggerConfig);
 
       // Configure Unity3D sink with custom formatter
-      string outputTemplate = "[{Level:u1}] [{SourceContext}.{method}]: {Message:lj}\n\r{Properties}";
+      string outputTemplate = "[{Level:u1}] [{Source}.{method}]: {Message:lj}\n\r{Properties}";
       loggerConfig = loggerConfig.WriteTo.Unity3D(outputTemplate: outputTemplate);
 
       // Apply source context filtering if enabled
@@ -117,8 +121,8 @@ namespace MToolKit.Runtime.Slog
           configurationAsset.AllowedSourceContexts.Count == 0)
         return true;
 
-      // Get the source context from the log event
-      if (evt.Properties.TryGetValue("SourceContext", out LogEventPropertyValue sourceContextValue))
+      // Get the source context from the log event (renamed from SourceContext to Source by RenamePropertyEnricher)
+      if (evt.Properties.TryGetValue("Source", out LogEventPropertyValue sourceContextValue))
       {
         string sourceContext = sourceContextValue.ToString().Trim('"');
         // Check if any allowed source context is contained within the source context string
@@ -139,7 +143,7 @@ namespace MToolKit.Runtime.Slog
       if (!string.IsNullOrEmpty(logsDir) && !Directory.Exists(logsDir)) Directory.CreateDirectory(logsDir);
 
       loggerConfig = loggerConfig.WriteTo.File(
-        new RenderedCompactJsonFormatter(),
+        new RenamingCompactJsonFormatter(new Dictionary<string, string> { { "Source", "src" } }),
         Application.persistentDataPath + configurationAsset.LogPath + configurationAsset.LogFileName,
         rollingInterval: RollingInterval.Day,
         retainedFileCountLimit: 7,

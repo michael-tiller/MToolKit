@@ -38,13 +38,13 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       // Use the same directory as the main save config but with a profiles subdirectory
       profilesDirectory = Path.Combine(config.GetSaveDirectoryPath(), "Profiles");
 
-      log.ForMethod().Debug("ProfileManager created with profiles directory: {0}", profilesDirectory);
+      log.ForMethod().Verbose("ProfileManager created with profiles directory: {0}", profilesDirectory);
 
       // Ensure profiles directory exists
       if (!Directory.Exists(profilesDirectory))
       {
         Directory.CreateDirectory(profilesDirectory);
-        log.ForMethod().Debug("Created profiles directory: {0}", profilesDirectory);
+        log.ForMethod().Verbose("Created profiles directory: {0}", profilesDirectory);
       }
 
       // Initialize available profiles
@@ -82,7 +82,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       AvailableProfiles?.Dispose();
       CurrentProfileMetadata?.Dispose();
 
-      log.ForMethod().Debug("ProfileManager disposed");
+      log.ForMethod().Verbose("ProfileManager disposed");
     }
 
     public ReactiveProperty<string> CurrentProfile { get; } = new(string.Empty);
@@ -108,7 +108,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         }
         else
         {
-          log.ForMethod().Debug("No current profile to close");
+          log.ForMethod().Verbose("No current profile to close");
         }
       }
       catch (Exception ex)
@@ -158,7 +158,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         string candidateName = $"{baseName}_{i:D4}";
         if (!ProfileExists(candidateName))
         {
-          log.ForMethod().Debug("Generated unique profile name: {0} (original: {1})", candidateName, baseName);
+          log.ForMethod().Verbose("Generated unique profile name: {0} (original: {1})", candidateName, baseName);
           return candidateName;
         }
       }
@@ -166,7 +166,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       // If we can't find a unique name with the pattern, append a random hash
       string randomSuffix = Guid.NewGuid().ToString("N")[..8];
       string fallbackName = $"{baseName}_{randomSuffix}";
-      log.ForMethod().Debug("Generated fallback unique profile name: {0} (original: {1})", fallbackName, baseName);
+      log.ForMethod().Verbose("Generated fallback unique profile name: {0} (original: {1})", fallbackName, baseName);
       return fallbackName;
     }
 
@@ -323,7 +323,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         // The ProfileAwareES3Service will automatically handle the file path switching
         NotifyES3ServiceOfProfileChange(profileFilePath);
 
-        log.ForMethod().Debug("Successfully loaded profile: {0}", profileName);
+        log.ForMethod().Verbose("Successfully loaded profile: {0}", profileName);
         return UniTask.FromResult(true);
       }
       catch (Exception ex)
@@ -411,7 +411,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       try
       {
         string filePath = GetProfileFilePath(profileName);
-        log.ForMethod().Debug("GetProfileMetaData: Loading metadata for profile '{0}' from path: {1}", profileName, filePath);
+        log.ForMethod().Verbose("GetProfileMetaData: Loading metadata for profile '{0}' from path: {1}", profileName, filePath);
 
         ES3Settings es3Settings = new(filePath)
         {
@@ -468,7 +468,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         }
 
         // Fallback: create metadata from individual fields or file info (READ-ONLY, no saving)
-        log.ForMethod().Debug("GetProfileMetaData: Creating fallback metadata for '{0}' from individual fields (read-only)", profileName);
+        log.ForMethod().Verbose("GetProfileMetaData: Creating fallback metadata for '{0}' from individual fields (read-only)", profileName);
 
         // Try to load from individual fields first
         string profileNameValue = ES3.KeyExists("ProfileName", es3Settings) ? ES3.Load<string>("ProfileName", es3Settings) : profileName;
@@ -487,7 +487,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
             fallbackMetadata = new ProfileMetaData(profileName, fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss"), config.SaveFormatVersion);
         }
 
-        log.ForMethod().Debug(
+        log.ForMethod().Verbose(
           "GetProfileMetaData: Created fallback metadata for '{0}' - ProfileName='{1}', LastSaveTime='{2}', SaveFormatVersion='{3}', SaveCounter={4} (read-only)",
           profileName, fallbackMetadata.ProfileName, fallbackMetadata.LastSaveTime, fallbackMetadata.SaveFormatVersion, fallbackMetadata.SaveCounter);
         return fallbackMetadata;
@@ -510,7 +510,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       List<ProfileMetaData> metadataList = new();
       List<string> availableProfiles = AvailableProfiles.Value;
 
-      log.ForMethod().Debug("GetAllProfileMetadata: Found {0} available profiles: [{1}]",
+      log.ForMethod().Verbose("GetAllProfileMetadata: Found {0} available profiles: [{1}]",
         availableProfiles?.Count ?? 0,
         availableProfiles != null ? string.Join(", ", availableProfiles) : "null");
 
@@ -520,7 +520,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         if (metadata != null)
         {
           metadataList.Add(metadata);
-          log.ForMethod().Debug("Successfully loaded metadata for profile: {0}", profileName);
+          log.ForMethod().Verbose("Successfully loaded metadata for profile: {0}", profileName);
         }
         else
         {
@@ -528,7 +528,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         }
       }
 
-      log.ForMethod().Debug("GetAllProfileMetadata: Returning {0} valid metadata entries", metadataList.Count);
+      log.ForMethod().Verbose("GetAllProfileMetadata: Returning {0} valid metadata entries", metadataList.Count);
       return metadataList.OrderByDescending(m =>
       {
         if (m.LastSaveTime != null && DateTime.TryParse(m.LastSaveTime, out DateTime lastSaveTime))
@@ -548,7 +548,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       try
       {
         List<ProfileMetaData> allMetaData = GetAllProfileMetadata(ct);
-        log.ForMethod().Debug("GetMostRecentProfileAsync: Got {0} metadata entries, allMetaData is null: {1}",
+        log.ForMethod().Verbose("GetMostRecentProfileAsync: Got {0} metadata entries, allMetaData is null: {1}",
           allMetaData?.Count ?? -1, allMetaData == null);
 
         if (allMetaData == null)
@@ -563,14 +563,14 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
           return UniTask.FromResult(string.Empty);
         }
 
-        log.ForMethod().Debug("GetMostRecentProfileAsync: Ordering {0} profiles by LastSaveTime", allMetaData.Count);
+        log.ForMethod().Verbose("GetMostRecentProfileAsync: Ordering {0} profiles by LastSaveTime", allMetaData.Count);
         List<ProfileMetaData> orderedProfiles = allMetaData.OrderByDescending(m =>
         {
           if (m.LastSaveTime != null && DateTime.TryParse(m.LastSaveTime, out DateTime lastSaveTime))
             return lastSaveTime;
           return DateTime.MinValue;
         }).ToList();
-        log.ForMethod().Debug("GetMostRecentProfileAsync: Ordered profiles count: {0}", orderedProfiles.Count);
+        log.ForMethod().Verbose("GetMostRecentProfileAsync: Ordered profiles count: {0}", orderedProfiles.Count);
 
         ProfileMetaData mostRecent = orderedProfiles.FirstOrDefault();
         if (mostRecent == null)
@@ -579,7 +579,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
           return UniTask.FromResult(string.Empty);
         }
 
-        log.ForMethod().Debug("GetMostRecentProfileAsync: Most recent profile: {0} (last saved: {1})", mostRecent.ProfileName, mostRecent.LastSaveTime);
+        log.ForMethod().Verbose("GetMostRecentProfileAsync: Most recent profile: {0} (last saved: {1})", mostRecent.ProfileName, mostRecent.LastSaveTime);
         return UniTask.FromResult(mostRecent.ProfileName);
       }
       catch (Exception ex)
@@ -640,13 +640,13 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         if (string.IsNullOrEmpty(profileName))
         {
           CurrentProfileMetadata.Value = null;
-          log.ForMethod().Debug("Current profile cleared, metadata set to null");
+          log.ForMethod().Verbose("Current profile cleared, metadata set to null");
         }
         else
         {
           ProfileMetaData metadata = GetProfileMetaData(profileName);
           CurrentProfileMetadata.Value = metadata;
-          log.ForMethod().Debug("Updated current profile metadata for: {0}", profileName);
+          log.ForMethod().Verbose("Updated current profile metadata for: {0}", profileName);
         }
       }
       catch (Exception ex)
@@ -723,12 +723,12 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
             }
             else
             {
-              log.ForMethod().Debug("Profile {0} metadata is already valid", profileName);
+              log.ForMethod().Verbose("Profile {0} metadata is already valid", profileName);
             }
           }
           else
           {
-            log.ForMethod().Debug("Profile {0} has no ProfileMetadata, individual fields will be used", profileName);
+            log.ForMethod().Verbose("Profile {0} has no ProfileMetadata, individual fields will be used", profileName);
           }
         }
         catch (Exception ex)
@@ -805,7 +805,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
           }
           else
           {
-            log.ForMethod().Debug("Profile '{0}' is already in clean format", profileName);
+            log.ForMethod().Verbose("Profile '{0}' is already in clean format", profileName);
           }
         }
         catch (Exception ex)
@@ -916,7 +916,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
 
         AvailableProfiles.Value = profileFiles;
 
-        log.ForMethod().Debug("Refreshed available profiles: {0}", string.Join(", ", profileFiles));
+        log.ForMethod().Verbose("Refreshed available profiles: {0}", profileFiles.Count);
       }
       catch (Exception ex)
       {

@@ -22,7 +22,7 @@ namespace MToolKit.Runtime.Editor
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<PluginDiagnosisWindow>().ForFeature("Editor"));
     private static ILogger log => logLazy.Value ?? Logger.None;
     private readonly string[] installerTabs = { "All", "GlobalInstaller", "GameInstaller" };
-    private bool autoRefresh = true;
+    private bool autoRefresh = false;
     private double lastRefreshTime;
     private List<PluginStateModel> pluginStates = new();
     private float refreshInterval = 5.0f;

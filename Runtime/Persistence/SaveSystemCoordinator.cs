@@ -53,7 +53,7 @@ namespace MToolKit.Runtime.Persistence
       IsAutoSaveRunning = new ReactiveProperty<bool>(false);
       IsAutoSaveExecuting = new ReactiveProperty<bool>(false);
 
-      log.ForMethod().Debug("SaveSystemCoordinator created with auto-save enabled: {0}", saveConfig.EnableAutoSave);
+      log.ForMethod().Verbose("SaveSystemCoordinator created with auto-save enabled: {0}", saveConfig.EnableAutoSave);
     }
 
     public ReactiveProperty<bool> IsSaving { get; }
@@ -197,6 +197,44 @@ namespace MToolKit.Runtime.Persistence
         controller.Domain, localRegistry.Count);
     }
 
+      /// <summary>
+      ///   Returns true if any controller registered with the local registry reports
+      ///   persisted save data. Used at session boot to choose between NEW-game seeding
+      ///   and LOAD-from-save without coupling to any single domain.
+      /// </summary>
+      public bool HasAnyLocalSaveData()
+      {
+        foreach (ISaveDomainController controller in localRegistry.GetControllers())
+          if (controller != null && controller.HasSaveData())
+            return true;
+        return false;
+      }
+
+      /// <summary>
+      ///   Returns the currently active save system (local or global). Lazily initializes
+      ///   if Start() has not yet run so callers resolved before startup still get a
+      ///   working instance bound to the live registries.
+      /// </summary>
+      public ES3GameSaveSystem GetActiveSaveSystem()
+      {
+        if (useLocalSystem)
+        {
+          if (localSaveSystem == null)
+          {
+            List<ISaveDomainController> localControllers = localRegistry.GetControllers().ToList();
+            localSaveSystem = new ES3GameSaveSystem(localControllers, es3Service);
+          }
+          return localSaveSystem;
+        }
+
+        if (globalSaveSystem == null)
+        {
+          List<ISaveDomainController> globalControllers = globalRegistry.GetControllers().ToList();
+          globalSaveSystem = new ES3GameSaveSystem(globalControllers, es3Service);
+        }
+        return globalSaveSystem;
+      }
+
     private void UpdateReactiveProperties()
     {
       ES3GameSaveSystem activeSystem = useLocalSystem ? localSaveSystem : globalSaveSystem;
@@ -227,7 +265,7 @@ namespace MToolKit.Runtime.Persistence
       // Log which controllers are available for saving
       SaveDomainControllerRegistry activeRegistry = useLocalSystem ? localRegistry : globalRegistry;
       List<ISaveDomainController> controllers = activeRegistry.GetControllers().ToList();
-      log.ForMethod().Information("Saving using {0} system with {1} controllers: {2}",
+      log.ForMethod().Verbose("Saving using {0} system with {1} controllers: {2}",
         useLocalSystem ? "local" : "global",
         controllers.Count,
         string.Join(", ", controllers.Select(c => c.Domain.ToString())));
@@ -237,7 +275,7 @@ namespace MToolKit.Runtime.Persistence
         await activeSystem.SaveAsync(ct);
         UpdateReactiveProperties();
 
-        log.ForMethod().Information("Save completed successfully using {0} system", useLocalSystem ? "local" : "global");
+        log.ForMethod().Debug("Save completed successfully using {0} system", useLocalSystem ? "local" : "global");
       }
       catch (Exception ex)
       {
@@ -337,12 +375,12 @@ namespace MToolKit.Runtime.Persistence
 
           try
           {
-            log.ForMethod().Information("Setting IsAutoSaveExecuting to true");
+            log.ForMethod().Verbose("Setting IsAutoSaveExecuting to true");
             IsAutoSaveExecuting.Value = true;
-            log.ForMethod().Information("Performing auto-save");
+            log.ForMethod().Verbose("Performing auto-save");
             await SaveAsync(ct);
             await UniTask.Delay(saveConfig.AutoSavePaddingMilliseconds);
-            log.ForMethod().Information("Auto-save completed successfully");
+            log.ForMethod().Verbose("Auto-save completed successfully");
           }
           catch (OperationCanceledException)
           {

@@ -59,7 +59,7 @@ namespace MToolKit.Runtime.Audio
 
     public override void Register(IContainerBuilder builder)
     {
-      log.ForMethod().Debug("AudioPlugin Register called");
+      log.ForMethod().Verbose("AudioPlugin Register called");
 
       // Register the config
       builder.RegisterInstance(config).As<AudioConfig>();
@@ -87,19 +87,19 @@ namespace MToolKit.Runtime.Audio
         }
       }, Lifetime.Singleton);
 
-      log.ForMethod().Information("AudioPlugin Register completed - IAudioService registered");
+      log.ForMethod().Verbose("AudioPlugin Register completed - IAudioService registered");
     }
 
     public void PerformSetup(IObjectResolver objectResolver)
     {
-      log.ForMethod().Information("AudioPlugin PerformSetup called");
+      log.ForMethod().Verbose("AudioPlugin PerformSetup called");
       resolver = objectResolver;
       cts = new CancellationTokenSource();
     }
 
     public void PerformRuntimeInitialization(IObjectResolver objectResolver)
     {
-      log.ForMethod().Information("AudioPlugin PerformRuntimeInitialization called");
+      log.ForMethod().Verbose("AudioPlugin PerformRuntimeInitialization called");
 
       // Use semaphore to ensure only one initialization happens
       bool isAcquired = false;
@@ -123,18 +123,18 @@ namespace MToolKit.Runtime.Audio
           return;
         }
 
-        log.ForMethod().Debug("Resolving IAudioService...");
+        log.ForMethod().Verbose("Resolving IAudioService...");
         audioService = resolver.Resolve<IAudioService>();
-        log.ForMethod().Information("Resolved IAudioService: {Type}", audioService?.GetType().Name ?? "NULL");
+        log.ForMethod().Verbose("Resolved IAudioService: {Type}", audioService?.GetType().Name ?? "NULL");
 
         ISettingsSystem settingsSystem = resolver.Resolve<ISettingsSystem>();
-        log.ForMethod().Information("Resolved ISettingsSystem: {Type}", settingsSystem?.GetType().Name ?? "NULL");
+        log.ForMethod().Verbose("Resolved ISettingsSystem: {Type}", settingsSystem?.GetType().Name ?? "NULL");
 
         if (audioService is AudioService service && settingsSystem != null)
         {
-          log.ForMethod().Information("Calling InitializeAsync on AudioService");
+          log.ForMethod().Verbose("Calling InitializeAsync on AudioService");
           service.InitializeAsync(settingsSystem, cts.Token).Forget();
-          log.ForMethod().Information("AudioService initialization started");
+          log.ForMethod().Verbose("AudioService initialization started");
         }
         else
         {
@@ -154,7 +154,7 @@ namespace MToolKit.Runtime.Audio
 
     public void Initialize(IObjectResolver resolver)
     {
-      log.ForMethod().Information("AudioPlugin Initialize called");
+      log.ForMethod().Verbose("AudioPlugin Initialize called");
       PerformSetup(resolver);
       if (AreDependenciesReady(resolver))
         PerformRuntimeInitialization(resolver);
@@ -167,7 +167,7 @@ namespace MToolKit.Runtime.Audio
       // Check if all required services are available
       bool ready = resolver.TryResolve<ISettingsSystem>(out _);
       if (ready)
-        log.ForMethod().Information("AudioPlugin dependencies are ready - ISettingsSystem found");
+        log.ForMethod().Verbose("AudioPlugin dependencies are ready - ISettingsSystem found");
       else
         log.ForMethod().Warning("AudioPlugin dependencies not ready - ISettingsSystem not found");
       return ready;

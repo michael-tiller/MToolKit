@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using MToolKit.Runtime.VisualGraphs.Dialogue.Definitions;
+using MToolKit.Runtime.VisualGraphs.Event.Definitions;
 using MToolKit.Runtime.VisualGraphs.Quest.Definitions;
 using MToolKit.Runtime.VisualGraphs.Variables;
 using Sirenix.OdinInspector;
@@ -33,9 +34,14 @@ namespace MToolKit.Runtime.VisualGraphs.Config
     [Tooltip("All dialogue definitions")]
     public List<DialogueDefinition> DialogueDefinitions = new();
 
+    [BoxGroup("Event Graphs")]
+    [ListDrawerSettings(ShowFoldout = true)]
+    [Tooltip("All event definitions (generic reactive graphs for items, setpieces, etc.)")]
+    public List<EventDefinition> EventDefinitions = new();
+
     [BoxGroup("Debug")]
     [ReadOnly]
     [ShowInInspector]
-    public int TotalGraphCount => QuestDefinitions.Count + DialogueDefinitions.Count;
+    public int TotalGraphCount => QuestDefinitions.Count + DialogueDefinitions.Count + EventDefinitions.Count;
   }
 }

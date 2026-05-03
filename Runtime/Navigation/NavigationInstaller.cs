@@ -40,8 +40,8 @@ namespace MToolKit.Runtime.Navigation
 
     protected override void Configure(IContainerBuilder builder)
     {
-      // Register MessagePipe for scene-specific messages (if needed for other message types)
-      builder.RegisterMessagePipe();
+      // MessagePipeOptions may already be registered by parent scope (GlobalInstaller)
+      // Skip re-registration to avoid Singleton conflict
 
       // Register services
       builder.Register<INavigationService, NavigationService>(Lifetime.Singleton);

@@ -47,13 +47,20 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
 
     public ESaveDomain Domain => ESaveDomain.Graphs;
 
+    public bool HasSaveData()
+    {
+      var graphStatesKey = $"{domainPrefix}{GraphStatesSaveKey}";
+      var questManagerKey = $"{domainPrefix}{QuestManagerSaveKey}";
+      return es3Service.KeyExists(graphStatesKey) || es3Service.KeyExists(questManagerKey);
+    }
+
     public async UniTask SaveAsync(CancellationToken ct = default)
     {
       log.ForMethod().Information("Saving graph states");
 
       if (ct.IsCancellationRequested)
       {
-        log.ForMethod().Debug("Save cancelled before starting");
+        log.ForMethod().Verbose("Save cancelled before starting");
         return;
       }
 
@@ -63,7 +70,7 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
         var stateMap = new Dictionary<string, GraphStateSnapshot>();
         var runners = router.GetRunners().ToList();
 
-        log.ForMethod().Debug("Capturing state from {GraphCount} graph(s)", runners.Count);
+        log.ForMethod().Verbose("Capturing state from {GraphCount} graph(s)", runners.Count);
 
         foreach (var runner in runners)
         {
@@ -73,7 +80,7 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
             if (snapshot != null)
             {
               stateMap[runner.GraphId] = snapshot;
-              log.ForMethod().Debug("Captured state for graph '{GraphId}' ({StateKeyCount} keys)",
+              log.ForMethod().Verbose("Captured state for graph '{GraphId}' ({StateKeyCount} keys)",
                 runner.GraphId, snapshot.Data?.Count ?? 0);
             }
             else
@@ -90,7 +97,7 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
 
           if (ct.IsCancellationRequested)
           {
-            log.ForMethod().Debug("Save cancelled during state capture");
+            log.ForMethod().Verbose("Save cancelled during state capture");
             return;
           }
         }
@@ -121,7 +128,7 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
       }
       catch (OperationCanceledException)
       {
-        log.ForMethod().Debug("Save operation cancelled");
+        log.ForMethod().Verbose("Save operation cancelled");
         throw;
       }
       catch (Exception ex)
@@ -137,7 +144,7 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
 
       if (ct.IsCancellationRequested)
       {
-        log.ForMethod().Debug("Load cancelled before starting");
+        log.ForMethod().Verbose("Load cancelled before starting");
         return;
       }
 
@@ -166,7 +173,7 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
             var graphStateSnapshotType = ES3TypeMgr.GetOrCreateES3Type(typeof(GraphStateSnapshot));
             var dictionaryType = ES3TypeMgr.GetOrCreateES3Type(typeof(Dictionary<string, GraphStateSnapshot>));
 
-            log.ForMethod().Debug("Loading graph states with ES3Type support (GraphStateSnapshot type: {Type}, Dictionary type: {DictType})",
+            log.ForMethod().Verbose("Loading graph states with ES3Type support (GraphStateSnapshot type: {Type}, Dictionary type: {DictType})",
               graphStateSnapshotType?.GetType().Name ?? "null", dictionaryType?.GetType().Name ?? "null");
 
             // Try loading with explicit type handling
@@ -276,13 +283,13 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
           return;
         }
 
-        log.ForMethod().Debug("Loaded {GraphCount} graph state(s) from save data", stateMap.Count);
+        log.ForMethod().Verbose("Loaded {GraphCount} graph state(s) from save data", stateMap.Count);
 
         // Restore states to runners (re-fetch to include any quest graphs that were just loaded)
         var runners = router.GetRunners().ToList();
-        log.ForMethod().Information("Available runners for state restoration: {RunnerIds}",
+        log.ForMethod().Verbose("Available runners for state restoration: {RunnerIds}",
           string.Join(", ", runners.Select(r => r.GraphId)));
-        log.ForMethod().Information("Graph IDs in save data: {GraphIds}",
+        log.ForMethod().Verbose("Graph IDs in save data: {GraphIds}",
           string.Join(", ", stateMap.Keys));
 
         var restoredCount = 0;
@@ -295,7 +302,7 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
 
           if (ct.IsCancellationRequested)
           {
-            log.ForMethod().Debug("Load cancelled during state restoration");
+            log.ForMethod().Verbose("Load cancelled during state restoration");
             return;
           }
 
@@ -306,7 +313,7 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
             {
               runner.ImportState(snapshot);
               restoredCount++;
-              log.ForMethod().Information("Restored state for graph '{GraphId}' ({StateKeyCount} keys): {Keys}",
+              log.ForMethod().Verbose("Restored state for graph '{GraphId}' ({StateKeyCount} keys): {Keys}",
                 graphId, snapshot.Data?.Count ?? 0, string.Join(", ", snapshot.Data?.Keys ?? Enumerable.Empty<string>()));
             }
             else
@@ -340,7 +347,7 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
       }
       catch (OperationCanceledException)
       {
-        log.ForMethod().Debug("Load operation cancelled");
+        log.ForMethod().Verbose("Load operation cancelled");
         throw;
       }
       catch (Exception ex)

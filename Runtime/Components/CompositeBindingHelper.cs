@@ -53,7 +53,7 @@ namespace MToolKit.Runtime.Components
         };
 
         // Debug logging to help troubleshoot control scheme detection
-        log.Debug("Binding {Index}: Name='{Name}', Path='{Path}', Groups='{Groups}', DeviceType='{DeviceType}', IsGamepad={IsGamepad}",
+        log.Verbose("Binding {Index}: Name='{Name}', Path='{Path}', Groups='{Groups}', DeviceType='{DeviceType}', IsGamepad={IsGamepad}",
           i, logicalName, binding.path, binding.groups, deviceType, isGamepad);
 
         if (!bindingGroups.ContainsKey(logicalName))

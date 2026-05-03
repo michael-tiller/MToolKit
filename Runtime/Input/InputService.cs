@@ -57,7 +57,7 @@ namespace MToolKit.Runtime.Input
 
     public void Initialize(object inputAsset)
     {
-      log.ForMethod().Debug("InputService instance #{0} initializing (total instances created: {1})", instanceId, instanceCounter);
+      log.ForMethod().Verbose("InputService instance #{0} initializing (total instances created: {1})", instanceId, instanceCounter);
       if (isInitialized)
       {
         log.ForMethod().Warning("InputService already initialized, ignoring duplicate initialization");
@@ -82,7 +82,7 @@ namespace MToolKit.Runtime.Input
 
       // Create our own clone - InputService owns and manages all input actions
       inputActionAsset = Object.Instantiate(sourceAsset);
-      log.ForMethod().Debug("InputService: Created InputActionAsset clone (name: {0}). InputService is the single entry point for input.", inputActionAsset.name);
+      log.ForMethod().Verbose("InputService: Created InputActionAsset clone (name: {0}). InputService is the single entry point for input.", inputActionAsset.name);
 
       // Set PlayerInput components to use our asset instance instead of cloning
       // This allows PlayerInput to work while InputService manages the asset
@@ -90,15 +90,15 @@ namespace MToolKit.Runtime.Input
       if (playerInput != null)
       {
         playerInput.actions = inputActionAsset;
-        log.ForMethod().Debug("InputService: Set PlayerInput.actions to use InputService's managed asset. Component: {0}", playerInput.name);
+        log.ForMethod().Verbose("InputService: Set PlayerInput.actions to use InputService's managed asset. Component: {0}", playerInput.name);
       }
 
       // Get action maps from our managed asset
       playerActionMap = inputActionAsset.FindActionMap("Player");
       uiActionMap = inputActionAsset.FindActionMap("UI");
 
-      log.ForMethod().Debug("InputService: Found Player action map: {0}", playerActionMap != null);
-      log.ForMethod().Debug("InputService: Found UI action map: {0}", uiActionMap != null);
+      log.ForMethod().Verbose("InputService: Found Player action map: {0}", playerActionMap != null);
+      log.ForMethod().Verbose("InputService: Found UI action map: {0}", uiActionMap != null);
 
       // Look for Pause action - try UI action map first (to avoid PlayerInput conflicts), then Player map
       if (uiActionMap != null)
@@ -107,7 +107,7 @@ namespace MToolKit.Runtime.Input
         if (pauseAction != null)
         {
           pauseAction.performed += OnPauseActionPerformed;
-          log.ForMethod().Debug("InputService: Pause action found and subscribed in UI action map");
+          log.ForMethod().Verbose("InputService: Pause action found and subscribed in UI action map");
         }
       }
 
@@ -119,7 +119,7 @@ namespace MToolKit.Runtime.Input
         if (pauseAction != null)
         {
           pauseAction.performed += OnPauseActionPerformed;
-          log.ForMethod().Debug("InputService: Pause action found and subscribed in Player action map");
+          log.ForMethod().Verbose("InputService: Pause action found and subscribed in Player action map");
         }
         else
         {
@@ -139,7 +139,7 @@ namespace MToolKit.Runtime.Input
         if (anyKeyAction != null)
         {
           anyKeyAction.performed += OnAnyKeyActionPerformed;
-          log.ForMethod().Debug("InputService: AnyKey action found and subscribed in UI action map");
+          log.ForMethod().Verbose("InputService: AnyKey action found and subscribed in UI action map");
         }
         else
         {
@@ -156,12 +156,12 @@ namespace MToolKit.Runtime.Input
 #endif
 
       isInitialized = true;
-      log.ForMethod().Debug("InputService initialized successfully");
+      log.ForMethod().Verbose("InputService initialized successfully");
     }
 
     public void Enable()
     {
-      log.ForMethod().Debug("InputService instance #{0} enabling", instanceId);
+      log.ForMethod().Verbose("InputService instance #{0} enabling", instanceId);
       if (!isInitialized)
       {
         log.ForMethod().Error("Cannot enable InputService before initialization");
@@ -180,7 +180,7 @@ namespace MToolKit.Runtime.Input
       if (playerInput != null && playerInput.actions != inputActionAsset)
       {
         playerInput.actions = inputActionAsset;
-        log.ForMethod().Debug("InputService: Updated PlayerInput.actions to use InputService's managed asset");
+        log.ForMethod().Verbose("InputService: Updated PlayerInput.actions to use InputService's managed asset");
       }
 
       if (inputActionAsset != null)
@@ -189,7 +189,7 @@ namespace MToolKit.Runtime.Input
         if (uiActionMap != null)
         {
           uiActionMap.Enable();
-          log.ForMethod().Debug("InputService: UI action map enabled");
+          log.ForMethod().Verbose("InputService: UI action map enabled");
         }
         else
         {
@@ -199,7 +199,7 @@ namespace MToolKit.Runtime.Input
         if (playerActionMap != null)
         {
           playerActionMap.Enable();
-          log.ForMethod().Debug("InputService: Player action map enabled");
+          log.ForMethod().Verbose("InputService: Player action map enabled");
         }
         else
         {
@@ -209,10 +209,10 @@ namespace MToolKit.Runtime.Input
         // Log pause action details for debugging
         if (pauseAction != null)
         {
-          log.ForMethod().Debug("InputService: Pause action enabled: {0}, bindings count: {1}, action map: {2}",
+          log.ForMethod().Verbose("InputService: Pause action enabled: {0}, bindings count: {1}, action map: {2}",
             pauseAction.enabled, pauseAction.bindings.Count, pauseAction.actionMap?.name ?? "null");
           foreach (InputBinding binding in pauseAction.bindings)
-            log.ForMethod().Debug("InputService: Pause binding: {0}", binding.path);
+            log.ForMethod().Verbose("InputService: Pause binding: {0}", binding.path);
         }
       }
       else
@@ -234,14 +234,14 @@ namespace MToolKit.Runtime.Input
       if (pauseAction != null)
       {
         int subscriberCount = OnPausePressed != null ? OnPausePressed.GetInvocationList().Length : 0;
-        log.ForMethod().Debug("InputService instance #{0}: Final status - Action enabled: {1}, Map enabled: {2}, Event subscribers: {3}",
+        log.ForMethod().Verbose("InputService instance #{0}: Final status - Action enabled: {1}, Map enabled: {2}, Event subscribers: {3}",
           instanceId,
           pauseAction.enabled,
           pauseAction.actionMap?.enabled ?? false,
           subscriberCount);
       }
 
-      log.ForMethod().Debug("InputService enabled successfully");
+      log.ForMethod().Verbose("InputService enabled successfully");
     }
 
     public void Disable()
@@ -257,13 +257,13 @@ namespace MToolKit.Runtime.Input
       if (uiActionMap != null)
       {
         uiActionMap.Disable();
-        log.ForMethod().Information("InputService: UI action map disabled");
+        log.ForMethod().Verbose("InputService: UI action map disabled");
       }
 
       if (playerActionMap != null)
       {
         playerActionMap.Disable();
-        log.ForMethod().Information("InputService: Player action map disabled");
+        log.ForMethod().Verbose("InputService: Player action map disabled");
       }
 #endif
 
@@ -322,7 +322,7 @@ namespace MToolKit.Runtime.Input
 #if ENABLE_INPUT_SYSTEM
     private void OnPauseActionPerformed(InputAction.CallbackContext context)
     {
-      log.ForMethod().Information("InputService instance #{0}: Pause action performed! Context phase: {1}, Event subscribers: {2}, Action enabled: {3}, Action map enabled: {4}",
+      log.ForMethod().Verbose("InputService instance #{0}: Pause action performed! Context phase: {1}, Event subscribers: {2}, Action enabled: {3}, Action map enabled: {4}",
         instanceId, context.phase, OnPausePressed?.GetInvocationList().Length ?? 0,
         pauseAction?.enabled ?? false, pauseAction?.actionMap?.enabled ?? false);
 
@@ -332,7 +332,7 @@ namespace MToolKit.Runtime.Input
       }
       else
       {
-        log.ForMethod().Information("InputService instance #{0}: Invoking OnPausePressed event with {1} subscriber(s)",
+        log.ForMethod().Verbose("InputService instance #{0}: Invoking OnPausePressed event with {1} subscriber(s)",
           instanceId, OnPausePressed?.GetInvocationList().Length ?? 0);
         OnPausePressed?.Invoke();
       }
@@ -340,7 +340,7 @@ namespace MToolKit.Runtime.Input
 
     private void OnAnyKeyActionPerformed(InputAction.CallbackContext context)
     {
-      log.ForMethod().Debug("AnyKey action performed");
+      log.ForMethod().Verbose("AnyKey action performed");
       OnAnyKeyPressed?.Invoke();
     }
 #endif

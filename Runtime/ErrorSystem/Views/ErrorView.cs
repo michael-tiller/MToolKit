@@ -47,24 +47,24 @@ namespace MToolKit.Runtime.ErrorSystem.Views
 
       if (string.IsNullOrWhiteSpace(message))
       {
-        log.ForGameObject(gameObject).ForMethod().Debug("Setting message to empty");
+        log.ForGameObject(gameObject).ForMethod().Verbose("Setting message to empty");
         errorText.SetText(string.Empty);
         return;
       }
 
-      log.ForGameObject(gameObject).ForMethod().Information("Setting message: {0}", message);
+      log.ForGameObject(gameObject).ForMethod().Debug("Setting message: {0}", message);
       errorText.SetText(message);
     }
 
     private void OnEnable()
     {
-      log.ForGameObject(gameObject).ForMethod().Debug("Enabled");
+      log.ForGameObject(gameObject).ForMethod().Verbose("Enabled");
       cts = new CancellationTokenSource();
     }
 
     private void OnDisable()
     {
-      log.ForGameObject(gameObject).ForMethod().Debug("Disabled");
+      log.ForGameObject(gameObject).ForMethod().Verbose("Disabled");
       cts?.Cancel();
       cts?.Dispose();
       cts = null;

@@ -33,7 +33,7 @@ namespace MToolKit.Runtime.ErrorSystem
       this.errorView = errorView;
       this.errorCanvasGroup = errorCanvasGroup;
 
-      log.Debug("ErrorService constructed");
+      log.Verbose("ErrorService constructed");
     }
 
     public void ShowError(ErrorRequestMessage message)
@@ -65,7 +65,7 @@ namespace MToolKit.Runtime.ErrorSystem
 
     public void HideError()
     {
-      log.Debug("Hiding error message");
+      log.Verbose("Hiding error message");
 
       // Defensive: Check for null references
       if (errorView == null || errorCanvasGroup == null)

@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using MessagePipe;
 using MToolKit.Runtime.MessageBus;
 using MToolKit.Runtime.MessageBus.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime;
@@ -62,7 +62,7 @@ namespace MToolKit.Runtime.VisualGraphs.Bootstrap
         return;
       }
 
-      log.Information("Subscribing to {Count} message types for graph event routing", messageTypes.Count);
+      log.Verbose("Subscribing to {Count} message types for graph event routing", messageTypes.Count);
 
       // Subscribe to each message type via MessagePipe
       foreach (var messageType in messageTypes)
@@ -77,7 +77,7 @@ namespace MToolKit.Runtime.VisualGraphs.Bootstrap
         }
       }
 
-      log.Information("EventBusBridge subscribed to {Count} message types", subscriptions.Count);
+      log.Verbose("EventBusBridge subscribed to {Count} message types", subscriptions.Count);
     }
 
     private void SubscribeToMessageType(Type messageType)
@@ -118,7 +118,7 @@ namespace MToolKit.Runtime.VisualGraphs.Bootstrap
 
       // MessagePipe's ISubscriber<T> requires IMessageHandler<T>, not Action<T>
       // Create a wrapper that implements IMessageHandler<T>
-      var messageHandlerType = typeof(MessagePipe.IMessageHandler<>).MakeGenericType(messageType);
+      Type messageHandlerType = typeof(IMessageHandler<>).MakeGenericType(messageType);
       var handlerWrapperType = typeof(ActionMessageHandler<>).MakeGenericType(messageType);
 
       object handlerWrapper;
@@ -138,8 +138,8 @@ namespace MToolKit.Runtime.VisualGraphs.Bootstrap
       }
 
       // Get the Subscribe method that takes IMessageHandler<T> and optional filters
-      var interfaceType = typeof(MessagePipe.ISubscriber<>).MakeGenericType(messageType);
-      var filterArrayType = typeof(MessagePipe.MessageHandlerFilter<>).MakeGenericType(messageType).MakeArrayType();
+      Type interfaceType = typeof(ISubscriber<>).MakeGenericType(messageType);
+      Type filterArrayType = typeof(MessageHandlerFilter<>).MakeGenericType(messageType).MakeArrayType();
 
       // Try to find Subscribe method - it might have filters as optional parameter
       var subscribeMethod = interfaceType.GetMethod("Subscribe", new[] { messageHandlerType, filterArrayType });
@@ -166,7 +166,7 @@ namespace MToolKit.Runtime.VisualGraphs.Bootstrap
         if (parameters.Length == 2)
         {
           // Method requires filters parameter - use empty array instead of null
-          var emptyFilterArray = Array.CreateInstance(typeof(MessagePipe.MessageHandlerFilter<>).MakeGenericType(messageType), 0);
+          Array emptyFilterArray = Array.CreateInstance(typeof(MessageHandlerFilter<>).MakeGenericType(messageType), 0);
           result = subscribeMethod.Invoke(subscriber, new object[] { handlerWrapper, emptyFilterArray });
         }
         else
@@ -186,19 +186,20 @@ namespace MToolKit.Runtime.VisualGraphs.Bootstrap
       catch (Exception ex)
       {
         // Unwrap InvocationTargetException to get the real exception
-        var innerException = ex is System.Reflection.TargetInvocationException tie ? tie.InnerException : ex;
+        Exception innerException = ex is TargetInvocationException tie ? tie.InnerException : ex;
         log.Error(innerException ?? ex, "Exception calling Subscribe for {MessageType}: {Message}. Outer exception: {OuterMessage}",
           messageType.Name, innerException?.Message ?? ex.Message, ex.Message);
         return;
       }
 
       subscriptions.Add(disposable);
-      log.Debug("Subscribed to {MessageType} from MessagePipe", messageType.Name);
+      log.Verbose("Subscribed to {MessageType} from MessagePipe", messageType.Name);
     }
 
     private void OnMessageReceivedGeneric<T>(T message) where T : IGameMessage
     {
-      OnMessageReceived(message, domain: null);
+      string domain = message is IDomainMessage dm ? dm.Domain : null;
+      OnMessageReceived(message, domain);
     }
 
     private void Start()
@@ -243,7 +244,7 @@ namespace MToolKit.Runtime.VisualGraphs.Bootstrap
     /// <summary>
     /// Wraps an Action<T> to implement IMessageHandler<T> for MessagePipe
     /// </summary>
-    private sealed class ActionMessageHandler<T> : MessagePipe.IMessageHandler<T>
+    private sealed class ActionMessageHandler<T> : IMessageHandler<T>
     {
       private readonly Action<T> action;
 

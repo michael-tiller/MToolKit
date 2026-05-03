@@ -17,17 +17,18 @@ namespace MToolKit.Runtime.Settings.Graphics
     private static ILogger log => logLazy.Value ?? Logger.None;
 
     // Helper method to update the engine's resolution.
-    private static void UpdateResolution(int resIndex, bool fullscreen)
+    private static int UpdateResolution(int resIndex, bool fullscreen)
     {
-      if (resIndex >= 0 && resIndex < Screen.resolutions.Length)
-      {
-        Resolution res = Screen.resolutions[resIndex];
-        Screen.SetResolution(res.width, res.height, fullscreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed, res.refreshRateRatio);
-      }
-      else
-      {
-        log.ForMethod().Error("Resolution index out of range: " + resIndex);
-      }
+      var resolutions = Screen.resolutions;
+      if (resolutions.Length == 0) return 0;
+
+      var clampedIndex = Math.Clamp(resIndex, 0, resolutions.Length - 1);
+      if (clampedIndex != resIndex)
+        log.ForMethod().Warning("Resolution index {Index} clamped to {Clamped} (available: {Count})", resIndex, clampedIndex, resolutions.Length);
+
+      Resolution res = resolutions[clampedIndex];
+      Screen.SetResolution(res.width, res.height, fullscreen ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed, res.refreshRateRatio);
+      return clampedIndex;
     }
 
     // Helper method to update the engine's quality setting.
@@ -110,7 +111,9 @@ namespace MToolKit.Runtime.Settings.Graphics
     {
       if (ResolutionIndex.IsDirty || Fullscreen.IsDirty)
       {
-        UpdateResolution(ResolutionIndex.Value, Fullscreen.Value);
+        var appliedIndex = UpdateResolution(ResolutionIndex.Value, Fullscreen.Value);
+        if (appliedIndex != ResolutionIndex.Value)
+          ResolutionIndex.Value = appliedIndex;
         ResolutionIndex.OnApply();
         Fullscreen.OnApply();
       }
@@ -133,7 +136,9 @@ namespace MToolKit.Runtime.Settings.Graphics
       if (!ResolutionIndex.IsDefault)
       {
         ResolutionIndex.OnRevertToDefault();
-        UpdateResolution(ResolutionIndex.Value, Fullscreen.Value);
+        var appliedIndex = UpdateResolution(ResolutionIndex.Value, Fullscreen.Value);
+        if (appliedIndex != ResolutionIndex.Value)
+          ResolutionIndex.Value = appliedIndex;
       }
 
       if (!QualityIndex.IsDefault)

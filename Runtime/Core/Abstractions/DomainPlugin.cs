@@ -20,7 +20,6 @@ namespace MToolKit.Runtime.Core.Abstractions
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<DomainPlugin<TService, TInterface>>().ForFeature("Core.Abstractions"));
     protected new static ILogger log => logLazy.Value ?? Logger.None;
-    protected bool isRuntimeInitialized;
 
     protected TService service;
 
@@ -46,7 +45,7 @@ namespace MToolKit.Runtime.Core.Abstractions
     /// </summary>
     public override void Register(IContainerBuilder builder)
     {
-      log.ForGameObject(gameObject).ForMethod().Debug("Registering {0}", GetType().Name);
+      log.ForGameObject(gameObject).ForMethod().Verbose("Registering {0}", GetType().Name);
 
       // Register the service as singleton
       builder.Register<TInterface>(CreateService, Lifetime.Singleton);
@@ -54,7 +53,7 @@ namespace MToolKit.Runtime.Core.Abstractions
       // Register the plugin instance
       builder.RegisterInstance(this).AsSelf();
 
-      log.ForGameObject(gameObject).ForMethod().Debug("{0} registration completed", GetType().Name);
+      log.ForGameObject(gameObject).ForMethod().Verbose("{0} registration completed", GetType().Name);
     }
 
     /// <summary>
@@ -80,7 +79,7 @@ namespace MToolKit.Runtime.Core.Abstractions
     {
       bool canResolveService = resolver.TryResolve(out TInterface _);
 
-      log.ForGameObject(gameObject).ForMethod().Debug(
+      log.ForGameObject(gameObject).ForMethod().Verbose(
         "Dependencies ready check: CanResolveService={0}", canResolveService);
 
       return canResolveService;
@@ -95,12 +94,12 @@ namespace MToolKit.Runtime.Core.Abstractions
       if (isRuntimeInitialized)
       {
         log.ForGameObject(gameObject).ForMethod().Verbose(
-          "{0} already runtime initialized, skipping", GetType().Name);
+          "{Type} already runtime initialized, skipping", GetType().Name);
         return;
       }
 
-      log.ForGameObject(gameObject).ForMethod().Debug(
-        "Performing {0} runtime initialization...", GetType().Name);
+      log.ForGameObject(gameObject).ForMethod().Verbose(
+        "Performing {Type} runtime initialization...", GetType().Name);
 
       try
       {
@@ -110,22 +109,22 @@ namespace MToolKit.Runtime.Core.Abstractions
         if (service == null)
         {
           log.ForGameObject(gameObject).ForMethod().Error(
-            "Failed to resolve {0}", typeof(TService).Name);
+            "Failed to resolve {Service}", typeof(TService).Name);
           return;
         }
 
         // Service is resolved and ready
-        log.ForGameObject(gameObject).ForMethod().Debug(
-          "{0} resolved successfully", typeof(TService).Name);
+        log.ForGameObject(gameObject).ForMethod().Verbose(
+          "{Service} resolved successfully", typeof(TService).Name);
 
         isRuntimeInitialized = true;
-        log.ForGameObject(gameObject).ForMethod().Debug(
-          "{0} runtime initialization completed", GetType().Name);
+        log.ForGameObject(gameObject).ForMethod().Verbose(
+          "{Type} runtime initialization completed", GetType().Name);
       }
       catch (Exception ex)
       {
         log.ForGameObject(gameObject).ForMethod().Error(
-          ex, "Error during {0} runtime initialization", GetType().Name);
+          ex, "Error during {Type} runtime initialization", GetType().Name);
       }
     }
 
