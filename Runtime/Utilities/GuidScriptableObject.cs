@@ -15,12 +15,12 @@ namespace MToolKit.Runtime.Utilities
     [field: SerializeField]
     [field: ReadOnly]
     [field: PropertyOrder(-9999)]
-    public string Guid { get; protected set; }
+    public string Guid { get; set; }
 
     [field: SerializeField]
     [field: ReadOnly]
     [field: PropertyOrder(-9998)]
-    public long Timestamp { get; protected set; }
+    public long Timestamp { get; set; }
 
 #if UNITY_EDITOR
     protected virtual void OnEnable()
@@ -33,7 +33,7 @@ namespace MToolKit.Runtime.Utilities
 #endif
 
     [field: SerializeField]
-    public string DisplayName { get; protected set; }
+    public string DisplayName { get; set; }
 
     [Button]
     protected virtual void RefreshGuid()

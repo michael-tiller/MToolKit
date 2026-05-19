@@ -31,7 +31,7 @@ namespace MToolKit.Runtime.Input
     protected override InputRebinderService CreateService(IObjectResolver resolver)
     {
       InputRebinderService instance = new();
-      log.ForGameObject(gameObject).ForMethod().Debug("Created InputRebinderService instance with HashCode: {HashCode}", instance.GetHashCode());
+      log.ForGameObject(gameObject).ForMethod().Verbose("Created InputRebinderService instance with HashCode: {HashCode}", instance.GetHashCode());
       return instance;
     }
 

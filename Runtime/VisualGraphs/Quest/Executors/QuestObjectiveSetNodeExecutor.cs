@@ -101,9 +101,10 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
         {
           ObjectiveGuid = objectiveGuid,
           Current = 0,
-          Required = 1
+          Required = objectiveDef.RequiredProgress
         };
-        log.ForMethod().Debug("Quest: Initialized new progress for objective {ObjectiveGuid}", objectiveGuid);
+        log.ForMethod().Debug("Quest: Initialized new progress for objective {ObjectiveGuid} (required: {Required})",
+          objectiveGuid, progress.Required);
       }
 
       // Set progress to exact value

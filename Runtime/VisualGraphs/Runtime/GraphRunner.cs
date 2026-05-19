@@ -163,6 +163,12 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
       var steps = 0;
       var maxSteps = Definition.MaxExecutionSteps;
 
+      // Per-message reentrancy guard. Authoring-time feedback edges (e.g. Increment.Output → Check.Input
+      // for "re-evaluate after incrementing") are valid and intended, but each node should execute at most
+      // once per message dispatch — without this, a single message walks the loop to completion and the
+      // increment fires N times for one event.
+      var executedThisDispatch = new HashSet<string>();
+
       while (queue.TryDequeue(out var nodeId))
       {
         if (ct.IsCancellationRequested) break;
@@ -173,6 +179,13 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
             Definition.GraphId, maxSteps);
           // TODO: Emit Graph.ExecutionHalted message
           break;
+        }
+
+        if (!executedThisDispatch.Add(nodeId))
+        {
+          log.ForMethod().Verbose("Quest: Graph '{GraphId}' - node {NodeId} already executed this dispatch, skipping (feedback-edge guard)",
+            Definition.GraphId, nodeId);
+          continue;
         }
 
         var nodeDef = Definition.GetNodeById(nodeId);

@@ -55,6 +55,8 @@ namespace MToolKit.Runtime.VisualGraphs
     private GraphEventRouter graphEventRouter;
     private IQuestManager questManager;
     private IDisposable questStartedSubscription;
+    private SaveSystemCoordinator registeredCoordinator;
+    private GraphStateSaveController registeredSaveController;
 
     [ShowInInspector]
     [ReadOnly]
@@ -400,6 +402,8 @@ namespace MToolKit.Runtime.VisualGraphs
 
         // Register with the save coordinator
         saveCoordinator.RegisterLocalController(saveController);
+        registeredCoordinator = saveCoordinator;
+        registeredSaveController = saveController;
         log.ForGameObject(gameObject).Information("Registered GraphStateSaveController with SaveSystemCoordinator");
         return true;
       }
@@ -472,6 +476,13 @@ namespace MToolKit.Runtime.VisualGraphs
     public override void Shutdown()
     {
       log.ForGameObject(gameObject).Information("Shutting down Visual Graphs plugin");
+
+      if (registeredCoordinator != null && registeredSaveController != null)
+      {
+        registeredCoordinator.UnregisterLocalController(registeredSaveController);
+        registeredCoordinator = null;
+        registeredSaveController = null;
+      }
 
       cts?.Cancel();
       cts?.Dispose();

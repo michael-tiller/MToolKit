@@ -28,6 +28,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     private readonly IES3Service es3Service;
     private readonly string profilesDirectory;
     private volatile bool isDisposed;
+    private int pendingWorldSeed;
     private IDisposable currentProfileSubscription;
 
     public ProfileManager(IES3Service es3Service, ES3SaveConfig config)
@@ -361,12 +362,14 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         ProfileMetaData existingMetadata = GetProfileMetaData(profileName, ct);
         if (existingMetadata != null)
         {
+          int worldSeed = pendingWorldSeed != 0 ? pendingWorldSeed : existingMetadata.WorldSeed;
           ProfileMetaData updatedMetadata = new(
             existingMetadata.ProfileName,
             DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
             config.SaveFormatVersion,
             existingMetadata.SaveCounter + 1,
-            existingMetadata.CreatedTime
+            existingMetadata.CreatedTime,
+            worldSeed
             );
 
           // Save ProfileMetadata object only (no individual fields to avoid duplication)
@@ -592,6 +595,22 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     /// <summary>
     ///   Forces repair of all profile metadata - useful for fixing corrupted save files
     /// </summary>
+    public void SetWorldSeed(int seed)
+    {
+      pendingWorldSeed = seed;
+
+      // Update live metadata so consumers that read CurrentProfileMetadata before the next
+      // SaveProfile (e.g. WorldGenerationPlugin during scene load) see the new seed.
+      ProfileMetaData current = CurrentProfileMetadata.Value;
+      if (current != null)
+      {
+        current.WorldSeed = seed;
+        CurrentProfileMetadata.OnNext(current);
+      }
+
+      log.ForMethod().Debug("Set world seed: {Seed}", seed);
+    }
+
     public void RepairAllProfileMetadata()
     {
       if (isDisposed)

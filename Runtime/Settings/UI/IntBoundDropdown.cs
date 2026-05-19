@@ -3,8 +3,10 @@ using MToolKit.Runtime.Settings.BoundSettings;
 using MToolKit.Runtime.Settings.UI.Abstract;
 using R3;
 using Serilog;
-using Serilog.Core;
+using UnityEngine;
+using UnityEngine.UI;
 using ILogger = Serilog.ILogger;
+using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.Settings.UI
 {
@@ -19,6 +21,56 @@ namespace MToolKit.Runtime.Settings.UI
     // Holds the reactive setting this dropdown is bound to.
     public IntBoundReactiveSetting IntBoundReactiveSetting { get; set; } = new();
 
+    [SerializeField]
+    private Button prevButton, nextButton;
+
+    [SerializeField]
+    private bool showNextPrevButtons;
+
+    public void OnNext()
+    {
+      int count = Dropdown.options.Count;
+      if (count == 0) return;
+      Dropdown.value = (Dropdown.value + 1) % count;
+    }
+
+    public void OnPrev()
+    {
+      int count = Dropdown.options.Count;
+      if (count == 0) return;
+      Dropdown.value = (Dropdown.value - 1 + count) % count;
+    }
+
+    protected override void OnEnable()
+    {
+      base.OnEnable();
+
+      if (nextButton == null)
+      {
+        log.ForGameObject(gameObject).ForMethod().Warning("nextButton is not assigned");
+        return;
+      }
+      if (prevButton == null)
+      {
+        log.ForGameObject(gameObject).ForMethod().Warning("prevButton is not assigned");
+        return;
+      }
+      nextButton.onClick.AddListener(OnNext);
+      prevButton.onClick.AddListener(OnPrev);
+
+      nextButton.gameObject.SetActive(showNextPrevButtons);
+      prevButton.gameObject.SetActive(showNextPrevButtons);
+    }
+
+    protected override void OnDisable()
+    {
+      base.OnDisable();
+      if (nextButton == null || prevButton == null)
+        return;
+      nextButton.onClick.RemoveListener(OnNext);
+      prevButton.onClick.RemoveListener(OnPrev);
+    }
+    
     private void OnDestroy()
     {
       reactiveSubscription?.Dispose();

@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Core.Interfaces;
+using MToolKit.Runtime.MessageBus;
 using MToolKit.Runtime.Persistence.ES3Integration;
 using MToolKit.Runtime.Persistence.Interfaces;
+using MToolKit.Runtime.Persistence.Migration;
 using R3;
 using Serilog;
 using Serilog.Core;
@@ -27,6 +30,12 @@ namespace MToolKit.Runtime.Persistence
     private readonly SaveDomainControllerRegistry localRegistry;
     private readonly IProfileManager profileManager;
     private readonly ES3SaveConfig saveConfig;
+    private readonly ITruncationReporter truncationReporter;
+
+    // Serializes concurrent LoadAsync invocations so the truncation reporter's load scope
+    // is not corrupted by overlapping callers. AvailableWaitHandle is never accessed, so
+    // disposal is not required (see Shutdown).
+    private readonly SemaphoreSlim loadGate = new(1, 1);
 
     // Auto-save functionality
     private CancellationTokenSource autoSaveCts;
@@ -36,13 +45,14 @@ namespace MToolKit.Runtime.Persistence
     private bool useLocalSystem;
 
     public SaveSystemCoordinator(IES3Service es3Service, SaveDomainControllerRegistry globalRegistry, SaveDomainControllerRegistry localRegistry, ES3SaveConfig saveConfig,
-      IProfileManager profileManager)
+      IProfileManager profileManager, ITruncationReporter truncationReporter)
     {
       this.es3Service = es3Service ?? throw new ArgumentNullException(nameof(es3Service));
       this.globalRegistry = globalRegistry ?? throw new ArgumentNullException(nameof(globalRegistry));
       this.localRegistry = localRegistry ?? throw new ArgumentNullException(nameof(localRegistry));
       this.saveConfig = saveConfig ?? throw new ArgumentNullException(nameof(saveConfig));
       this.profileManager = profileManager ?? throw new ArgumentNullException(nameof(profileManager));
+      this.truncationReporter = truncationReporter ?? throw new ArgumentNullException(nameof(truncationReporter));
 
       // Initialize reactive properties
       IsSaving = new ReactiveProperty<bool>(false);
@@ -63,6 +73,24 @@ namespace MToolKit.Runtime.Persistence
     public ReactiveProperty<int> SaveCounter { get; }
     public ReactiveProperty<bool> IsAutoSaveRunning { get; }
     public ReactiveProperty<bool> IsAutoSaveExecuting { get; }
+
+    /// <summary>
+    ///   Snapshot of truncation entries reported during the most recent successful
+    ///   <see cref="LoadAsync"/>. Set to <see cref="TruncationReport.Empty"/> when the last
+    ///   load was clean, threw, or has not yet run. Pull-mechanism for callers that cannot
+    ///   subscribe to <see cref="SaveTruncatedOnLoadMessage"/> through
+    ///   <c>GameMessageBroker</c> (e.g., menu-scene global loads where the game-scope broker
+    ///   may not be available, or post-load hydrate handlers reading state directly).
+    /// </summary>
+    public TruncationReport LastLoadTruncationReport { get; private set; } = TruncationReport.Empty;
+
+    /// <summary>
+    ///   Fires after a successful <see cref="LoadAsync"/> completes, allowing subscribers
+    ///   to perform post-load cross-controller hydration (e.g. resolve references that
+    ///   span multiple SaveData domains). Handlers are awaited sequentially; per-handler
+    ///   failures are logged and isolated so one bad hydrator does not break others.
+    /// </summary>
+    public event Func<CancellationToken, UniTask> PostLoadHydrate;
 
     #region IRuntimeSystem Members
 
@@ -197,6 +225,35 @@ namespace MToolKit.Runtime.Persistence
         controller.Domain, localRegistry.Count);
     }
 
+        /// <summary>
+        ///   Unregisters a domain controller from the local registry. Called by plugins on
+        ///   Shutdown so controllers holding scene-scoped Unity references (cameras, services,
+        ///   etc.) don't outlive the scene that owns them and break subsequent save/load cycles.
+        /// </summary>
+        public void UnregisterLocalController(ISaveDomainController controller)
+        {
+          if (controller == null)
+          {
+            log.ForMethod().Warning("Attempted to unregister null controller from local registry - ignoring");
+            return;
+          }
+
+          if (!localRegistry.UnregisterController(controller))
+            return;
+
+          if (useLocalSystem)
+          {
+            List<ISaveDomainController> localControllers = localRegistry.GetControllers().ToList();
+            localSaveSystem = new ES3GameSaveSystem(localControllers, es3Service);
+            UpdateReactiveProperties();
+            log.ForMethod().Information("Recreated local save system with {0} controllers after unregistering: {1}",
+              localControllers.Count, controller.Domain);
+          }
+
+          log.ForMethod().Information("Unregistered domain controller from local registry: {0} (total local controllers: {1})",
+            controller.Domain, localRegistry.Count);
+        }
+
       /// <summary>
       ///   Returns true if any controller registered with the local registry reports
       ///   persisted save data. Used at session boot to choose between NEW-game seeding
@@ -272,10 +329,13 @@ namespace MToolKit.Runtime.Persistence
 
       try
       {
+        Stopwatch sw = Stopwatch.StartNew();
         await activeSystem.SaveAsync(ct);
+        sw.Stop();
         UpdateReactiveProperties();
 
-        log.ForMethod().Debug("Save completed successfully using {0} system", useLocalSystem ? "local" : "global");
+        log.ForMethod().Information("Save timing total: system={0} wall_clock_ms={1} controller_count={2}",
+          useLocalSystem ? "local" : "global", sw.ElapsedMilliseconds, controllers.Count);
       }
       catch (Exception ex)
       {
@@ -299,17 +359,71 @@ namespace MToolKit.Runtime.Persistence
 
       log.ForMethod().Information("Loading using {0} system", useLocalSystem ? "local" : "global");
 
+      // Validate first; only then take the load gate and touch the truncation reporter.
+      // The gate serializes overlapping LoadAsync calls so the reporter's load scope is not
+      // corrupted by a second caller swapping its queue mid-load.
+      await loadGate.WaitAsync(ct);
       try
       {
-        await activeSystem.LoadAsync(ct);
-        UpdateReactiveProperties();
+        truncationReporter.BeginLoadScope();
+        bool loadSucceeded = false;
+        TruncationReport drained = TruncationReport.Empty;
+        try
+        {
+          await activeSystem.LoadAsync(ct);
+          UpdateReactiveProperties();
+          loadSucceeded = true;
 
-        log.ForMethod().Information("Load completed successfully using {0} system", useLocalSystem ? "local" : "global");
+          log.ForMethod().Information("Load completed successfully using {0} system", useLocalSystem ? "local" : "global");
+        }
+        catch (Exception ex)
+        {
+          log.ForMethod().Error(ex, "Load failed using {0} system: {Message}", useLocalSystem ? "local" : "global", ex.Message);
+          throw;
+        }
+        finally
+        {
+          // Always drain so leaked entries don't poison the next load. Publish only on success.
+          drained = truncationReporter.DrainReport();
+          LastLoadTruncationReport = loadSucceeded ? drained : TruncationReport.Empty;
+        }
+
+        if (drained.HasEntries)
+        {
+          GameMessageBroker.Publish(new SaveTruncatedOnLoadMessage(drained.Severity, drained.Entries));
+          log.ForMethod().Warning("Save loaded with {0} truncation entries; published SaveTruncatedOnLoadMessage at severity {1}", drained.Entries.Count, drained.Severity);
+        }
+
+        await InvokePostLoadHydrateAsync(ct);
       }
-      catch (Exception ex)
+      finally
       {
-        log.ForMethod().Error(ex, "Load failed using {0} system: {Message}", useLocalSystem ? "local" : "global", ex.Message);
-        throw;
+        loadGate.Release();
+      }
+    }
+
+    private async UniTask InvokePostLoadHydrateAsync(CancellationToken ct)
+    {
+      Func<CancellationToken, UniTask> handlers = PostLoadHydrate;
+      if (handlers == null)
+        return;
+
+      foreach (Delegate del in handlers.GetInvocationList())
+      {
+        ct.ThrowIfCancellationRequested();
+        Func<CancellationToken, UniTask> handler = (Func<CancellationToken, UniTask>)del;
+        try
+        {
+          await handler(ct);
+        }
+        catch (OperationCanceledException)
+        {
+          throw;
+        }
+        catch (Exception ex)
+        {
+          log.ForMethod().Error(ex, "PostLoadHydrate handler failed: {Message}", ex.Message);
+        }
       }
     }
 

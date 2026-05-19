@@ -42,7 +42,7 @@ namespace MToolKit.Runtime.Settings
       }
 
       SettingsSystem instance = new(inputRebinderService, iniService);
-      log.ForGameObject(gameObject).ForMethod().Debug("Created SettingsSystem instance with HashCode: {HashCode}", instance.GetHashCode());
+      log.ForGameObject(gameObject).ForMethod().Verbose("Created SettingsSystem instance with HashCode: {HashCode}", instance.GetHashCode());
       return instance;
     }
 

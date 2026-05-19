@@ -77,7 +77,7 @@ namespace MToolKit.Runtime.ErrorSystem
 
     public void PerformRuntimeInitialization(IObjectResolver resolver)
     {
-      log.ForMethod().Debug("Performing runtime initialization for ErrorSystemPlugin");
+      log.ForMethod().Verbose("Performing runtime initialization for ErrorSystemPlugin");
 
       // Resolve the error service
       errorService = resolver.Resolve<IErrorService>();

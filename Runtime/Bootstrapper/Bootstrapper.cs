@@ -373,7 +373,7 @@ namespace MToolKit.Runtime.Bootstrapper
     {
       try
       {
-        log.ForMethod().Debug("Loading game assets using IGameLoader");
+        log.ForMethod().Verbose("Loading game assets using IGameLoader");
 
         // Get GlobalInstaller instance and its container
         GlobalInstaller globalInstaller = GlobalInstaller.Instance;

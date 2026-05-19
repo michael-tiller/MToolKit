@@ -16,5 +16,13 @@ namespace MToolKit.Runtime.MessageBus
   public static class StartupFlowState
   {
     public static StartupFlowKind Pending { get; set; } = StartupFlowKind.Unknown;
+
+    /// <summary>
+    ///   Stable string ID of the scenario the player picked on the new-game screen. Set by
+    ///   the scenario picker view just before the gameplay scene loads; consumed (and
+    ///   cleared) by the orchestrator when it spawns starting colonists. Empty/null falls
+    ///   back to the orchestrator's serialized scenario default.
+    /// </summary>
+    public static string PendingScenarioId { get; set; }
   }
 }

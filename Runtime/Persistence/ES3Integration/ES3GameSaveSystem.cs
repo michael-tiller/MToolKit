@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
@@ -21,6 +22,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<ES3GameSaveSystem>().ForFeature("Persistence.ES3"));
     private static ILogger log => logLazy.Value ?? Logger.None;
+
+    // Per-controller save timing above this threshold (ms) escalates to Warning.
+    // Tuned conservatively; can be lowered as the perf budget tightens.
+    private const long SlowControllerThresholdMs = 100;
 
     [ShowInInspector]
     [ReadOnly]
@@ -95,18 +100,37 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       {
         if (domainControllers != null)
         {
-          log.ForMethod().Debug("Starting ES3 save operation with {0} domain controllers", domainControllers.Count());
+          List<ISaveDomainController> controllers = domainControllers.ToList();
+          log.ForMethod().Information("Save iteration: domain_controller_count={0}", controllers.Count);
 
-          // Save all domain controllers in parallel
-          await UniTask.WhenAll(domainControllers.Select(d => d.SaveAsync(ct)));
+          // Per-controller timing instrumentation. UniTask.WhenAll runs cooperatively, so
+          // individual Stopwatch readings are upper-bounds (include scheduler interleaving).
+          // Use the total wall-clock at the SaveSystemCoordinator level for the user-observed cost.
+          long[] elapsedMs = new long[controllers.Count];
+          await UniTask.WhenAll(controllers.Select((d, i) => RunWithTimingAsync(d, i, elapsedMs, ct)));
+
+          // Per-controller timing: Debug by default (quiet), Warning when above threshold.
+          // Diagnostic confirmed Branch A on 2026-05-14: per-controller logs fire correctly via UniTask.WhenAll.
+          // Demoted from Information → Debug to keep default-level output to 3 save-system lines per autosave.
+          for (int i = 0; i < controllers.Count; i++)
+          {
+            if (elapsedMs[i] > SlowControllerThresholdMs)
+              log.ForMethod().Warning("Save timing per controller (SLOW): domain={0} elapsed_ms={1} threshold_ms={2}", controllers[i].Domain, elapsedMs[i], SlowControllerThresholdMs);
+            else
+              log.ForMethod().Debug("Save timing per controller: domain={0} elapsed_ms={1}", controllers[i].Domain, elapsedMs[i]);
+          }
         }
         else
         {
-          log.ForMethod().Debug("Starting ES3 save operation with config-based setup");
+          log.ForMethod().Information("Save iteration: domainControllers is NULL (config-based setup path; per-controller iteration skipped)");
         }
 
-        // Update the main save timestamp
+        // Wrap the ES3 cache flush separately so we can attribute total wall-clock between
+        // per-controller serialization and the file write. Information level by default.
+        Stopwatch flushSw = Stopwatch.StartNew();
         await es3Service.SaveAsync();
+        flushSw.Stop();
+        log.ForMethod().Information("Save timing es3_flush: elapsed_ms={0}", flushSw.ElapsedMilliseconds);
 
         log.ForMethod().Information("ES3 save operation completed successfully");
       }
@@ -209,6 +233,20 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     {
       domainControllers = controllers;
       log.ForMethod().Debug("ES3GameSaveSystem domain controllers set: {0}", controllers?.Count() ?? 0);
+    }
+
+    private static async UniTask RunWithTimingAsync(ISaveDomainController controller, int index, long[] elapsedMs, CancellationToken ct)
+    {
+      Stopwatch sw = Stopwatch.StartNew();
+      try
+      {
+        await controller.SaveAsync(ct);
+      }
+      finally
+      {
+        sw.Stop();
+        elapsedMs[index] = sw.ElapsedMilliseconds;
+      }
     }
   }
 }

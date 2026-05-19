@@ -28,6 +28,7 @@ using MToolKit.Runtime.Music;
 using MToolKit.Runtime.Navigation;
 using MToolKit.Runtime.Navigation.Events;
 using MToolKit.Runtime.Persistence;
+using MToolKit.Runtime.Persistence.Migration;
 using MToolKit.Runtime.Persistence.ES3Integration;
 using MToolKit.Runtime.Persistence.Interfaces;
 using MToolKit.Runtime.Settings;
@@ -376,6 +377,10 @@ namespace MToolKit.Runtime.Installer
       builder.Register<IMusicManager, MusicManagerAdapter>(Lifetime.Singleton);
       log.ForGameObject(gameObject).ForMethod().Verbose("Registered IMusicManager with MusicManagerAdapter");
 
+      // Register ITruncationReporter before the coordinator so the factory below can resolve it.
+      builder.Register<ITruncationReporter, TruncationReporter>(Lifetime.Singleton);
+      log.ForGameObject(gameObject).ForMethod().Verbose("Registered ITruncationReporter with TruncationReporter");
+
       // Register SaveSystemCoordinator globally so it's available in all scenes
       builder.Register(resolver =>
       {
@@ -398,7 +403,8 @@ namespace MToolKit.Runtime.Installer
         SaveDomainControllerRegistry localRegistry = new();
 
         IProfileManager profileManager = resolver.Resolve<IProfileManager>();
-        return new SaveSystemCoordinator(es3Service, globalRegistry, localRegistry, saveConfig, profileManager);
+        ITruncationReporter truncationReporter = resolver.Resolve<ITruncationReporter>();
+        return new SaveSystemCoordinator(es3Service, globalRegistry, localRegistry, saveConfig, profileManager, truncationReporter);
       }, Lifetime.Singleton);
 
       log.ForGameObject(gameObject).ForMethod().Verbose("Registered SaveSystemCoordinator globally");

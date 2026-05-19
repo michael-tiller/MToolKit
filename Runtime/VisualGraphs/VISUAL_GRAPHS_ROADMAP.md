@@ -56,6 +56,18 @@
 
 ---
 
+## Related Plans (External Consumers)
+
+Plans authored by downstream projects that depend on this roadmap. They scope what they need from VGraph and where their work picks up.
+
+- **dirigible2D — VGraph Parity for Dirigible**
+  - Path: `dirigible2D/Assets/_Dirigible/Media/Documentation/Plan/vgraph_dirigible_parity_plan.md`
+  - Scope: Adds the third graph component (`EventGraphAsset`), integrates Storyteller-driven content generation, hot-reload of text-authored graphs, and SS14-style systemic gameplay over the message bus.
+  - Dependencies on this roadmap: Phase 5 (Testing) and Phase 9.0/9.1 (Variables, Math, Logic) are critical-path for Dirigible's modder-facing surface.
+  - Companion plan: `dirigible2D/.../Plan/event_graph_system_plan.md` (Phase A — EventGraphAsset specifics).
+
+---
+
 ## Phase 1: Critical Integration (Foundation)
 
 **Goal:** Integrate with MToolKit's core patterns so the system works with existing infrastructure

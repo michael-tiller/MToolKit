@@ -9,7 +9,8 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Definitions
     Side = 1,
     Secret = 2,
     Repeatable = 3,
-    Daily = 4
+    Daily = 4,
+    Emergent = 5
   }
 
   /// <summary>
