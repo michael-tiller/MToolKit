@@ -24,5 +24,38 @@ namespace MToolKit.Runtime.Persistence.Migration
     /// </summary>
     public static TEnum Defined<TEnum>(TEnum value, TEnum fallback) where TEnum : struct, Enum
       => Enum.IsDefined(typeof(TEnum), value) ? value : fallback;
+
+    /// <summary>
+    ///   Storage-typed wrapper for fields stored as <see cref="int"/> that map to an
+    ///   integer-backed enum (which may be <c>int</c>- or <c>byte</c>-backed under the hood).
+    ///   Bridges the storage type to the enum's underlying type internally so callers don't need
+    ///   per-field casts.
+    ///   <para>
+    ///     Delegates to <see cref="Defined{TEnum}"/> for both the loaded value AND the fallback,
+    ///     so an out-of-range fallback (programmer error) does not silently stamp bad data into
+    ///     the field. In that pathological case the returned value is the underlying-zero member
+    ///     of the enum, surfaced as an <see cref="int"/>.
+    ///   </para>
+    /// </summary>
+    public static int ClampIntField<TEnum>(int storedValue, TEnum fallback) where TEnum : struct, Enum
+    {
+      TEnum loaded = (TEnum)Enum.ToObject(typeof(TEnum), storedValue);
+      TEnum validatedFallback = Defined(fallback, default(TEnum));
+      TEnum clamped = Defined(loaded, validatedFallback);
+      return Convert.ToInt32(clamped);
+    }
+
+    /// <summary>
+    ///   Storage-typed wrapper for fields stored as <see cref="byte"/> that map to an
+    ///   integer-backed enum. See <see cref="ClampIntField{TEnum}"/> for the fallback-validation
+    ///   contract.
+    /// </summary>
+    public static byte ClampByteField<TEnum>(byte storedValue, TEnum fallback) where TEnum : struct, Enum
+    {
+      TEnum loaded = (TEnum)Enum.ToObject(typeof(TEnum), storedValue);
+      TEnum validatedFallback = Defined(fallback, default(TEnum));
+      TEnum clamped = Defined(loaded, validatedFallback);
+      return Convert.ToByte(clamped);
+    }
   }
 }

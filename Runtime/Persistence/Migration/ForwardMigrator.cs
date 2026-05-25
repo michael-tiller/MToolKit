@@ -12,9 +12,20 @@ namespace MToolKit.Runtime.Persistence.Migration
   ///   hash computation (cached on first access). Concrete subclasses declare the schema surface
   ///   (<see cref="SchemaRoots"/>, <see cref="NamespacePrefixes"/>) and the per-DTO normalization logic.
   /// </summary>
-  public abstract class ForwardMigrator<T> : IForwardMigrator<T>
+  public abstract class ForwardMigrator<T> : IForwardMigrator<T>, IForwardMigratorBase
     where T : class, ISchemaStampedSaveData
   {
+    // Explicit IForwardMigratorBase implementation — exposes the protected DomainKey through a
+    // non-generic accessor without changing the accessibility of the override mechanism, so the
+    // 13+ existing subclasses keep their `protected override string DomainKey` declarations.
+    string IForwardMigratorBase.Domain => DomainKey;
+
+    // SaveDataType exposes typeof(T) so infrastructure (e.g., the save-prewarm checker) can match
+    // a migrator to the save file's per-section `__type` field. This avoids relying on DomainKey
+    // matching the save's top-level section key, which often differs (e.g., DomainKey="Colony"
+    // vs save key="ColonyData") and produced false-positive schema-change diffs.
+    Type IForwardMigratorBase.SaveDataType => typeof(T);
+
     protected readonly ILogger Log;
     protected readonly ITruncationReporter TruncationReporter;
 

@@ -319,7 +319,10 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
             else
             {
               missingCount++;
-              log.ForMethod().Warning(
+              // Per-graph detail at Debug to avoid drowning the console with one warning per dungeon/dialogue/event
+              // graph in the save (e.g. graphs whose runners haven't been instantiated this session). The aggregate
+              // summary below escalates to Warning when missingCount > 0.
+              log.ForMethod().Debug(
                 "Save data contains state for graph '{GraphId}' but no runner found. Available runners: {AvailableRunners}",
                 graphId, string.Join(", ", runners.Select(r => r.GraphId)));
             }
@@ -332,9 +335,14 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
           }
         }
 
-        log.ForMethod().Information(
-          "Graph state load completed: {RestoredCount} restored, {MissingCount} missing runners, {TotalInSave} total in save data",
-          restoredCount, missingCount, stateMap.Count);
+        if (missingCount > 0)
+          log.ForMethod().Warning(
+            "Graph state load completed: {RestoredCount} restored, {MissingCount} missing runners, {TotalInSave} total in save data (per-graph detail at Debug)",
+            restoredCount, missingCount, stateMap.Count);
+        else
+          log.ForMethod().Information(
+            "Graph state load completed: {RestoredCount} restored, {MissingCount} missing runners, {TotalInSave} total in save data",
+            restoredCount, missingCount, stateMap.Count);
 
         // Note: Completed quests are already restored directly to completedUnclaimedQuests
         // (they were never in activeQuests), so we don't need to call FinalizeCompletedQuestRestoration.

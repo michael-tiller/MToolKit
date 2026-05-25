@@ -181,7 +181,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
       catch (Exception ex)
       {
-        log.ForMethod().Error(ex, "ES3 load operation failed: {Message}", ex.Message);
+        log.ForMethod().Error(ex, "ES3 load operation failed: {ExType}: {ExFull}", ex.GetType().Name, ex.ToString());
         throw;
       }
     }

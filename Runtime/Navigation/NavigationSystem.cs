@@ -823,7 +823,9 @@ namespace MToolKit.Runtime.Navigation
     }
 
 
-    // Helper for normal ModalView dialogs.
+    // Helper for normal ModalView dialogs. `postInit` runs after Initialize so callers can apply
+    // subclass-specific setup (e.g., scroll-list population) without polluting the interface with
+    // per-subclass parameters.
     public async UniTask CreateModalView<T>(
       CancellationToken token,
       string modalName,
@@ -837,7 +839,8 @@ namespace MToolKit.Runtime.Navigation
       UnityAction action2 = null,
       EModalButtonType type3 = EModalButtonType.None,
       string text3 = null,
-      UnityAction action3 = null)
+      UnityAction action3 = null,
+      Action<T> postInit = null)
       where T : ModalView
     {
       ECanvasType canvasType = ECanvasType.Overlay;
@@ -880,6 +883,8 @@ namespace MToolKit.Runtime.Navigation
             new ModalButtonConfig(type2, text2, action2),
             new ModalButtonConfig(type3, text3, action3)
             );
+
+          postInit?.Invoke(newModal);
         }
         catch (Exception ex)
         {

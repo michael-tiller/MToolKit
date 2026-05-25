@@ -62,6 +62,7 @@ namespace MToolKit.Runtime.Persistence
       SaveCounter = new ReactiveProperty<int>(0);
       IsAutoSaveRunning = new ReactiveProperty<bool>(false);
       IsAutoSaveExecuting = new ReactiveProperty<bool>(false);
+      IsSaveBlocked = new ReactiveProperty<bool>(false);
 
       log.ForMethod().Verbose("SaveSystemCoordinator created with auto-save enabled: {0}", saveConfig.EnableAutoSave);
     }
@@ -73,6 +74,16 @@ namespace MToolKit.Runtime.Persistence
     public ReactiveProperty<int> SaveCounter { get; }
     public ReactiveProperty<bool> IsAutoSaveRunning { get; }
     public ReactiveProperty<bool> IsAutoSaveExecuting { get; }
+
+    /// <summary>
+    ///   Sticky-true after a successful load drains a <see cref="SaveTruncatedOnLoadMessage.Severity.BlockOverwrite"/>
+    ///   truncation report. Set by THIS coordinator (not the UI) so the save-safety invariant holds even when
+    ///   no presenter is alive. No public clear API — recovery requires app exit / global container teardown
+    ///   (this coordinator is registered <c>Lifetime.Singleton</c> in <c>GlobalInstaller</c>; scene transitions
+    ///   do NOT recreate it). Blocks BOTH local and global save paths uniformly (Phase F boundary F2).
+    /// </summary>
+    public ReactiveProperty<bool> IsSaveBlocked { get; }
+
 
     /// <summary>
     ///   Snapshot of truncation entries reported during the most recent successful
@@ -143,6 +154,7 @@ namespace MToolKit.Runtime.Persistence
       // Clean up reactive properties
       IsSaving?.Dispose();
       IsLoading?.Dispose();
+      IsSaveBlocked?.Dispose();
       LastSaveTime?.Dispose();
       LastLoadTime?.Dispose();
       IsAutoSaveRunning?.Dispose();
@@ -311,6 +323,15 @@ namespace MToolKit.Runtime.Persistence
       // Check cancellation token before proceeding
       ct.ThrowIfCancellationRequested();
 
+      // Phase F (F2): skip-and-warn rather than throw. Callers (pause-menu quit-and-save, OS-quit
+      // handler) check IsSaveBlocked separately to surface user-facing messaging; throwing here
+      // would propagate spuriously through their shutdown paths.
+      if (IsSaveBlocked.Value)
+      {
+        log.ForMethod().Warning("Save blocked: prior load reported severe truncation; quit and restart the game to use a different save");
+        return;
+      }
+
       ES3GameSaveSystem activeSystem = useLocalSystem ? localSaveSystem : globalSaveSystem;
 
       if (activeSystem == null)
@@ -375,10 +396,16 @@ namespace MToolKit.Runtime.Persistence
           loadSucceeded = true;
 
           log.ForMethod().Information("Load completed successfully using {0} system", useLocalSystem ? "local" : "global");
+
+          // Phase E.2 Wave 3: hydrate runs INSIDE the load scope so cross-reference rot
+          // reported by handlers merges into the single drained report. OperationCanceledException
+          // propagates (cancellation = load failure); other exceptions are isolated per-handler
+          // inside InvokePostLoadHydrateAsync so one bad hydrator does not block others.
+          await InvokePostLoadHydrateAsync(ct);
         }
         catch (Exception ex)
         {
-          log.ForMethod().Error(ex, "Load failed using {0} system: {Message}", useLocalSystem ? "local" : "global", ex.Message);
+          log.ForMethod().Error(ex, "Load failed using {0} system: {ExType}: {ExFull}", useLocalSystem ? "local" : "global", ex.GetType().Name, ex.ToString());
           throw;
         }
         finally
@@ -390,11 +417,14 @@ namespace MToolKit.Runtime.Persistence
 
         if (drained.HasEntries)
         {
+          // Phase F (F5): set the sticky save block BEFORE publishing so any subscriber that reads
+          // IsSaveBlocked sees the consistent post-block state. One-way ratchet: no path inside this
+          // coordinator ever assigns false. Recovery requires app exit (F1).
+          if (drained.Severity == SaveTruncatedOnLoadMessage.Severity.BlockOverwrite)
+            IsSaveBlocked.Value = true;
           GameMessageBroker.Publish(new SaveTruncatedOnLoadMessage(drained.Severity, drained.Entries));
           log.ForMethod().Warning("Save loaded with {0} truncation entries; published SaveTruncatedOnLoadMessage at severity {1}", drained.Entries.Count, drained.Severity);
         }
-
-        await InvokePostLoadHydrateAsync(ct);
       }
       finally
       {
@@ -473,10 +503,10 @@ namespace MToolKit.Runtime.Persistence
           // Wait for the configured interval
           await UniTask.Delay(TimeSpan.FromSeconds(saveConfig.AutoSaveIntervalSeconds), cancellationToken: ct);
 
-          // Skip auto-save if we're already saving or loading
-          if (IsSaving.Value || IsLoading.Value)
+          // Skip auto-save if we're already saving or loading, or if the save block is set (F2).
+          if (IsSaving.Value || IsLoading.Value || IsSaveBlocked.Value)
           {
-            log.ForMethod().Debug("Skipping auto-save - save/load operation in progress");
+            log.ForMethod().Verbose("Skipping auto-save - save/load in progress or save blocked");
             continue;
           }
 
@@ -532,6 +562,13 @@ namespace MToolKit.Runtime.Persistence
       if (!saveConfig.EnableAutoSave)
       {
         log.ForMethod().Debug("Auto-save is disabled, skipping manual trigger");
+        return;
+      }
+
+      // Phase F (F2): respect the sticky save block.
+      if (IsSaveBlocked.Value)
+      {
+        log.ForMethod().Debug("Skipping manual auto-save - save blocked");
         return;
       }
 
@@ -594,6 +631,14 @@ namespace MToolKit.Runtime.Persistence
       if (!useLocalSystem)
       {
         log.ForMethod().Debug("Skipping scene change auto-save - not in local system");
+        return;
+      }
+
+      // Phase F (F2): respect the sticky save block. Covers ApplicationQuitSaveHandler too —
+      // it calls HandleSceneChangeAsync on OS quit, so guarding here transitively protects that path.
+      if (IsSaveBlocked.Value)
+      {
+        log.ForMethod().Debug("Skipping scene change auto-save - save blocked");
         return;
       }
 

@@ -41,6 +41,13 @@ namespace MToolKit.Runtime.Persistence.Migration
     ///       (schema drift is qualitatively stronger than version drift even at zero drops).
     ///     - Otherwise any non-zero drop: <c>Warning</c>.
     ///     - Otherwise: <c>Info</c>.
+    ///   <para>
+    ///     Entries whose <see cref="TruncationEntry.Reason"/> starts with
+    ///     <see cref="TruncationEntry.ReasonLiveReferenceDemoted"/> are EXEMPT from the drop
+    ///     accumulator and the "any non-zero drop" floor — demote preserves data, so a
+    ///     demote-only report stays at <c>Info</c>. <see cref="TruncationEntry.IsLoadBearing"/>
+    ///     still escalates if set on a demote entry (defensive — no current caller sets it).
+    ///   </para>
     /// </summary>
     public static SaveTruncatedOnLoadMessage.Severity ComputeSeverity(IReadOnlyList<TruncationEntry> entries)
     {
@@ -59,7 +66,10 @@ namespace MToolKit.Runtime.Persistence.Migration
         if (entry.IsLoadBearing)
           return SaveTruncatedOnLoadMessage.Severity.BlockOverwrite;
 
-        if (entry.DroppedItemCount > 0)
+        bool isDemote = entry.Reason != null
+            && entry.Reason.StartsWith(TruncationEntry.ReasonLiveReferenceDemoted, StringComparison.Ordinal);
+
+        if (!isDemote && entry.DroppedItemCount > 0)
         {
           anyDrop = true;
           totalDrops += entry.DroppedItemCount;

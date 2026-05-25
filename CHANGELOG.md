@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the project is pre-1.0, breaking changes bump the minor component.
 
+## [0.7.0] - 2026-05-25
+
+### Added
+
+- `Runtime/Persistence/Prewarm/` — pre-load compatibility-check subsystem (ADR-0012 "save prewarm" tier). `ISavePrewarmChecker` / `SavePrewarmChecker` regex-scan the save file's metadata header (no DTO graph hydration, no Unity instantiation) and emit a `SavePrewarmReport` carrying build-version delta, per-domain schema-hash mismatches, and mod-manifest diff. `IContinueGuard` is the main-menu gate that consumes the report and surfaces the user modal; `IModManifestProvider` is the optional adapter for mod-aware games (omit for headless / template scenes). `SchemaHashRegistry.Build(...)` snapshots the current build's hashes once at startup, keyed by DTO type full name (so the checker matches against the save file's per-section `__type` field — robust against DomainKey vs save-section-key naming differences).
+- `Runtime/Persistence/Interfaces/IPostLoadHydrator.cs` — `IPostLoadHydrator.HydrateAsync(CancellationToken)` formalizes post-load cross-reference hydration. Hydrators run inside the load scope (after every `ISaveDomainController.LoadAsync` completes, before the truncation reporter is drained) so cross-reference rot reported by handlers merges into the single drained report. Companion `INonMutatingHydrator` marker opts read-only/diagnostic hydrators out of the no-op-hydrator audit reflection guard.
+- `Runtime/Persistence/Migration/IForwardMigratorBase.cs` — non-generic surface for `ForwardMigrator<T>` (exposes `Domain`, `CurrentSchemaVersion`, `CurrentSchemaHash`, `SaveDataType`) so infrastructure code (prewarm checker, diagnostics) can enumerate migrators without knowing each `TSaveData`. Generic `IForwardMigrator<TSaveData>` remains the typed surface used by save controllers.
+- `TruncationEntry.ReasonRegistryReferenceDropped` / `ReasonLiveReferenceDropped` / `ReasonLiveReferenceDemoted` — canonical reason-prefix constants for the post-load hydrator pipeline. `ReasonLiveReferenceDemoted` carries a severity exemption (data is preserved; only the back-reference is lost), so a demote-only report stays at `Info`.
+- `EnumClamp.ClampIntField<TEnum>(int, TEnum)` / `ClampByteField<TEnum>(byte, TEnum)` — storage-typed wrappers for `int`/`byte` fields backed by integer-enums; validates the fallback too so an out-of-range fallback (programmer error) can't silently stamp bad data.
+- `SaveSystemCoordinator.IsSaveBlocked` — sticky `ReactiveProperty<bool>` that ratchets to `true` when `LoadAsync` drains a `BlockOverwrite`-severity truncation report. Guards `SaveAsync`, the auto-save loop, manual auto-save, and scene-change save uniformly; one-way (recovery requires app exit) so the save-safety invariant holds even when no presenter is alive.
+- `AssetReferenceBase<T>(string guid, string subObjectName)` constructor — sub-asset addressing without requiring a custom subclass per sub-object name.
+
+### Changed
+
+- **BREAKING:** `IModalService.CreateModalView<T>` adds an optional `Action<T> postInit = null` parameter that runs after `Initialize` for subclass-specific setup (e.g., populating a scroll-list body). *Migration:* call sites are source-compatible (default value). External implementers of `IModalService` must add the new parameter to their method signature — a `null`-tolerant body is acceptable when the implementer has no per-subclass setup hook.
+- `ForwardMigrator<T>` now implements `IForwardMigratorBase` via explicit interface implementation. Existing subclasses with `protected override string DomainKey => ...` are unaffected — the explicit-interface accessor delegates to `DomainKey`.
+- `SaveSystemCoordinator.LoadAsync` now invokes `PostLoadHydrate` INSIDE the load scope so hydrator drops reported via `ITruncationReporter` merge into the single drained report (previously fired after the drain, so hydrator entries went unreported). Sets `IsSaveBlocked = true` BEFORE publishing `SaveTruncatedOnLoadMessage` when severity is `BlockOverwrite`, so any subscriber that reads `IsSaveBlocked` sees the consistent post-block state.
+- `TruncationReport.ComputeSeverity` exempts entries whose reason starts with `ReasonLiveReferenceDemoted` from the drop accumulator and the "any non-zero drop" floor — demote preserves data, so a demote-only report stays at `Info`. `IsLoadBearing` still escalates if set on a demote entry (defensive — no current caller sets it).
+- `GraphStateSaveController` demotes per-graph "save data contains state for graph X but no runner found" entries from Warning to Debug to avoid drowning the console with one warning per dungeon/dialogue/event graph in the save. The aggregate post-loop summary now escalates to Warning when `missingCount > 0`, preserving the operational signal.
+- `ES3GameSaveSystem.LoadAsync` and `SaveSystemCoordinator.LoadAsync` error logs now include `ExType` and the full `ex.ToString()` (inner stack, nested exceptions) instead of just `ex.Message` — load failures inside ES3's reflection-driven deserializer often surface as bare `MissingMethodException`/`SerializationException` whose `Message` alone identifies neither the offending type nor the field.
+
+### Fixed
+
+- `NavigationInstaller.Install(IContainerBuilder builder)` was calling `base.Configure(builder)`, which resolved to `LifetimeScope`'s empty stub instead of this class's override — `INavigationService` and `IModalService` were silently dropped from the parent scope's registrations. Root cause of the `SaveTruncationDialogPresenter` not wiring in dependent game scopes. Now calls `Configure(builder)` directly.
+
 ## [0.6.0] - 2026-05-19
 
 ### Added
