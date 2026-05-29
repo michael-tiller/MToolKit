@@ -24,6 +24,8 @@ Persistence/
 ├── Enums/             # Save domain enums
 ├── ES3Integration/    # ES3-specific implementations
 ├── Interfaces/        # Save system interfaces
+├── Migration/         # Forward-only schema-versioned save migration
+├── Prewarm/           # Pre-load header check (version / hash / mod diff)
 └── README.md          # This file
 ```
 
@@ -173,6 +175,48 @@ saveSystem.IsSaving.Property.Subscribe(isSaving =>
 });
 ```
 
+## Save Migration & Schema Versioning
+
+The `Migration/` directory provides forward-only, schema-versioned save migration. Every persisted DTO carries a stamped `SaveVersion` (int) and `SaveSchemaHash` (a deterministic hash of its serialized shape); a per-domain migrator decides what happens when a loaded save's stamp doesn't match the current build.
+
+### Core types
+
+- **`ISchemaStampedSaveData`** — marker interface your save DTO implements (`SaveVersion`, `SaveSchemaHash`). The framework stamps these on save and reads them on load.
+- **`ForwardMigrator<T>`** — abstract base your per-domain migrator subclasses. You declare the schema surface (`SchemaRoots`, `NamespacePrefixes`) and implement `EnsureContainers` (null-coalesce collections), `Normalize` (clamp / repair; idempotent; returns true when it changed something), and — once you support older versions — `Migrate(data, oldVersion, oldHash)`.
+- **`SchemaHashWalker`** — computes the deterministic schema hash from the DTO graph. Hash drift is what flags "this save's shape no longer matches the code."
+- **`SavePrewarmChecker`** (`Prewarm/`) — reads only the save header (version + per-domain hashes + mod manifest) *before* a full load, so the UI can warn the player before committing to a load.
+- **`MigrationOutcome`** — `None` (exact match), `Migrated` (forward-migrated or legacy-shape repaired), `TruncatedFromNewerBuild` (best-effort load of a newer / hash-drifted save, with a `TruncationReport`), `RefusedFatal` (unrecoverable — refused loudly).
+
+### The compatibility floor
+
+`MinimumSupportedVersion` is the **compatibility floor**: the oldest `SaveVersion` a migrator will load. It defaults to `CurrentSchemaVersion` — **refuse everything older**. That default is correct during pre-release: saves are disposable, and writing migration bodies for schemas no real player holds is unvalidatable guesswork.
+
+Adopt forward migration by **lowering the floor and overriding `Migrate`** — starting at the schema version of your **first real ship**, not for pre-release dev churn. Below the floor, saves are `RefusedFatal`; unstamped pre-scaffolding saves are always refused (no hash to validate against).
+
+### The per-bump ritual
+
+When you change a persisted schema at or after the floor:
+
+1. Snapshot the OLD shape as a golden fixture (`golden_<domain>_v<OLD>.es3`) via the domain's `[Explicit]` generator test.
+2. Bump `CurrentSchemaVersion`.
+3. Extend `Migrate(data, oldVersion, oldHash)` to transform the old shape forward.
+4. Add a forward-migration golden test asserting the old fixture loads to `Migrated`.
+5. Update the pinned hash in the domain's drift test.
+
+### Load dispatch (`MigrateForLoad`, in order)
+
+1. Unstamped (no hash) → `RefusedFatal`, unless `AllowsLegacyHashlessLoad`.
+2. Newer build (`loaded > current`) → best-effort load + truncation report, unless `AllowsBestEffortNewerBuildLoad` is false → `RefusedFatal`.
+3. Below floor → `RefusedFatal`.
+4. Within `[floor, current)` → `Migrate` → `Migrated`.
+5. Exact match → `None` (or `Migrated` if `Normalize` repaired a legacy shape).
+6. Hash drift, editor build → re-normalize + re-stamp → `Migrated`.
+7. Hash drift, shipping build → best-effort load + truncation report (or `RefusedFatal` if opted out).
+
+### Testing discipline
+
+Each domain pins its schema with a **drift test** (asserts `CurrentSchemaVersion` + `CurrentSchemaHash`) and a **golden-corpus test** (loads every `golden_<domain>_v*.es3` and asserts the outcome). The golden generator is `[Explicit]` so it never runs in CI — invoke it manually when intentionally rotating a schema, and commit the produced fixture.
+
 ## Dependencies
 
 - **ES3** - Easy Save 3 for serialization
@@ -210,5 +254,4 @@ Untested files:
 ## Known Issues
 
 - Some hardcoded save paths (consider making configurable)
-- Save versioning system not yet implemented
 
