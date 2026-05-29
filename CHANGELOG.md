@@ -4,7 +4,30 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-While the project is pre-1.0, breaking changes bump the minor component.
+Releases are cut as annotated git tags and follow strict SemVer 2.0.0. Version
+numbers are orthogonal to product milestones — a major bump signals an API break,
+not a roadmap milestone.
+
+## [1.0.0] - 2026-05-28
+
+First release cut as an annotated git tag and the switchover to strict SemVer 2.0.0.
+Earlier versions (0.3.5–0.7.0) shipped through `package.json` without tags under a
+pre-1.0 "breaking changes bump the minor" convention; that convention is retired.
+Version numbers are now orthogonal to product milestones — a major bump marks an
+API break, not a roadmap point.
+
+### Added
+
+- `NavigationSystem.Instance` — static cross-scope accessor to the live `NavigationSystem`, set in `Awake` (with a duplicate-instance guard that keeps the prior instance and warns) and cleared on teardown. Lets game-scope installers forward `IModalService` across sibling-isolated VContainer scopes that share no DI parent chain.
+- `TruncationEntry.ReasonBelowFloor` (`"below-floor"`) — canonical reason string for a best-effort load of a stamped save whose version is below the compatibility floor (no version-specific `Migrate` body runs); classified at least `Warning`.
+
+### Changed
+
+- **BREAKING:** `MigrationOutcome.TruncatedFromNewerBuild` renamed to `MigrationOutcome.TruncatedBestEffort`. *Migration:* update references to the new name; it now covers newer-build, below-floor, and shipping-build hash-drift loads.
+- **BREAKING:** Removed `ForwardMigrator<T>.AllowsBestEffortNewerBuildLoad`. Per ADR-0016 a stamped save is never refused, so the opt-out no longer exists. *Migration:* delete any override — load-bearing schemas can no longer force `RefusedFatal` on a newer-build or hash-drift load.
+- Below-floor loads (`loadedVersion < MinimumSupportedVersion`) now load best-effort (`EnsureContainers` + `Normalize` + re-stamp) with a `below-floor` truncation report instead of returning `RefusedFatal` (ADR-0016). `MinimumSupportedVersion` becomes the validated-transform boundary, not a refusal boundary; the only `RefusedFatal` path left is an unstamped save.
+- `TruncationReport.ComputeSeverity` escalates `below-floor` entries to at least `Warning` (alongside `hash-drift-shipping`), since an unmigrated below-floor load is qualitatively stronger than plain version drift even at zero dropped items.
+- `Runtime/Persistence/README.md` rewritten around ADR-0016: the compatibility floor documented as a validated-transform boundary, the 7-row load dispatch reflects never-refuse-stamped-saves, and `PolymorphicResolve` notes ES3 missing-type behavior is not yet empirically pinned.
 
 ## [0.7.0] - 2026-05-25
 

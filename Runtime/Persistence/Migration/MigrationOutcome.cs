@@ -12,17 +12,17 @@ namespace MToolKit.Runtime.Persistence.Migration
     Migrated,
 
     /// <summary>
-    ///   Loaded data could not be exact-matched against the current schema; framework attempted
-    ///   best-effort normalization and produced a truncation report via
-    ///   <see cref="ITruncationReporter"/>. Covers both rows of the dispatch table:
-    ///     - <c>loadedVersion &gt; CurrentSchemaVersion</c> (newer build), and
+    ///   Loaded data could not be exact-matched against the current schema; the framework loaded it
+    ///   best-effort (containers + normalize + re-stamp) and produced a truncation report via
+    ///   <see cref="ITruncationReporter"/>. Per ADR-0016 every stamped save takes this path rather than
+    ///   being refused. Covers three rows of the dispatch table:
+    ///     - <c>loadedVersion &gt; CurrentSchemaVersion</c> (newer build),
+    ///     - <c>loadedVersion &lt; MinimumSupportedVersion</c> (below the compatibility floor — no
+    ///       version-specific <c>Migrate</c> body runs), and
     ///     - <c>loadedVersion == CurrentSchemaVersion</c> with <c>loadedHash != CurrentSchemaHash</c>
     ///       in a shipping build (hash drift).
-    ///   Migrators that own load-bearing schemas can refuse instead by overriding
-    ///   <see cref="ForwardMigrator{T}.AllowsBestEffortNewerBuildLoad"/> to <c>false</c>;
-    ///   that path returns <see cref="RefusedFatal"/>.
     /// </summary>
-    TruncatedFromNewerBuild,
+    TruncatedBestEffort,
 
     /// <summary>Loaded data was refused; the caller must not proceed with materialization.</summary>
     RefusedFatal

@@ -45,6 +45,14 @@ namespace MToolKit.Runtime.Persistence.Migration
     public const string ReasonHashDriftShipping = "hash-drift-shipping";
 
     /// <summary>
+    ///   Canonical reason string for "loaded version &lt; compatibility floor" best-effort truncation
+    ///   (row 3 in the <see cref="ForwardMigrator{T}"/> dispatch table, per ADR-0016). The save loaded
+    ///   structurally but ran NO version-specific <c>Migrate</c> transform, so it is potentially lossy;
+    ///   classified at least <c>Warning</c> like <see cref="ReasonHashDriftShipping"/>.
+    /// </summary>
+    public const string ReasonBelowFloor = "below-floor";
+
+    /// <summary>
     ///   Canonical reason prefix for "polymorphic ref dropped during Normalize" entries.
     ///   Per-migrator subcategories append <c>":field-name"</c>. Distinct from
     ///   <see cref="ReasonRegistryReferenceDropped"/>: this prefix is for Type.GetType-style

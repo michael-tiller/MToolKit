@@ -46,7 +46,13 @@ namespace MToolKit.Runtime.Persistence.Migration
 
     public abstract int CurrentSchemaVersion { get; }
 
-    /// <summary>Defaults to <see cref="CurrentSchemaVersion"/> — refuse all older. Override to opt into older-version support.</summary>
+    /// <summary>
+    ///   The compatibility floor. Defaults to <see cref="CurrentSchemaVersion"/>. At or above it, a
+    ///   version-specific <see cref="Migrate"/> body runs to forward-migrate. Below it (per ADR-0016) a
+    ///   stamped save still loads best-effort with a truncation report — it is NOT refused; it simply
+    ///   skips the (unwritten) version transform. Lower the floor + override <see cref="Migrate"/> when a
+    ///   validated forward transform is warranted.
+    /// </summary>
     public virtual int MinimumSupportedVersion => CurrentSchemaVersion;
 
     public string CurrentSchemaHash => _hash ?? (_hash = ComputeAndLogHash());
@@ -76,16 +82,6 @@ namespace MToolKit.Runtime.Persistence.Migration
     ///   "WorkOrders") so the value survives type renames and stays readable in UI/logs.
     /// </summary>
     protected virtual string DomainKey => GetType().Name;
-
-    /// <summary>
-    ///   When true (default), saves from a newer build or with shipping-build hash drift are
-    ///   loaded best-effort: containers init, <see cref="Normalize"/> runs, scaffold metadata
-    ///   is re-stamped to the current schema, a <see cref="TruncationEntry"/> is reported,
-    ///   and <see cref="MigrationOutcome.TruncatedFromNewerBuild"/> is returned. Migrators that
-    ///   own load-bearing schemas (e.g., player class definitions whose absence is unrecoverable)
-    ///   override to <c>false</c> and get <see cref="MigrationOutcome.RefusedFatal"/> instead.
-    /// </summary>
-    protected virtual bool AllowsBestEffortNewerBuildLoad => true;
 
     /// <summary>
     ///   Container initialization (null collections, missing dictionaries, etc.). Runs before <see cref="Normalize"/>.
@@ -146,27 +142,28 @@ namespace MToolKit.Runtime.Persistence.Migration
         Log.Information("Loading legacy hashless save. LoadedVersion={LoadedVersion}", loadedVersion);
       }
 
-      // Row 2: from a newer build. Default best-effort load; opt-out via AllowsBestEffortNewerBuildLoad.
+      // Row 2: from a newer build. Best-effort load + report (per ADR-0016 a stamped save is never refused).
       if (loadedVersion > CurrentSchemaVersion)
       {
-        if (!AllowsBestEffortNewerBuildLoad)
-        {
-          Log.Error("Save refused: from newer build (load-bearing migrator opted out). LoadedVersion={LoadedVersion}, Current={Current}", loadedVersion, CurrentSchemaVersion);
-          return MigrationOutcome.RefusedFatal;
-        }
         Log.Warning("Loading newer-build save best-effort. LoadedVersion={LoadedVersion}, Current={Current}", loadedVersion, CurrentSchemaVersion);
         EnsureContainers(data);
         Normalize(data); // Per-migrator Normalize may report domain-specific drops via TruncationReporter.
         StampMetadata(data);
         TruncationReporter.Report(new TruncationEntry(DomainKey, loadedVersion, CurrentSchemaVersion, TruncationEntry.ReasonNewerBuild, droppedItemCount: 0));
-        return MigrationOutcome.TruncatedFromNewerBuild;
+        return MigrationOutcome.TruncatedBestEffort;
       }
 
-      // Row 3: below minimum supported -> refuse rather than blind-migrate.
+      // Row 3: below the compatibility floor. No version-specific Migrate body was written for these
+      // versions, but per ADR-0016 a stamped save is never refused — load best-effort (containers +
+      // Normalize + re-stamp) and report so the player learns what may not have carried forward.
       if (loadedVersion < MinimumSupportedVersion)
       {
-        Log.Error("Save refused: version below minimum supported. LoadedVersion={LoadedVersion}, MinSupported={MinSupported}", loadedVersion, MinimumSupportedVersion);
-        return MigrationOutcome.RefusedFatal;
+        Log.Warning("Loading below-floor save best-effort. LoadedVersion={LoadedVersion}, Floor={Floor}, Current={Current}", loadedVersion, MinimumSupportedVersion, CurrentSchemaVersion);
+        EnsureContainers(data);
+        Normalize(data);
+        StampMetadata(data);
+        TruncationReporter.Report(new TruncationEntry(DomainKey, loadedVersion, CurrentSchemaVersion, TruncationEntry.ReasonBelowFloor, droppedItemCount: 0));
+        return MigrationOutcome.TruncatedBestEffort;
       }
 
       // Row 4: older but in supported range -> migrate forward. Normalize return value ignored;
@@ -207,18 +204,13 @@ namespace MToolKit.Runtime.Persistence.Migration
         return MigrationOutcome.Migrated;
       }
 
-      // Row 7: hash drift, shipping build. Default best-effort load; opt-out via AllowsBestEffortNewerBuildLoad.
-      if (!AllowsBestEffortNewerBuildLoad)
-      {
-        Log.Error("Save refused: hash drift in shipping build (load-bearing migrator opted out). LoadedHash={Got}, Current={Want}", loadedHash, CurrentSchemaHash);
-        return MigrationOutcome.RefusedFatal;
-      }
+      // Row 7: hash drift, shipping build. Best-effort load + report (per ADR-0016 a stamped save is never refused).
       Log.Warning("Loading shipping-build hash-drift save best-effort. LoadedHash={Got}, Current={Want}", loadedHash, CurrentSchemaHash);
       EnsureContainers(data);
       Normalize(data);
       StampMetadata(data);
       TruncationReporter.Report(new TruncationEntry(DomainKey, loadedVersion, CurrentSchemaVersion, TruncationEntry.ReasonHashDriftShipping, droppedItemCount: 0));
-      return MigrationOutcome.TruncatedFromNewerBuild;
+      return MigrationOutcome.TruncatedBestEffort;
     }
 
     private string ComputeAndLogHash()

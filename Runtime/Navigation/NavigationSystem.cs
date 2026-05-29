@@ -36,6 +36,25 @@ namespace MToolKit.Runtime.Navigation
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<NavigationSystem>().ForFeature("Navigation"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 
+    // Cross-scope accessor: VContainer scopes are sibling-isolated, so the IModalService
+    // registration in NavigationInstaller doesn't bubble to the game scope. Game-scope
+    // installers (DirigibleGameInstaller via ServiceRegistration) forward IModalService
+    // through this instance pointer rather than via DI parent-chain. See ADR-0012 and
+    // TECHNICAL_DEBT.md "Cross-scope IModalService plumbing" entry (2026-05-21).
+    public static NavigationSystem Instance { get; private set; }
+
+    private void Awake()
+    {
+      if (Instance != null && Instance != this)
+      {
+        log.ForGameObject(gameObject).ForMethod().Warning(
+          "Duplicate NavigationSystem detected on '{0}'; keeping prior instance on '{1}'",
+          gameObject.name, Instance.gameObject.name);
+        return;
+      }
+      Instance = this;
+    }
+
     /// <summary>
     ///   Navigation service handling view stack operations.
     /// </summary>
@@ -815,6 +834,9 @@ namespace MToolKit.Runtime.Navigation
 
         cts = null;
       }
+
+      if (Instance == this)
+        Instance = null;
     }
 
     public void Cleanup(ECanvasType canvas, View view)

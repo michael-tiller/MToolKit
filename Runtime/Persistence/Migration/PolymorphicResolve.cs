@@ -15,6 +15,17 @@ namespace MToolKit.Runtime.Persistence.Migration
   ///     missing-type failures, which throw at ES3 deserialization before any migrator runs.
   ///     Phase E does not intercept those — see Phase E plan boundary B1.
   ///   </para>
+  ///
+  ///   <para>
+  ///     The exact ES3 behavior on a missing <c>[SerializeReference]</c> target type
+  ///     (silently nulls the field / throws / silently skips the entry) is not empirically
+  ///     pinned — confirming it requires loading a fixture serialized by an assembly that
+  ///     contains the type from a test assembly that does NOT. A documentation-only probe that
+  ///     sketched this (<c>Es3PolymorphicMissingTypeProbeTests</c>) was removed as perpetually
+  ///     skipped; wiring a real one needs a separate stripped-type test assembly. Until then,
+  ///     treat a missing-type ref as throwing at the save-controller boundary (before the
+  ///     migrator runs) and keep this helper scoped to string-name DTOs.
+  ///   </para>
   /// </summary>
   public static class PolymorphicResolve
   {

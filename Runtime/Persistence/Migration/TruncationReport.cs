@@ -37,8 +37,9 @@ namespace MToolKit.Runtime.Persistence.Migration
     ///     - Any <see cref="TruncationEntry.IsLoadBearing"/> == true: <c>BlockOverwrite</c>.
     ///     - Total <see cref="TruncationEntry.DroppedItemCount"/> &gt;= 10: <c>BlockOverwrite</c>.
     ///     - Any entry whose <see cref="TruncationEntry.Reason"/> starts with
-    ///       <see cref="TruncationEntry.ReasonHashDriftShipping"/>: at least <c>Warning</c>
-    ///       (schema drift is qualitatively stronger than version drift even at zero drops).
+    ///       <see cref="TruncationEntry.ReasonHashDriftShipping"/> or
+    ///       <see cref="TruncationEntry.ReasonBelowFloor"/>: at least <c>Warning</c>
+    ///       (schema drift / an unmigrated below-floor load is qualitatively stronger than version drift even at zero drops).
     ///     - Otherwise any non-zero drop: <c>Warning</c>.
     ///     - Otherwise: <c>Info</c>.
     ///   <para>
@@ -55,7 +56,7 @@ namespace MToolKit.Runtime.Persistence.Migration
         return SaveTruncatedOnLoadMessage.Severity.Info;
 
       int totalDrops = 0;
-      bool hashDriftSeen = false;
+      bool bestEffortSeen = false;
       bool anyDrop = false;
 
       for (int i = 0; i < entries.Count; i++)
@@ -77,13 +78,14 @@ namespace MToolKit.Runtime.Persistence.Migration
             return SaveTruncatedOnLoadMessage.Severity.BlockOverwrite;
         }
 
-        if (!hashDriftSeen
+        if (!bestEffortSeen
             && entry.Reason != null
-            && entry.Reason.StartsWith(TruncationEntry.ReasonHashDriftShipping, StringComparison.Ordinal))
-          hashDriftSeen = true;
+            && (entry.Reason.StartsWith(TruncationEntry.ReasonHashDriftShipping, StringComparison.Ordinal)
+                || entry.Reason.StartsWith(TruncationEntry.ReasonBelowFloor, StringComparison.Ordinal)))
+          bestEffortSeen = true;
       }
 
-      if (hashDriftSeen || anyDrop)
+      if (bestEffortSeen || anyDrop)
         return SaveTruncatedOnLoadMessage.Severity.Warning;
 
       return SaveTruncatedOnLoadMessage.Severity.Info;

@@ -185,13 +185,13 @@ The `Migration/` directory provides forward-only, schema-versioned save migratio
 - **`ForwardMigrator<T>`** — abstract base your per-domain migrator subclasses. You declare the schema surface (`SchemaRoots`, `NamespacePrefixes`) and implement `EnsureContainers` (null-coalesce collections), `Normalize` (clamp / repair; idempotent; returns true when it changed something), and — once you support older versions — `Migrate(data, oldVersion, oldHash)`.
 - **`SchemaHashWalker`** — computes the deterministic schema hash from the DTO graph. Hash drift is what flags "this save's shape no longer matches the code."
 - **`SavePrewarmChecker`** (`Prewarm/`) — reads only the save header (version + per-domain hashes + mod manifest) *before* a full load, so the UI can warn the player before committing to a load.
-- **`MigrationOutcome`** — `None` (exact match), `Migrated` (forward-migrated or legacy-shape repaired), `TruncatedFromNewerBuild` (best-effort load of a newer / hash-drifted save, with a `TruncationReport`), `RefusedFatal` (unrecoverable — refused loudly).
+- **`MigrationOutcome`** — `None` (exact match), `Migrated` (forward-migrated within `[floor, current)` or editor-side legacy-shape repair), `TruncatedBestEffort` (best-effort load of a newer / below-floor / hash-drifted *stamped* save, with a `TruncationReport`), `RefusedFatal` (only an unstamped save — no hash to validate; per ADR-0016 stamped saves are never refused).
 
-### The compatibility floor
+### The compatibility floor (ADR-0016)
 
-`MinimumSupportedVersion` is the **compatibility floor**: the oldest `SaveVersion` a migrator will load. It defaults to `CurrentSchemaVersion` — **refuse everything older**. That default is correct during pre-release: saves are disposable, and writing migration bodies for schemas no real player holds is unvalidatable guesswork.
+`MinimumSupportedVersion` is the **validated-transform boundary** — *not* a refusal boundary. It defaults to `CurrentSchemaVersion`. At or above it, a version-specific `Migrate` body runs. **Below it, a stamped save still loads best-effort** (`EnsureContainers` + `Normalize` + re-stamp + a `below-floor` `TruncationReport`) — it is **not** refused; it simply skips the (unwritten) version transform. The only `RefusedFatal` path is an **unstamped** save (no `SaveSchemaHash` to validate against) — unless a domain opts into `AllowsLegacyHashlessLoad`.
 
-Adopt forward migration by **lowering the floor and overriding `Migrate`** — starting at the schema version of your **first real ship**, not for pre-release dev churn. Below the floor, saves are `RefusedFatal`; unstamped pre-scaffolding saves are always refused (no hash to validate against).
+Adopt *validated* forward migration by **lowering the floor and overriding `Migrate`** when a schema change warrants a golden-tested transform — typically at first real ship, for versions players actually hold. Best-effort-below-floor is the safety net; a written `Migrate` body is the upgrade.
 
 ### The per-bump ritual
 
@@ -205,13 +205,13 @@ When you change a persisted schema at or after the floor:
 
 ### Load dispatch (`MigrateForLoad`, in order)
 
-1. Unstamped (no hash) → `RefusedFatal`, unless `AllowsLegacyHashlessLoad`.
-2. Newer build (`loaded > current`) → best-effort load + truncation report, unless `AllowsBestEffortNewerBuildLoad` is false → `RefusedFatal`.
-3. Below floor → `RefusedFatal`.
+1. Unstamped (no hash) → `RefusedFatal`, unless `AllowsLegacyHashlessLoad`. (The only refusal path.)
+2. Newer build (`loaded > current`) → best-effort load + `newer-build` truncation report → `TruncatedBestEffort`.
+3. Below floor (`loaded < MinimumSupportedVersion`) → best-effort load + `below-floor` truncation report → `TruncatedBestEffort`. No version-specific `Migrate` runs.
 4. Within `[floor, current)` → `Migrate` → `Migrated`.
 5. Exact match → `None` (or `Migrated` if `Normalize` repaired a legacy shape).
 6. Hash drift, editor build → re-normalize + re-stamp → `Migrated`.
-7. Hash drift, shipping build → best-effort load + truncation report (or `RefusedFatal` if opted out).
+7. Hash drift, shipping build → best-effort load + `hash-drift-shipping` truncation report → `TruncatedBestEffort`.
 
 ### Testing discipline
 
