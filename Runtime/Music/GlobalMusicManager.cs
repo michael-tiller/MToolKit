@@ -76,7 +76,7 @@ namespace MToolKit.Runtime.Music
       {
         audioSource1.outputAudioMixerGroup = musicMixerGroup;
         audioSource2.outputAudioMixerGroup = musicMixerGroup;
-        log.Debug("MusicManager assigned to mixer group: {MixerGroup}", musicMixerGroup.name);
+        log.Verbose("MusicManager assigned to mixer group: {MixerGroup}", musicMixerGroup.name);
       }
       else
       {
@@ -91,7 +91,7 @@ namespace MToolKit.Runtime.Music
     {
       if (defaultMusicClip != null)
       {
-        log.ForMethod().ForMethod().Debug("Playing default music clip: {clipName}", defaultMusicClip.name);
+        log.ForMethod().ForMethod().Verbose("Playing default music clip: {clipName}", defaultMusicClip.name);
         PlayMusic(defaultMusicClip);
       }
       else

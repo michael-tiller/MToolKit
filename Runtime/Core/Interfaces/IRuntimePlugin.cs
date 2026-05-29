@@ -38,6 +38,19 @@ namespace MToolKit.Runtime.Core.Interfaces
     void PerformRuntimeInitialization(IObjectResolver resolver);
 
     /// <summary>
+    ///   Async variant of Phase 3 that the plugin registry awaits. Plugins doing
+    ///   async runtime work should override this and await it here instead of
+    ///   firing it off with .Forget() from the sync method — otherwise the load
+    ///   races scene transitions and gets cancelled when the plugin GameObject
+    ///   is destroyed mid-flight. Default delegates to the sync version.
+    /// </summary>
+    UniTask PerformRuntimeInitializationAsync(IObjectResolver resolver, CancellationToken ct = default)
+    {
+      PerformRuntimeInitialization(resolver);
+      return UniTask.CompletedTask;
+    }
+
+    /// <summary>
     ///   Check if dependencies are ready for runtime initialization.
     ///   This method determines whether Phase 3 can proceed.
     ///   If the plugin implements IDependencyDeclaration, this method will validate

@@ -29,12 +29,8 @@ namespace MToolKit.Runtime.Settings
 
     protected override SettingsSystem CreateService(IObjectResolver resolver)
     {
-      log.ForGameObject(gameObject).ForMethod().Debug("Created SettingsSystem instance with HashCode: {0}", service?.GetHashCode() ?? 0);
-
-      // Create the InputRebinderService instance
       InputRebinderService inputRebinderService = new();
-      
-      // Try to resolve INI service (optional)
+
       IIniService iniService = null;
       try
       {
@@ -45,7 +41,9 @@ namespace MToolKit.Runtime.Settings
         log.ForGameObject(gameObject).ForMethod().Verbose("IIniService not available, SettingsSystem will work without INI integration");
       }
 
-      return new SettingsSystem(inputRebinderService, iniService);
+      SettingsSystem instance = new(inputRebinderService, iniService);
+      log.ForGameObject(gameObject).ForMethod().Verbose("Created SettingsSystem instance with HashCode: {HashCode}", instance.GetHashCode());
+      return instance;
     }
 
     /// <summary>

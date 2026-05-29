@@ -5,12 +5,16 @@ using System.Reflection;
 using MToolKit.Runtime.Utilities;
 using MToolKit.Runtime.VisualGraphs.Authoring;
 using MToolKit.Runtime.VisualGraphs.Dialogue.Graphs;
+using MToolKit.Runtime.VisualGraphs.Event.Graphs;
 using MToolKit.Runtime.VisualGraphs.Quest.Graphs;
 using MToolKit.Runtime.VisualGraphs.Runtime.DTOs;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
+using Serilog;
 using UnityEngine;
 using XNode;
 using Object = UnityEngine.Object;
+using ILogger = Serilog.ILogger;
+using Logger = Serilog.Core.Logger;
 
 #if UNITY_ADDRESSABLES
 using UnityEngine.AddressableAssets;
@@ -24,6 +28,9 @@ namespace MToolKit.Runtime.VisualGraphs.Export
   /// </summary>
   public sealed class XNodeGraphExporter
   {
+    private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<XNodeGraphExporter>().ForFeature("VisualGraphs.Export"));
+    private static ILogger log => logLazy.Value ?? Logger.None;
+
     private readonly NodeExecutorRegistry nodeRegistry;
 
     public XNodeGraphExporter(NodeExecutorRegistry nodeRegistry)
@@ -96,6 +103,28 @@ namespace MToolKit.Runtime.VisualGraphs.Export
           }
         }
       }
+      else if (graphAsset is EventGraphAsset eventGraph)
+      {
+        // Copy execution limit
+        def.MaxExecutionSteps = eventGraph.MaxExecutionSteps;
+
+        // Extract subscriptions
+        if (eventGraph.Subscriptions != null)
+        {
+          foreach (var subscription in eventGraph.Subscriptions)
+          {
+            if (subscription?.MessageType == null || !subscription.MessageType.IsValid)
+              continue;
+
+            def.Subscriptions.Add(new RuntimeSubscriptionDefinition
+            {
+              MessageType = subscription.MessageType,
+              DomainFilter = subscription.DomainFilter,
+              Required = subscription.Required
+            });
+          }
+        }
+      }
 
       // Extract nodes
       var nodesByType = new Dictionary<string, List<Node>>();
@@ -152,7 +181,8 @@ namespace MToolKit.Runtime.VisualGraphs.Export
           if (!port.IsOutput) continue;
 
           var connections = port.GetConnections();
-          Debug.Log($"[Export] Node '{fromNodeName}' ({fromNodeType}, ID: {fromNodeId}) - Port '{port.fieldName}' has {connections.Count} connection(s)");
+          log.Verbose("[Export] Node '{NodeName}' ({NodeType}, ID: {NodeId}) - Port '{PortName}' has {ConnectionCount} connection(s)",
+            fromNodeName, fromNodeType, fromNodeId, port.fieldName, connections.Count);
 
           foreach (var conn in connections)
           {
@@ -173,7 +203,8 @@ namespace MToolKit.Runtime.VisualGraphs.Export
               toNodeText = $" (Text: '{lineNode.Text}')";
             }
 
-            Debug.Log($"[Export]   Connection: '{fromNodeName}' ({fromNodeId}) -> '{toNodeName}' ({toNodeId}) via port '{port.fieldName}'{toNodeText}");
+            log.Verbose("[Export] Connection: '{FromNode}' ({FromId}) -> '{ToNode}' ({ToId}) via port '{Port}'{Text}",
+              fromNodeName, fromNodeId, toNodeName, toNodeId, port.fieldName, toNodeText);
 
             // Validate connection - warn about self-loops
             if (fromNodeId == toNodeId)
@@ -221,7 +252,7 @@ namespace MToolKit.Runtime.VisualGraphs.Export
       // Replace the Choices parameter with our serialized version
       runtimeNode.Parameters["Choices"] = serializedChoices;
 
-      Debug.Log($"[Export] DialogueChoiceNode '{choiceNode.name}': Serialized {serializedChoices.Count} choices");
+      log.Verbose("[Export] DialogueChoiceNode '{NodeName}': Serialized {ChoiceCount} choices", choiceNode.name, serializedChoices.Count);
     }
 
     /// <summary>
@@ -392,6 +423,7 @@ namespace MToolKit.Runtime.VisualGraphs.Export
     {
       if (graph is QuestGraphAsset) return "Quest";
       if (graph is DialogueGraphAsset) return "Dialogue";
+      if (graph is EventGraphAsset) return "Event";
       return string.Empty;
     }
 

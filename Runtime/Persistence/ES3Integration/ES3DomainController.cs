@@ -39,6 +39,17 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
 
     public ESaveDomain Domain { get; }
 
+    public bool HasSaveData()
+    {
+      foreach (ISaveable saveable in saveables)
+      {
+        var key = $"{domainPrefix}{saveable.Key}";
+        if (es3Service.KeyExists(key))
+          return true;
+      }
+      return false;
+    }
+
     public async UniTask SaveAsync(CancellationToken ct = default)
     {
       log.ForMethod().Verbose("Saving domain: {0}", Domain);

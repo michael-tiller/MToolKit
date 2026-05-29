@@ -107,7 +107,7 @@ namespace MToolKit.Runtime.Utilities
       }
       else if (instance != this)
       {
-        log.ForGameObject(gameObject).ForMethod().Information(
+        log.ForGameObject(gameObject).ForMethod().Verbose(
           "Duplicate Singleton<{0}> found. Destroying new instance on '{1}'.",
           typeof(T).Name,
           gameObject.name
@@ -130,5 +130,16 @@ namespace MToolKit.Runtime.Utilities
       log.ForGameObject(gameObject).ForMethod(typeof(T).Name).Verbose("{0}: {1}", typeof(T).Name, nameof(OnApplicationQuit));
       isApplicationQuitting = true;
     }
+
+#if UNITY_EDITOR
+    /// <summary>
+    ///   Resets the singleton state for testing. Only available in Editor.
+    /// </summary>
+    public static void ResetForTesting()
+    {
+      isApplicationQuitting = false;
+      instance = null;
+    }
+#endif
   }
 }

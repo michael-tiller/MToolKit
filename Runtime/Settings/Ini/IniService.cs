@@ -44,7 +44,7 @@ namespace MToolKit.Runtime.Settings.Ini
       filePath = config.GetIniFilePath();
       EnsureDirectoryExists();
 
-      log.ForMethod().Information("IniService created - File: {0}, Full Path: {1}", config.IniFileName, filePath);
+      log.ForMethod().Verbose("IniService created - File: {0}, Full Path: {1}", config.IniFileName, filePath);
     }
 
     #region IDisposable Members
@@ -132,7 +132,7 @@ namespace MToolKit.Runtime.Settings.Ini
             ReadIniFile();
           }, cancellationToken: timeoutCts.Token);
 
-          log.ForMethod().Information("INI file loaded successfully - File: {0}, Sections: {1}, Total Keys: {2}",
+          log.ForMethod().Verbose("INI file loaded successfully - File: {0}, Sections: {1}, Total Keys: {2}",
             filePath, sections.Count, allValuesFlat.Count);
         }
         finally
@@ -204,7 +204,7 @@ namespace MToolKit.Runtime.Settings.Ini
             WriteIniFile();
           }, cancellationToken: timeoutCts.Token);
 
-          log.ForMethod().Information("INI file saved successfully - File: {0}", filePath);
+          log.ForMethod().Verbose("INI file saved successfully - File: {0}", filePath);
         }
         finally
         {
@@ -524,7 +524,7 @@ namespace MToolKit.Runtime.Settings.Ini
           }
         }
 
-        log.ForMethod().Debug("Read INI file: {0} sections, {1} total keys", sections.Count, allValuesFlat.Count);
+        log.ForMethod().Verbose("Read INI file: {0} sections, {1} total keys", sections.Count, allValuesFlat.Count);
       }
       catch (Exception ex)
       {
@@ -555,7 +555,7 @@ namespace MToolKit.Runtime.Settings.Ini
           }
         }
 
-        log.ForMethod().Debug("Wrote INI file: {0} sections, {1} total keys", sections.Count, allValuesFlat.Count);
+        log.ForMethod().Verbose("Wrote INI file: {0} sections, {1} total keys", sections.Count, allValuesFlat.Count);
       }
       catch (Exception ex)
       {

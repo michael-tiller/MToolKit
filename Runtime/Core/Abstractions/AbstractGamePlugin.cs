@@ -34,7 +34,7 @@ namespace MToolKit.Runtime.Core.Abstractions
       if (this == null || gameObject == null)
         throw new MissingReferenceException($"GameObject for {GetType().Name} has been destroyed");
 
-      log.ForGameObject(gameObject).ForMethod().Information("{0} plugin started", GetType().Name);
+      log.ForGameObject(gameObject).ForMethod().Verbose("{0} plugin started", GetType().Name);
       isStarted = true;
     }
 
@@ -62,7 +62,7 @@ namespace MToolKit.Runtime.Core.Abstractions
       }
 
       isShutdown = true;
-      log.ForGameObject(gameObject).ForMethod().Information("{0} plugin shutdown", GetType().Name);
+      log.ForGameObject(gameObject).ForMethod().Verbose("{0} plugin shutdown", GetType().Name);
     }
   }
 }

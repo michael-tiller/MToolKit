@@ -450,6 +450,8 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         throw new ObjectDisposedException(nameof(ES3SaveService));
       }
 
+      var totalSw = System.Diagnostics.Stopwatch.StartNew();
+
       try
       {
         // Add timeout for load operation and link with disposal token
@@ -457,11 +459,14 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(10)); // 10 second timeout for individual key loads
 
         // Acquire semaphore to ensure exclusive file access
+        var semaphoreSw = System.Diagnostics.Stopwatch.StartNew();
         await fileAccessSemaphore.WaitAsync(timeoutCts.Token);
+        semaphoreSw.Stop();
 
         try
         {
-          return await UniTask.RunOnThreadPool(() =>
+          var loadSw = System.Diagnostics.Stopwatch.StartNew();
+          var result = await UniTask.RunOnThreadPool(() =>
           {
             if (ES3.KeyExists(key, es3Settings))
             {
@@ -469,6 +474,11 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
             }
             return defaultValue;
           }, cancellationToken: timeoutCts.Token);
+          loadSw.Stop();
+          totalSw.Stop();
+          log.ForMethod().Information("LoadAsync<{Type}>({Key}): semaphore={SemaphoreMs}ms, load={LoadMs}ms, total={TotalMs}ms",
+            typeof(T).Name, key, semaphoreSw.ElapsedMilliseconds, loadSw.ElapsedMilliseconds, totalSw.ElapsedMilliseconds);
+          return result;
         }
         finally
         {
@@ -666,11 +676,11 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
           {
             var existingSaveTime = ES3.Load<string>("LastSaveTime", es3Settings);
             LastSaveTime.Value = existingSaveTime;
-            log.ForMethod().Debug("Initialized from existing save file - LastSaveTime: {0}", existingSaveTime);
+            log.ForMethod().Verbose("Initialized from existing save file - LastSaveTime: {0}", existingSaveTime);
           }
           else
           {
-            log.ForMethod().Debug("Save file exists but no LastSaveTime found");
+            log.ForMethod().Verbose("Save file exists but no LastSaveTime found");
           }
 
           // Try to load the SaveCounter from the existing save file
@@ -678,16 +688,16 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
           {
             var existingSaveCounter = ES3.Load<int>("SaveCounter", es3Settings);
             SaveCounter.Value = existingSaveCounter;
-            log.ForMethod().Debug("Initialized from existing save file - SaveCounter: {0}", existingSaveCounter);
+            log.ForMethod().Verbose("Initialized from existing save file - SaveCounter: {0}", existingSaveCounter);
           }
           else
           {
-            log.ForMethod().Debug("Save file exists but no SaveCounter found, starting from 0");
+            log.ForMethod().Verbose("Save file exists but no SaveCounter found, starting from 0");
           }
         }
         else
         {
-          log.ForMethod().Debug("No existing save file found at {0}", filePath);
+          log.ForMethod().Verbose("No existing save file found at {0}", filePath);
         }
       }
       catch (Exception ex)

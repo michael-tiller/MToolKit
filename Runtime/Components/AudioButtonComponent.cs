@@ -101,7 +101,7 @@ namespace MToolKit.Runtime.Components
       }
 
       button.onClick.AddListener(OnClick);
-      log.ForMethod().Debug("AudioButtonComponent initialized for {0}", gameObject.name);
+      log.ForMethod().Verbose("AudioButtonComponent initialized for {0}", gameObject.name);
     }
 
     private void OnDestroy()
@@ -113,7 +113,7 @@ namespace MToolKit.Runtime.Components
     public void OnDeselect(BaseEventData eventData)
     {
       // Optional: Could play a deselect sound here if needed
-      log.ForMethod().Debug("Button deselected: {0}", gameObject.name);
+      log.ForMethod().Verbose("Button deselected: {0}", gameObject.name);
     }
 
     public void OnSelect(BaseEventData eventData)
@@ -140,7 +140,7 @@ namespace MToolKit.Runtime.Components
       {
         audioService.PlayOneShot(selectAudioClips, volume: selectVolume, pitch: selectPitch, audioType: EAudioTypes.Interface);
         lastSelectTime = Time.time;
-        log.ForMethod().Debug("Select sound played on {0}", gameObject.name);
+        log.ForMethod().Verbose("Select sound played on {0}", gameObject.name);
       }
       catch (Exception ex)
       {
@@ -156,7 +156,7 @@ namespace MToolKit.Runtime.Components
         if (GlobalInstaller.Instance != null)
         {
           audioService = GlobalInstaller.Instance.Container.Resolve<IAudioService>();
-          log.ForMethod().Debug("Successfully resolved IAudioService from GlobalInstaller.Instance for {0}", gameObject.name);
+          log.ForMethod().Verbose("Successfully resolved IAudioService from GlobalInstaller.Instance for {0}", gameObject.name);
           return;
         }
 
@@ -192,7 +192,7 @@ namespace MToolKit.Runtime.Components
       {
         audioService.PlayOneShot(clickAudioClips, volume: clickVolume, pitch: clickPitch, audioType: EAudioTypes.Interface);
         lastClickTime = Time.time;
-        log.ForMethod().Debug("Click sound played on {0}", gameObject.name);
+        log.ForMethod().Verbose("Click sound played on {0}", gameObject.name);
       }
       catch (Exception ex)
       {

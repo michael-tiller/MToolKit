@@ -9,5 +9,10 @@ namespace MToolKit.Runtime.AssetLoader
   public class AssetReferenceBase<T> : AssetReference where T : Object
   {
     protected AssetReferenceBase(string guid) : base(guid) { }
+
+    protected AssetReferenceBase(string guid, string subObjectName) : base(guid)
+    {
+      SubObjectName = subObjectName;
+    }
   }
 }

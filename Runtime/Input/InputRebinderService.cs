@@ -73,7 +73,7 @@ namespace MToolKit.Runtime.Input
         bindings.Add(binding);
       originalBindings[key] = bindings;
 
-      log.ForMethod().Information("Registered action {ActionName} for rebinding", action.name);
+      log.ForMethod().Verbose("Registered action {ActionName} for rebinding", action.name);
     }
 
     /// <summary>

@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Core.Interfaces;
+using MToolKit.Runtime.MessageBus;
 using MToolKit.Runtime.Persistence.ES3Integration;
 using MToolKit.Runtime.Persistence.Interfaces;
+using MToolKit.Runtime.Persistence.Migration;
 using R3;
 using Serilog;
 using Serilog.Core;
@@ -27,6 +30,12 @@ namespace MToolKit.Runtime.Persistence
     private readonly SaveDomainControllerRegistry localRegistry;
     private readonly IProfileManager profileManager;
     private readonly ES3SaveConfig saveConfig;
+    private readonly ITruncationReporter truncationReporter;
+
+    // Serializes concurrent LoadAsync invocations so the truncation reporter's load scope
+    // is not corrupted by overlapping callers. AvailableWaitHandle is never accessed, so
+    // disposal is not required (see Shutdown).
+    private readonly SemaphoreSlim loadGate = new(1, 1);
 
     // Auto-save functionality
     private CancellationTokenSource autoSaveCts;
@@ -36,13 +45,14 @@ namespace MToolKit.Runtime.Persistence
     private bool useLocalSystem;
 
     public SaveSystemCoordinator(IES3Service es3Service, SaveDomainControllerRegistry globalRegistry, SaveDomainControllerRegistry localRegistry, ES3SaveConfig saveConfig,
-      IProfileManager profileManager)
+      IProfileManager profileManager, ITruncationReporter truncationReporter)
     {
       this.es3Service = es3Service ?? throw new ArgumentNullException(nameof(es3Service));
       this.globalRegistry = globalRegistry ?? throw new ArgumentNullException(nameof(globalRegistry));
       this.localRegistry = localRegistry ?? throw new ArgumentNullException(nameof(localRegistry));
       this.saveConfig = saveConfig ?? throw new ArgumentNullException(nameof(saveConfig));
       this.profileManager = profileManager ?? throw new ArgumentNullException(nameof(profileManager));
+      this.truncationReporter = truncationReporter ?? throw new ArgumentNullException(nameof(truncationReporter));
 
       // Initialize reactive properties
       IsSaving = new ReactiveProperty<bool>(false);
@@ -52,8 +62,9 @@ namespace MToolKit.Runtime.Persistence
       SaveCounter = new ReactiveProperty<int>(0);
       IsAutoSaveRunning = new ReactiveProperty<bool>(false);
       IsAutoSaveExecuting = new ReactiveProperty<bool>(false);
+      IsSaveBlocked = new ReactiveProperty<bool>(false);
 
-      log.ForMethod().Debug("SaveSystemCoordinator created with auto-save enabled: {0}", saveConfig.EnableAutoSave);
+      log.ForMethod().Verbose("SaveSystemCoordinator created with auto-save enabled: {0}", saveConfig.EnableAutoSave);
     }
 
     public ReactiveProperty<bool> IsSaving { get; }
@@ -63,6 +74,34 @@ namespace MToolKit.Runtime.Persistence
     public ReactiveProperty<int> SaveCounter { get; }
     public ReactiveProperty<bool> IsAutoSaveRunning { get; }
     public ReactiveProperty<bool> IsAutoSaveExecuting { get; }
+
+    /// <summary>
+    ///   Sticky-true after a successful load drains a <see cref="SaveTruncatedOnLoadMessage.Severity.BlockOverwrite"/>
+    ///   truncation report. Set by THIS coordinator (not the UI) so the save-safety invariant holds even when
+    ///   no presenter is alive. No public clear API — recovery requires app exit / global container teardown
+    ///   (this coordinator is registered <c>Lifetime.Singleton</c> in <c>GlobalInstaller</c>; scene transitions
+    ///   do NOT recreate it). Blocks BOTH local and global save paths uniformly (Phase F boundary F2).
+    /// </summary>
+    public ReactiveProperty<bool> IsSaveBlocked { get; }
+
+
+    /// <summary>
+    ///   Snapshot of truncation entries reported during the most recent successful
+    ///   <see cref="LoadAsync"/>. Set to <see cref="TruncationReport.Empty"/> when the last
+    ///   load was clean, threw, or has not yet run. Pull-mechanism for callers that cannot
+    ///   subscribe to <see cref="SaveTruncatedOnLoadMessage"/> through
+    ///   <c>GameMessageBroker</c> (e.g., menu-scene global loads where the game-scope broker
+    ///   may not be available, or post-load hydrate handlers reading state directly).
+    /// </summary>
+    public TruncationReport LastLoadTruncationReport { get; private set; } = TruncationReport.Empty;
+
+    /// <summary>
+    ///   Fires after a successful <see cref="LoadAsync"/> completes, allowing subscribers
+    ///   to perform post-load cross-controller hydration (e.g. resolve references that
+    ///   span multiple SaveData domains). Handlers are awaited sequentially; per-handler
+    ///   failures are logged and isolated so one bad hydrator does not break others.
+    /// </summary>
+    public event Func<CancellationToken, UniTask> PostLoadHydrate;
 
     #region IRuntimeSystem Members
 
@@ -115,6 +154,7 @@ namespace MToolKit.Runtime.Persistence
       // Clean up reactive properties
       IsSaving?.Dispose();
       IsLoading?.Dispose();
+      IsSaveBlocked?.Dispose();
       LastSaveTime?.Dispose();
       LastLoadTime?.Dispose();
       IsAutoSaveRunning?.Dispose();
@@ -197,6 +237,73 @@ namespace MToolKit.Runtime.Persistence
         controller.Domain, localRegistry.Count);
     }
 
+        /// <summary>
+        ///   Unregisters a domain controller from the local registry. Called by plugins on
+        ///   Shutdown so controllers holding scene-scoped Unity references (cameras, services,
+        ///   etc.) don't outlive the scene that owns them and break subsequent save/load cycles.
+        /// </summary>
+        public void UnregisterLocalController(ISaveDomainController controller)
+        {
+          if (controller == null)
+          {
+            log.ForMethod().Warning("Attempted to unregister null controller from local registry - ignoring");
+            return;
+          }
+
+          if (!localRegistry.UnregisterController(controller))
+            return;
+
+          if (useLocalSystem)
+          {
+            List<ISaveDomainController> localControllers = localRegistry.GetControllers().ToList();
+            localSaveSystem = new ES3GameSaveSystem(localControllers, es3Service);
+            UpdateReactiveProperties();
+            log.ForMethod().Information("Recreated local save system with {0} controllers after unregistering: {1}",
+              localControllers.Count, controller.Domain);
+          }
+
+          log.ForMethod().Information("Unregistered domain controller from local registry: {0} (total local controllers: {1})",
+            controller.Domain, localRegistry.Count);
+        }
+
+      /// <summary>
+      ///   Returns true if any controller registered with the local registry reports
+      ///   persisted save data. Used at session boot to choose between NEW-game seeding
+      ///   and LOAD-from-save without coupling to any single domain.
+      /// </summary>
+      public bool HasAnyLocalSaveData()
+      {
+        foreach (ISaveDomainController controller in localRegistry.GetControllers())
+          if (controller != null && controller.HasSaveData())
+            return true;
+        return false;
+      }
+
+      /// <summary>
+      ///   Returns the currently active save system (local or global). Lazily initializes
+      ///   if Start() has not yet run so callers resolved before startup still get a
+      ///   working instance bound to the live registries.
+      /// </summary>
+      public ES3GameSaveSystem GetActiveSaveSystem()
+      {
+        if (useLocalSystem)
+        {
+          if (localSaveSystem == null)
+          {
+            List<ISaveDomainController> localControllers = localRegistry.GetControllers().ToList();
+            localSaveSystem = new ES3GameSaveSystem(localControllers, es3Service);
+          }
+          return localSaveSystem;
+        }
+
+        if (globalSaveSystem == null)
+        {
+          List<ISaveDomainController> globalControllers = globalRegistry.GetControllers().ToList();
+          globalSaveSystem = new ES3GameSaveSystem(globalControllers, es3Service);
+        }
+        return globalSaveSystem;
+      }
+
     private void UpdateReactiveProperties()
     {
       ES3GameSaveSystem activeSystem = useLocalSystem ? localSaveSystem : globalSaveSystem;
@@ -216,6 +323,15 @@ namespace MToolKit.Runtime.Persistence
       // Check cancellation token before proceeding
       ct.ThrowIfCancellationRequested();
 
+      // Phase F (F2): skip-and-warn rather than throw. Callers (pause-menu quit-and-save, OS-quit
+      // handler) check IsSaveBlocked separately to surface user-facing messaging; throwing here
+      // would propagate spuriously through their shutdown paths.
+      if (IsSaveBlocked.Value)
+      {
+        log.ForMethod().Warning("Save blocked: prior load reported severe truncation; quit and restart the game to use a different save");
+        return;
+      }
+
       ES3GameSaveSystem activeSystem = useLocalSystem ? localSaveSystem : globalSaveSystem;
 
       if (activeSystem == null)
@@ -227,17 +343,20 @@ namespace MToolKit.Runtime.Persistence
       // Log which controllers are available for saving
       SaveDomainControllerRegistry activeRegistry = useLocalSystem ? localRegistry : globalRegistry;
       List<ISaveDomainController> controllers = activeRegistry.GetControllers().ToList();
-      log.ForMethod().Information("Saving using {0} system with {1} controllers: {2}",
+      log.ForMethod().Verbose("Saving using {0} system with {1} controllers: {2}",
         useLocalSystem ? "local" : "global",
         controllers.Count,
         string.Join(", ", controllers.Select(c => c.Domain.ToString())));
 
       try
       {
+        Stopwatch sw = Stopwatch.StartNew();
         await activeSystem.SaveAsync(ct);
+        sw.Stop();
         UpdateReactiveProperties();
 
-        log.ForMethod().Information("Save completed successfully using {0} system", useLocalSystem ? "local" : "global");
+        log.ForMethod().Information("Save timing total: system={0} wall_clock_ms={1} controller_count={2}",
+          useLocalSystem ? "local" : "global", sw.ElapsedMilliseconds, controllers.Count);
       }
       catch (Exception ex)
       {
@@ -261,17 +380,80 @@ namespace MToolKit.Runtime.Persistence
 
       log.ForMethod().Information("Loading using {0} system", useLocalSystem ? "local" : "global");
 
+      // Validate first; only then take the load gate and touch the truncation reporter.
+      // The gate serializes overlapping LoadAsync calls so the reporter's load scope is not
+      // corrupted by a second caller swapping its queue mid-load.
+      await loadGate.WaitAsync(ct);
       try
       {
-        await activeSystem.LoadAsync(ct);
-        UpdateReactiveProperties();
+        truncationReporter.BeginLoadScope();
+        bool loadSucceeded = false;
+        TruncationReport drained = TruncationReport.Empty;
+        try
+        {
+          await activeSystem.LoadAsync(ct);
+          UpdateReactiveProperties();
+          loadSucceeded = true;
 
-        log.ForMethod().Information("Load completed successfully using {0} system", useLocalSystem ? "local" : "global");
+          log.ForMethod().Information("Load completed successfully using {0} system", useLocalSystem ? "local" : "global");
+
+          // Phase E.2 Wave 3: hydrate runs INSIDE the load scope so cross-reference rot
+          // reported by handlers merges into the single drained report. OperationCanceledException
+          // propagates (cancellation = load failure); other exceptions are isolated per-handler
+          // inside InvokePostLoadHydrateAsync so one bad hydrator does not block others.
+          await InvokePostLoadHydrateAsync(ct);
+        }
+        catch (Exception ex)
+        {
+          log.ForMethod().Error(ex, "Load failed using {0} system: {ExType}: {ExFull}", useLocalSystem ? "local" : "global", ex.GetType().Name, ex.ToString());
+          throw;
+        }
+        finally
+        {
+          // Always drain so leaked entries don't poison the next load. Publish only on success.
+          drained = truncationReporter.DrainReport();
+          LastLoadTruncationReport = loadSucceeded ? drained : TruncationReport.Empty;
+        }
+
+        if (drained.HasEntries)
+        {
+          // Phase F (F5): set the sticky save block BEFORE publishing so any subscriber that reads
+          // IsSaveBlocked sees the consistent post-block state. One-way ratchet: no path inside this
+          // coordinator ever assigns false. Recovery requires app exit (F1).
+          if (drained.Severity == SaveTruncatedOnLoadMessage.Severity.BlockOverwrite)
+            IsSaveBlocked.Value = true;
+          GameMessageBroker.Publish(new SaveTruncatedOnLoadMessage(drained.Severity, drained.Entries));
+          log.ForMethod().Warning("Save loaded with {0} truncation entries; published SaveTruncatedOnLoadMessage at severity {1}", drained.Entries.Count, drained.Severity);
+        }
       }
-      catch (Exception ex)
+      finally
       {
-        log.ForMethod().Error(ex, "Load failed using {0} system: {Message}", useLocalSystem ? "local" : "global", ex.Message);
-        throw;
+        loadGate.Release();
+      }
+    }
+
+    private async UniTask InvokePostLoadHydrateAsync(CancellationToken ct)
+    {
+      Func<CancellationToken, UniTask> handlers = PostLoadHydrate;
+      if (handlers == null)
+        return;
+
+      foreach (Delegate del in handlers.GetInvocationList())
+      {
+        ct.ThrowIfCancellationRequested();
+        Func<CancellationToken, UniTask> handler = (Func<CancellationToken, UniTask>)del;
+        try
+        {
+          await handler(ct);
+        }
+        catch (OperationCanceledException)
+        {
+          throw;
+        }
+        catch (Exception ex)
+        {
+          log.ForMethod().Error(ex, "PostLoadHydrate handler failed: {Message}", ex.Message);
+        }
       }
     }
 
@@ -321,10 +503,10 @@ namespace MToolKit.Runtime.Persistence
           // Wait for the configured interval
           await UniTask.Delay(TimeSpan.FromSeconds(saveConfig.AutoSaveIntervalSeconds), cancellationToken: ct);
 
-          // Skip auto-save if we're already saving or loading
-          if (IsSaving.Value || IsLoading.Value)
+          // Skip auto-save if we're already saving or loading, or if the save block is set (F2).
+          if (IsSaving.Value || IsLoading.Value || IsSaveBlocked.Value)
           {
-            log.ForMethod().Debug("Skipping auto-save - save/load operation in progress");
+            log.ForMethod().Verbose("Skipping auto-save - save/load in progress or save blocked");
             continue;
           }
 
@@ -337,12 +519,12 @@ namespace MToolKit.Runtime.Persistence
 
           try
           {
-            log.ForMethod().Information("Setting IsAutoSaveExecuting to true");
+            log.ForMethod().Verbose("Setting IsAutoSaveExecuting to true");
             IsAutoSaveExecuting.Value = true;
-            log.ForMethod().Information("Performing auto-save");
+            log.ForMethod().Verbose("Performing auto-save");
             await SaveAsync(ct);
             await UniTask.Delay(saveConfig.AutoSavePaddingMilliseconds);
-            log.ForMethod().Information("Auto-save completed successfully");
+            log.ForMethod().Verbose("Auto-save completed successfully");
           }
           catch (OperationCanceledException)
           {
@@ -380,6 +562,13 @@ namespace MToolKit.Runtime.Persistence
       if (!saveConfig.EnableAutoSave)
       {
         log.ForMethod().Debug("Auto-save is disabled, skipping manual trigger");
+        return;
+      }
+
+      // Phase F (F2): respect the sticky save block.
+      if (IsSaveBlocked.Value)
+      {
+        log.ForMethod().Debug("Skipping manual auto-save - save blocked");
         return;
       }
 
@@ -442,6 +631,14 @@ namespace MToolKit.Runtime.Persistence
       if (!useLocalSystem)
       {
         log.ForMethod().Debug("Skipping scene change auto-save - not in local system");
+        return;
+      }
+
+      // Phase F (F2): respect the sticky save block. Covers ApplicationQuitSaveHandler too —
+      // it calls HandleSceneChangeAsync on OS quit, so guarding here transitively protects that path.
+      if (IsSaveBlocked.Value)
+      {
+        log.ForMethod().Debug("Skipping scene change auto-save - save blocked");
         return;
       }
 

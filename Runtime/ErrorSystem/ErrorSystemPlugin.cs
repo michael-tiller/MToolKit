@@ -47,7 +47,7 @@ namespace MToolKit.Runtime.ErrorSystem
 
     public override void Register(IContainerBuilder builder)
     {
-      log.ForMethod().Debug("ErrorSystemPlugin Register called");
+      log.ForMethod().Verbose("ErrorSystemPlugin Register called");
 
       // Ensure the plugin persists across scene changes
       DontDestroyOnLoad(gameObject);
@@ -67,17 +67,17 @@ namespace MToolKit.Runtime.ErrorSystem
         }
       }, Lifetime.Singleton);
 
-      log.ForMethod().Information("ErrorSystemPlugin Register completed - IErrorService registered");
+      log.ForMethod().Verbose("ErrorSystemPlugin Register completed - IErrorService registered");
     }
 
     public void PerformSetup(IObjectResolver resolver)
     {
-      log.ForMethod().Debug("Performing setup for ErrorSystemPlugin");
+      log.ForMethod().Verbose("Performing setup for ErrorSystemPlugin");
     }
 
     public void PerformRuntimeInitialization(IObjectResolver resolver)
     {
-      log.ForMethod().Debug("Performing runtime initialization for ErrorSystemPlugin");
+      log.ForMethod().Verbose("Performing runtime initialization for ErrorSystemPlugin");
 
       // Resolve the error service
       errorService = resolver.Resolve<IErrorService>();
@@ -113,13 +113,13 @@ namespace MToolKit.Runtime.ErrorSystem
 
     public bool AreDependenciesReady(IObjectResolver resolver)
     {
-      log.ForMethod().Debug("Checking if dependencies are ready for ErrorSystemPlugin");
+      log.ForMethod().Verbose("Checking if dependencies are ready for ErrorSystemPlugin");
       return resolver.TryResolve<IErrorService>(out _);
     }
 
     private void OnDestroy()
     {
-      log.ForMethod().Debug("OnDestroy called for ErrorSystemPlugin");
+      log.ForMethod().Verbose("OnDestroy called for ErrorSystemPlugin");
       errorRequestMessageSubscription?.Dispose();
       errorRequestMessageSubscription = null;
     }

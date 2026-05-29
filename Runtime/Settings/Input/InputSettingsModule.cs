@@ -37,27 +37,27 @@ namespace MToolKit.Runtime.Settings.Input
     public void RevertToDefaultSettings()
     {
       rebinderService.ResetAllBindings();
-      log.ForMethod().Information("Reverted all input settings to defaults");
+      log.ForMethod().Verbose("Reverted all input settings to defaults");
     }
 
     public void Apply()
     {
       // Input settings are applied immediately via override paths
       // No additional apply logic needed
-      log.ForMethod().Information("Input settings applied");
+      log.ForMethod().Verbose("Input settings applied");
     }
 
     public void Cancel()
     {
       // Revert any pending changes
       RevertToDefaultSettings();
-      log.ForMethod().Information("Input settings cancelled");
+      log.ForMethod().Verbose("Input settings cancelled");
     }
 
     public void OnShutdown()
     {
       registeredActions.Clear();
-      log.ForMethod().Information("Input settings module shutdown");
+      log.ForMethod().Verbose("Input settings module shutdown");
     }
 
     #endregion

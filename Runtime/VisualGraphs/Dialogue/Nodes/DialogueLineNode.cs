@@ -47,6 +47,9 @@ namespace MToolKit.Runtime.VisualGraphs.Dialogue.Nodes
     [Tooltip("If true, player can skip this line by clicking Next before MinDisplaySeconds")]
     public bool Skippable = true;
 
+    [HideInInspector]
+    public string OriginalLabel = "";
+
     public override object GetValue(NodePort port)
     {
       return null;

@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 using Cysharp.Threading.Tasks;
 using MessagePipe;
 using MToolKit.Runtime.Input;
@@ -164,7 +163,7 @@ namespace MToolKit.Runtime.Settings
 
     private void InitializeModules(InputRebinderService inputRebinderService)
     {
-      log.ForMethod().Debug("Initializing settings modules");
+      log.ForMethod().Verbose("Initializing settings modules");
       AudioSettings = new AudioSettingsModule(this);
       GraphicsSettings = new GraphicsSettingsModule(this);
       GameSettings = new GameSettingsModule(this);
@@ -173,7 +172,7 @@ namespace MToolKit.Runtime.Settings
 
     private void ShutdownModules()
     {
-      log.ForMethod().Debug("Shutting down settings modules");
+      log.ForMethod().Verbose("Shutting down settings modules");
       AudioSettings?.OnShutdown();
       GraphicsSettings?.OnShutdown();
       GameSettings?.OnShutdown();
@@ -182,7 +181,7 @@ namespace MToolKit.Runtime.Settings
 
     private void GoToMainMenu()
     {
-      log.ForMethod().Debug("Going to main menu");
+      log.ForMethod().Verbose("Going to main menu");
 
       // Use GlobalAsyncMessageBroker for BackRequestMessage
       if (GlobalAsyncMessageBroker.IsAvailable())
@@ -243,8 +242,8 @@ namespace MToolKit.Runtime.Settings
           
           // Load values from INI to override defaults
           LoadFromIni();
-          
-          log.ForMethod().Information("INI integration initialized");
+
+          log.ForMethod().Verbose("INI integration initialized");
         }
       }
       catch (Exception ex)
@@ -260,7 +259,7 @@ namespace MToolKit.Runtime.Settings
 
       try
       {
-        log.ForMethod().Debug("Loading settings from INI file");
+        log.ForMethod().Verbose("Loading settings from INI file");
 
         // Graphics settings
         if (GraphicsSettings != null)
@@ -303,7 +302,7 @@ namespace MToolKit.Runtime.Settings
         GameSettings?.Apply();
         SetDirty(false);
 
-        log.ForMethod().Information("Settings loaded from INI file");
+        log.ForMethod().Verbose("Settings loaded from INI file");
       }
       catch (Exception ex)
       {
@@ -321,7 +320,7 @@ namespace MToolKit.Runtime.Settings
 
       try
       {
-        log.ForMethod().Information("Saving settings to INI file");
+        log.ForMethod().Verbose("Saving settings to INI file");
 
         // Graphics settings
         if (GraphicsSettings != null)
@@ -350,7 +349,7 @@ namespace MToolKit.Runtime.Settings
 
         // Save to file
         await iniService.SaveAsync();
-        log.ForMethod().Information("Settings saved to INI file");
+        log.ForMethod().Verbose("Settings saved to INI file");
       }
       catch (Exception ex)
       {

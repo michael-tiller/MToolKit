@@ -45,5 +45,10 @@ namespace MToolKit.Runtime.Core.Config
     [TabGroup("Environment Settings")]
     [field: SerializeField]
     public bool EnablePerformanceProfiling { get; private set; }
+
+    [TabGroup("Mod Settings")]
+    [Tooltip("ID of the master package to load on startup (e.g., 'dirigible_core')")]
+    [field: SerializeField]
+    public string MasterPackageId { get; private set; } = "dirigible_core";
   }
 }

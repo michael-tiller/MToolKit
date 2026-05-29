@@ -1,7 +1,7 @@
 {
   "name": "com.michael-tiller.mtoolkit",
   "displayName": "MToolKit",
-  "version": "0.4.2",
+  "version": "1.0.0",
   "unity": "2021.3",
   "author": "Michael Tiller",
   "description": "Modular runtime framework for production Unity applications built on modern .NET practices."

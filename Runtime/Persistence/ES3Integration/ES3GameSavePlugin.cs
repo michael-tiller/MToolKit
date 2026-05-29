@@ -141,7 +141,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     /// </summary>
     protected override ES3GameSaveSystem CreateService(IObjectResolver resolver)
     {
-      log.ForGameObject(gameObject).ForMethod().Debug("Creating ES3GameSaveSystem with config");
+      log.ForGameObject(gameObject).ForMethod().Verbose("Creating ES3GameSaveSystem with config");
 
       // Resolve IES3Service from the resolver instead of using injected field
       // The injected field is only available after service creation, not during creation

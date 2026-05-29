@@ -36,6 +36,25 @@ namespace MToolKit.Runtime.Navigation
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<NavigationSystem>().ForFeature("Navigation"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 
+    // Cross-scope accessor: VContainer scopes are sibling-isolated, so the IModalService
+    // registration in NavigationInstaller doesn't bubble to the game scope. Game-scope
+    // installers (DirigibleGameInstaller via ServiceRegistration) forward IModalService
+    // through this instance pointer rather than via DI parent-chain. See ADR-0012 and
+    // TECHNICAL_DEBT.md "Cross-scope IModalService plumbing" entry (2026-05-21).
+    public static NavigationSystem Instance { get; private set; }
+
+    private void Awake()
+    {
+      if (Instance != null && Instance != this)
+      {
+        log.ForGameObject(gameObject).ForMethod().Warning(
+          "Duplicate NavigationSystem detected on '{0}'; keeping prior instance on '{1}'",
+          gameObject.name, Instance.gameObject.name);
+        return;
+      }
+      Instance = this;
+    }
+
     /// <summary>
     ///   Navigation service handling view stack operations.
     /// </summary>
@@ -94,7 +113,7 @@ namespace MToolKit.Runtime.Navigation
       if (interstitialAlertView == null)
         log.ForGameObject(gameObject).ForMethod().Error("interstitialAlertView is null in Start()! Check NavigationPlugin prefab configuration.");
       else
-        log.ForGameObject(gameObject).ForMethod().Debug("interstitialAlertView prefab assigned: {0}, Canvas: {1}",
+        log.ForGameObject(gameObject).ForMethod().Verbose("interstitialAlertView prefab assigned: {0}, Canvas: {1}",
           interstitialAlertView.name, interstitialAlertView.Canvas);
 
       InitializeCanvasConfigs();
@@ -415,12 +434,12 @@ namespace MToolKit.Runtime.Navigation
 
       try
       {
-        log.ForGameObject(gameObject).ForMethod().Information("Pushing view: {0} (type: {1}) for canvas type: {2}",
+        log.ForGameObject(gameObject).ForMethod().Verbose("Pushing view: {0} (type: {1}) for canvas type: {2}",
           prefab.name, prefab.GetType().Name, type);
 
         View result = await PushAsync(type, prefab, token);
 
-        log.ForGameObject(gameObject).ForMethod().Debug("PushAsync returned view: {0} (type: {1})",
+        log.ForGameObject(gameObject).ForMethod().Verbose("PushAsync returned view: {0} (type: {1})",
           result?.name ?? "NULL", result?.GetType().Name ?? "NULL");
 
         return result;
@@ -574,7 +593,7 @@ namespace MToolKit.Runtime.Navigation
           return;
         }
 
-        log.ForGameObject(gameObject).ForMethod().Debug("interstitialAlertView prefab: {0}, Canvas: {1}",
+        log.ForGameObject(gameObject).ForMethod().Verbose("interstitialAlertView prefab: {0}, Canvas: {1}",
           interstitialAlertView.name, interstitialAlertView.Canvas);
 
         UniTask.Void(async () =>
@@ -605,7 +624,7 @@ namespace MToolKit.Runtime.Navigation
             }
 
             // Debug: Log the actual type of the returned view
-            log.ForGameObject(gameObject).ForMethod().Debug("ShowViewAsync returned view type: {0}, name: {1}",
+            log.ForGameObject(gameObject).ForMethod().Verbose("ShowViewAsync returned view type: {0}, name: {1}",
               view?.GetType().Name ?? "NULL", view?.name ?? "NULL");
 
             InterstitialAlertView alertView = view as InterstitialAlertView;
@@ -815,6 +834,9 @@ namespace MToolKit.Runtime.Navigation
 
         cts = null;
       }
+
+      if (Instance == this)
+        Instance = null;
     }
 
     public void Cleanup(ECanvasType canvas, View view)
@@ -823,7 +845,9 @@ namespace MToolKit.Runtime.Navigation
     }
 
 
-    // Helper for normal ModalView dialogs.
+    // Helper for normal ModalView dialogs. `postInit` runs after Initialize so callers can apply
+    // subclass-specific setup (e.g., scroll-list population) without polluting the interface with
+    // per-subclass parameters.
     public async UniTask CreateModalView<T>(
       CancellationToken token,
       string modalName,
@@ -837,7 +861,8 @@ namespace MToolKit.Runtime.Navigation
       UnityAction action2 = null,
       EModalButtonType type3 = EModalButtonType.None,
       string text3 = null,
-      UnityAction action3 = null)
+      UnityAction action3 = null,
+      Action<T> postInit = null)
       where T : ModalView
     {
       ECanvasType canvasType = ECanvasType.Overlay;
@@ -880,6 +905,8 @@ namespace MToolKit.Runtime.Navigation
             new ModalButtonConfig(type2, text2, action2),
             new ModalButtonConfig(type3, text3, action3)
             );
+
+          postInit?.Invoke(newModal);
         }
         catch (Exception ex)
         {

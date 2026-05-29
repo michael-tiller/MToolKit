@@ -35,7 +35,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       // Initialize by checking for existing save data
       InitializeFromExistingSave();
 
-      log.ForMethod().Debug("ProfileAwareES3Service created with config: {0}", config.name);
+      log.ForMethod().Verbose("ProfileAwareES3Service created with config: {0}", config.name);
     }
 
     #region IDisposable Members
@@ -171,7 +171,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       {
         ES3Settings es3Settings = GetCurrentES3Settings();
         ES3.Save(key, value, es3Settings);
-        log.ForMethod().Debug("Saved key '{0}' to file: {1}", key, es3Settings.FullPath);
+        log.ForMethod().Verbose("Saved key '{0}' to file: {1}", key, es3Settings.FullPath);
       }
       catch (Exception ex)
       {
@@ -192,10 +192,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         if (ES3.KeyExists(key, es3Settings))
         {
           T value = ES3.Load<T>(key, es3Settings);
-          log.ForMethod().Debug("Loaded key '{0}' from file: {1}", key, es3Settings.FullPath);
+          log.ForMethod().Verbose("Loaded key '{0}' from file: {1}", key, es3Settings.FullPath);
           return UniTask.FromResult(value);
         }
-        log.ForMethod().Debug("Key '{0}' not found in file: {1}, returning default value", key, es3Settings.FullPath);
+        log.ForMethod().Verbose("Key '{0}' not found in file: {1}, returning default value", key, es3Settings.FullPath);
         return UniTask.FromResult(defaultValue);
       }
       catch (Exception ex)
@@ -358,7 +358,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         string backupPattern = $"{fileName}*{extension}.backup";
         string[] backupFiles = Directory.GetFiles(directory, backupPattern);
 
-        log.ForMethod().Debug("Found {0} backup files for: {1}", backupFiles.Length, es3Settings.FullPath);
+        log.ForMethod().Verbose("Found {0} backup files for: {1}", backupFiles.Length, es3Settings.FullPath);
         return backupFiles;
       }
       catch (Exception ex)
@@ -380,12 +380,12 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       {
         // Use profile-specific file path
         string profileFilePath = ProfileManager.GetProfileFilePath(currentProfile);
-        log.ForMethod().Debug("Using profile-specific save file: {0}", profileFilePath);
+        log.ForMethod().Verbose("Using profile-specific save file: {0}", profileFilePath);
         return profileFilePath;
       }
       // Fall back to default save file
       string defaultFilePath = config.GetSaveFilePath();
-      log.ForMethod().Debug("No active profile, using default save file: {0}", defaultFilePath);
+      log.ForMethod().Verbose("No active profile, using default save file: {0}", defaultFilePath);
       return defaultFilePath;
     }
 
@@ -408,7 +408,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     /// </summary>
     private void OnCurrentProfileChanged(string newProfile)
     {
-      log.ForMethod().Debug("Profile changed to: {0}, updating save file path", string.IsNullOrWhiteSpace(newProfile) ? "null" : newProfile);
+      log.ForMethod().Verbose("Profile changed to: {0}, updating save file path", string.IsNullOrWhiteSpace(newProfile) ? "null" : newProfile);
 
       // Re-initialize from the new save file
       InitializeFromExistingSave();

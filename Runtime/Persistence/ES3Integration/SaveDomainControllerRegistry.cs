@@ -27,6 +27,15 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
     }
 
+    public virtual bool UnregisterController(ISaveDomainController controller)
+    {
+      if (controller == null) return false;
+      bool removed = controllers.Remove(controller);
+      if (removed)
+        log.ForMethod().Information("Unregistered controller for domain {0}", controller.Domain);
+      return removed;
+    }
+
     public IEnumerable<ISaveDomainController> GetControllers()
     {
       return controllers.AsReadOnly();

@@ -1,4 +1,6 @@
 using System;
+using System.Threading;
+using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Core.Interfaces;
 using VContainer;
 
@@ -11,7 +13,7 @@ namespace MToolKit.Runtime.Core.Abstractions
   /// </summary>
   public abstract class AbstractRuntimePlugin : AbstractGamePlugin, IRuntimeSystem, IRuntimePlugin
   {
-    private bool isRuntimeInitialized;
+    protected bool isRuntimeInitialized;
 
     /// <summary>
     ///   Phase 2: Setup subscriptions and early initialization.
@@ -31,6 +33,18 @@ namespace MToolKit.Runtime.Core.Abstractions
         return;
 
       isRuntimeInitialized = true;
+    }
+
+    /// <summary>
+    ///   Async Phase 3 hook awaited by <see cref="PluginRegistry.PerformPluginRuntimeInitializationAsync"/>.
+    ///   Default delegates to the sync version. Override when a plugin's runtime work is
+    ///   async and the bootstrapper must wait for completion (e.g. to load content before
+    ///   the first scene transition).
+    /// </summary>
+    public virtual UniTask PerformRuntimeInitializationAsync(IObjectResolver resolver, CancellationToken ct = default)
+    {
+      PerformRuntimeInitialization(resolver);
+      return UniTask.CompletedTask;
     }
 
     /// <summary>

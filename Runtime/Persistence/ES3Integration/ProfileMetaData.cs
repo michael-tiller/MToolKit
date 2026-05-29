@@ -25,6 +25,9 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     [field: SerializeField]
     public int SaveCounter { get; private set; }
 
+    [field: SerializeField]
+    public int WorldSeed { get; set; }
+
     public ProfileMetaData()
     {
       ProfileName = "Player_" + Guid.NewGuid().ToString("N")[..8];
@@ -32,16 +35,18 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       CreatedTimeString = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
       SaveFormatVersion = "1.0.0";
       SaveCounter = 0;
+      WorldSeed = 0;
     }
 
     // Parameterized constructor for easier initialization
-    public ProfileMetaData(string profileName = "Player", string lastSaveTime = "Never", string saveFormatVersion = "1.0.0", int saveCounter = 0, DateTime createdTime = default)
+    public ProfileMetaData(string profileName = "Player", string lastSaveTime = "Never", string saveFormatVersion = "1.0.0", int saveCounter = 0, DateTime createdTime = default, int worldSeed = 0)
     {
       ProfileName = profileName;
       LastSaveTime = lastSaveTime;
       SaveFormatVersion = saveFormatVersion;
       SaveCounter = saveCounter;
       CreatedTimeString = createdTime != default ? createdTime.ToString("yyyy-MM-dd HH:mm:ss") : DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+      WorldSeed = worldSeed;
     }
 
     // Computed properties for DateTime access

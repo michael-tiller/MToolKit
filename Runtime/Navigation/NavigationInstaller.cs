@@ -35,13 +35,17 @@ namespace MToolKit.Runtime.Navigation
     public void Install(IContainerBuilder builder)
     {
       log.ForGameObject(gameObject).ForMethod().Verbose("Installing Navigation");
-      base.Configure(builder); // Call the protected Configure from inside
+      // Invoke this class's override (not LifetimeScope's empty stub) so INavigationService
+      // and IModalService land in the parent scope's builder. The prior `base.Configure(builder)`
+      // call resolved to the no-op base method and silently dropped both registrations — root
+      // cause of the SaveTruncationDialogPresenter never wiring in the game scope.
+      Configure(builder);
     }
 
     protected override void Configure(IContainerBuilder builder)
     {
-      // Register MessagePipe for scene-specific messages (if needed for other message types)
-      builder.RegisterMessagePipe();
+      // MessagePipeOptions may already be registered by parent scope (GlobalInstaller)
+      // Skip re-registration to avoid Singleton conflict
 
       // Register services
       builder.Register<INavigationService, NavigationService>(Lifetime.Singleton);

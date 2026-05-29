@@ -199,6 +199,10 @@ The full Unity project and builds are private but can be shared with hiring team
 ./package.json                     # Unity package manifest
 ```
 
+## Part of Captain SDLC
+
+MToolKit is the **runtime blade** of [Captain SDLC](https://github.com/LlamaBrain/captain-sdlc), an AI-driven SDLC tooling pipeline — the canonical Unity foundation the process blades detect and lean on when present, and degrade gracefully without (ADR-0010). The process blades: [claude-interrogate](https://github.com/michael-tiller/claude-interrogate-src) (design), [ai-test-harness](https://github.com/LlamaBrain/ai-test-harness) (QA), and [claude-release](https://github.com/LlamaBrain/claude-release) (release).
+
 ## License
 
 MToolKit is released under the MIT License and maintained by Michael Tiller (@michael-tiller).

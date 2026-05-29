@@ -142,7 +142,7 @@ namespace MToolKit.Runtime.Bootstrapper
           {
             anyKeyAction.performed += OnAnyKeyPressed;
             inputActionAsset.Enable();
-            log.ForMethod().Debug("Input System initialized successfully");
+            log.ForMethod().Verbose("Input System initialized successfully");
           }
           else
           {
@@ -373,7 +373,7 @@ namespace MToolKit.Runtime.Bootstrapper
     {
       try
       {
-        log.ForMethod().Information("Loading game assets using IGameLoader");
+        log.ForMethod().Verbose("Loading game assets using IGameLoader");
 
         // Get GlobalInstaller instance and its container
         GlobalInstaller globalInstaller = GlobalInstaller.Instance;
@@ -385,13 +385,12 @@ namespace MToolKit.Runtime.Bootstrapper
 
         // Resolve IGameLoader from the container
         IGameLoader gameLoader = globalInstaller.Container.Resolve<IGameLoader>();
-        log.ForMethod().Information("Resolved IGameLoader: {Type}", gameLoader.GetType().Name);
+        log.ForMethod().Verbose("Resolved IGameLoader: {Type}, calling LoadGameAsync with timeout: {Timeout}s", gameLoader.GetType().Name, timeout);
 
         // Load game assets with timeout
-        log.ForMethod().Information("Calling LoadGameAsync with timeout: {Timeout}s", timeout);
         await gameLoader.LoadGameAsync().Timeout(TimeSpan.FromSeconds(timeout));
 
-        log.ForMethod().Information("Game assets loaded successfully");
+        log.ForMethod().Verbose("Game assets loaded successfully");
       }
       catch (TimeoutException ex)
       {
@@ -416,7 +415,7 @@ namespace MToolKit.Runtime.Bootstrapper
       }
       catch (Exception ex)
       {
-        log.ForMethod().Fatal(ex, "Failed to get localized text, using fallback: {0}", fallback);
+        log.ForMethod().Warning(ex, "Failed to get localized text, using fallback: {0}", fallback);
         return fallback;
       }
     }

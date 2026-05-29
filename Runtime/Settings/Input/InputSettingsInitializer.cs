@@ -57,7 +57,7 @@ namespace MToolKit.Runtime.Settings.Input
 
       // Log control schemes for debugging
       List<string> controlSchemes = CompositeBindingHelper.GetControlSchemeNames(inputActionAsset);
-      log.ForGameObject(gameObject).ForMethod().Information("Available control schemes: {ControlSchemes}", string.Join(", ", controlSchemes));
+      log.ForGameObject(gameObject).ForMethod().Verbose("Available control schemes: {ControlSchemes}", string.Join(", ", controlSchemes));
 
       // Register all actions from the input action asset
       foreach (InputActionMap actionMap in inputActionAsset.actionMaps)
@@ -65,7 +65,7 @@ namespace MToolKit.Runtime.Settings.Input
         {
           if (action.name == "Look") continue;
           inputRebinderService.RegisterAction(action);
-          log.ForGameObject(gameObject).ForMethod().Debug("Registered action {ActionName} from {ActionMap}", action.name, actionMap.name);
+          log.ForGameObject(gameObject).ForMethod().Verbose("Registered action {ActionName} from {ActionMap}", action.name, actionMap.name);
         }
 
       // Clear existing elements
@@ -94,7 +94,7 @@ namespace MToolKit.Runtime.Settings.Input
             bindingComponentElements.Add(element);
 
             element.Initialize(component, inputRebinderService);
-            log.ForGameObject(gameObject).ForMethod().Debug("Created binding component element for {ActionName}.{ComponentName}",
+            log.ForGameObject(gameObject).ForMethod().Verbose("Created binding component element for {ActionName}.{ComponentName}",
               action.name, component.DisplayName);
           }
         }

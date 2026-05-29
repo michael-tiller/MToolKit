@@ -5,8 +5,8 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 using MessagePipe;
 using MToolKit.Runtime.MessageBus;
-using MToolKit.Runtime.VisualGraphs.Export;
 using MToolKit.Runtime.VisualGraphs.Config;
+using MToolKit.Runtime.VisualGraphs.Export;
 using MToolKit.Runtime.VisualGraphs.Quest.Definitions;
 using MToolKit.Runtime.VisualGraphs.Quest.Graphs;
 using MToolKit.Runtime.VisualGraphs.Quest.Messages;
@@ -114,7 +114,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       // Skip if already subscribed
       if (subscriptions.Count > 0)
       {
-        log.ForMethod().Information("Quest: Already subscribed to QuestObjectiveProgressMessage");
+        log.ForMethod().Verbose("Quest: Already subscribed to QuestObjectiveProgressMessage");
         return;
       }
 
@@ -123,7 +123,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       if (completedSubscriber != null)
       {
         subscriptions.Add(completedSubscriber.Subscribe(OnQuestCompleted));
-        log.ForMethod().Information("Quest: Successfully subscribed to QuestCompletedMessage (subscriber type: {SubscriberType})",
+        log.ForMethod().Verbose("Quest: Successfully subscribed to QuestCompletedMessage (subscriber type: {SubscriberType})",
           completedSubscriber.GetType().FullName);
       }
       else
@@ -136,7 +136,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       if (progressSubscriber != null)
       {
         subscriptions.Add(progressSubscriber.Subscribe(OnQuestObjectiveProgress));
-        log.ForMethod().Information("Quest: Successfully subscribed to QuestObjectiveProgressMessage (subscriber type: {SubscriberType})",
+        log.ForMethod().Verbose("Quest: Successfully subscribed to QuestObjectiveProgressMessage (subscriber type: {SubscriberType})",
           progressSubscriber.GetType().FullName);
       }
       else
@@ -148,7 +148,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       if (abandonedSubscriber != null)
       {
         subscriptions.Add(abandonedSubscriber.Subscribe(OnQuestAbandoned));
-        log.ForMethod().Information("Quest: Successfully subscribed to QuestAbandonedMessage (subscriber type: {SubscriberType})",
+        log.ForMethod().Verbose("Quest: Successfully subscribed to QuestAbandonedMessage (subscriber type: {SubscriberType})",
           abandonedSubscriber.GetType().FullName);
       }
       else
@@ -160,7 +160,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       if (claimedSubscriber != null)
       {
         subscriptions.Add(claimedSubscriber.Subscribe(OnQuestClaimed));
-        log.ForMethod().Information("Quest: Successfully subscribed to QuestClaimedMessage (subscriber type: {SubscriberType})",
+        log.ForMethod().Verbose("Quest: Successfully subscribed to QuestClaimedMessage (subscriber type: {SubscriberType})",
           claimedSubscriber.GetType().FullName);
       }
       else
@@ -171,7 +171,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       if (startedSubscriber != null)
       {
         subscriptions.Add(startedSubscriber.Subscribe(OnQuestStarted));
-        log.ForMethod().Information("Quest: Successfully subscribed to QuestStartedMessage (subscriber type: {SubscriberType})",
+        log.ForMethod().Verbose("Quest: Successfully subscribed to QuestStartedMessage (subscriber type: {SubscriberType})",
           startedSubscriber.GetType().FullName);
       }
       else
@@ -184,7 +184,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       if (startQuestRequestSubscriber != null)
       {
         subscriptions.Add(startQuestRequestSubscriber.Subscribe(OnStartQuestRequest));
-        log.ForMethod().Information("Quest: Successfully subscribed to StartQuestRequestMessage");
+        log.ForMethod().Verbose("Quest: Successfully subscribed to StartQuestRequestMessage");
       }
       else
       {
@@ -195,7 +195,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       if (startCampaignRequestSubscriber != null)
       {
         subscriptions.Add(startCampaignRequestSubscriber.Subscribe(OnStartCampaignRequest));
-        log.ForMethod().Information("Quest: Successfully subscribed to StartCampaignRequestMessage");
+        log.ForMethod().Verbose("Quest: Successfully subscribed to StartCampaignRequestMessage");
       }
       else
       {
@@ -206,7 +206,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       if (claimQuestRequestSubscriber != null)
       {
         subscriptions.Add(claimQuestRequestSubscriber.Subscribe(OnClaimQuestRequest));
-        log.ForMethod().Information("Quest: Successfully subscribed to ClaimQuestRequestMessage");
+        log.ForMethod().Verbose("Quest: Successfully subscribed to ClaimQuestRequestMessage");
       }
       else
       {
@@ -218,12 +218,14 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       if (campaignCompletedSubscriber != null)
       {
         subscriptions.Add(campaignCompletedSubscriber.Subscribe(OnCampaignCompleted));
-        log.ForMethod().Information("Quest: Successfully subscribed to CampaignCompletedMessage");
+        log.ForMethod().Verbose("Quest: Successfully subscribed to CampaignCompletedMessage");
       }
       else
       {
         log.ForMethod().Warning("Quest: GameMessageBroker.GetSubscriber returned null for CampaignCompletedMessage - broker may not be initialized yet");
       }
+
+      log.ForMethod().Information("Quest: Subscribed to {Count} message type(s)", subscriptions.Count);
     }
 
     // ==================== LIFECYCLE ====================

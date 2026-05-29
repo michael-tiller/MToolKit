@@ -5,3 +5,6 @@
 .env.dev
 .env.prod
 .env.stage
+CON
+CON.meta
+/.claude

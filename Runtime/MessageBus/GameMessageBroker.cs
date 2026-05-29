@@ -52,84 +52,105 @@ namespace MToolKit.Runtime.MessageBus
     }
 
     /// <summary>
-    ///   Get a publisher for the specified message type
+    ///   Get a publisher for the specified message type.
+    ///   Returns null if the broker is not initialized (shutdown/pre-init grace).
+    ///   Throws <see cref="InvalidOperationException"/> if the type is not registered with the VContainer scope —
+    ///   missing registrations are a developer error and silent no-ops cause recurring debugging sessions.
     /// </summary>
     public static IPublisher<T> GetPublisher<T>()
     {
       if (!isInitialized || gameResolver == null)
       {
-        log.ForMethod().Error("GameMessageBroker not initialized or game resolver is null");
+        log.ForMethod().Verbose("GameMessageBroker not initialized; returning null publisher for {0}", typeof(T).Name);
         return null;
       }
 
       try
       {
         IPublisher<T> publisher = gameResolver.Resolve<IPublisher<T>>();
+        if (publisher == null)
+          throw BuildUnregisteredException<T>("IPublisher", null);
 #if UNITY_EDITOR
         accessedPublishers.TryAdd(typeof(T), true);
 #endif
         return publisher;
       }
+      catch (InvalidOperationException)
+      {
+        throw;
+      }
       catch (Exception ex)
       {
-        log.ForMethod().Error(ex, "Failed to resolve publisher for {0}", typeof(T).Name);
-        return null;
+        throw BuildUnregisteredException<T>("IPublisher", ex);
       }
     }
 
     /// <summary>
-    ///   Get a subscriber for the specified message type
+    ///   Get a subscriber for the specified message type.
+    ///   Returns null if the broker is not initialized (shutdown/pre-init grace).
+    ///   Throws <see cref="InvalidOperationException"/> if the type is not registered with the VContainer scope —
+    ///   missing registrations are a developer error and silent no-ops cause recurring debugging sessions.
     /// </summary>
     public static ISubscriber<T> GetSubscriber<T>()
     {
       if (!isInitialized || gameResolver == null)
       {
-        log.ForMethod().Error("GameMessageBroker not initialized");
+        log.ForMethod().Verbose("GameMessageBroker not initialized; returning null subscriber for {0}", typeof(T).Name);
         return null;
       }
 
       try
       {
         ISubscriber<T> subscriber = gameResolver.Resolve<ISubscriber<T>>();
+        if (subscriber == null)
+          throw BuildUnregisteredException<T>("ISubscriber", null);
 #if UNITY_EDITOR
         accessedSubscribers.TryAdd(typeof(T), true);
 #endif
         log.ForMethod().Verbose("Resolved subscriber for {0}", typeof(T).Name);
         return subscriber;
       }
+      catch (InvalidOperationException)
+      {
+        throw;
+      }
       catch (Exception ex)
       {
-        log.ForMethod().Error(ex, "Failed to resolve subscriber for {0}", typeof(T).Name);
-        return null;
+        throw BuildUnregisteredException<T>("ISubscriber", ex);
       }
     }
 
+    private static InvalidOperationException BuildUnregisteredException<T>(string role, Exception inner)
+    {
+      string typeName = typeof(T).Name;
+      string message =
+        $"[GameMessageBroker] No {role}<{typeName}> is registered in the VContainer scope. " +
+        $"Add `builder.RegisterMessageBroker<{typeName}>(options);` to DirigibleGameInstaller.RegisterMessagePipe " +
+        $"(or the relevant plugin installer). Pub/sub on unregistered types is a silent no-op without this check.";
+      log.ForMethod().Fatal(inner, message);
+      return new InvalidOperationException(message, inner);
+    }
+
     /// <summary>
-    ///   Publish a message using the game broker
+    ///   Publish a message using the game broker.
+    ///   No-ops silently if the broker is not initialized (shutdown/pre-init grace).
+    ///   Throws <see cref="InvalidOperationException"/> if T is not registered with the VContainer scope.
     /// </summary>
     public static void Publish<T>(T message)
     {
-      // Check if broker is available before attempting to publish
-      // This prevents error logs during shutdown or before initialization
+      // Check if broker is available before attempting to publish.
+      // This prevents error logs during shutdown or before initialization.
       if (!IsAvailable())
       {
         log.ForMethod().Verbose("Skipping publish of {0} - broker not available (likely during shutdown or before initialization)", typeof(T).Name);
         return;
       }
 
+      // GetPublisher throws InvalidOperationException for unregistered types — let it propagate so the
+      // call site is the consistent failure point rather than a silent no-op.
       IPublisher<T> publisher = GetPublisher<T>();
-      if (publisher != null)
-        try
-        {
-          publisher.Publish(message);
-          log.ForMethod().Verbose("Published {0} via game broker", typeof(T).Name);
-        }
-        catch (Exception ex)
-        {
-          log.ForMethod().Fatal(ex, "Failed to publish {0} - publisher threw exception: {Exception}", typeof(T).Name, ex.Message);
-        }
-      else
-        log.ForMethod().Warning("Failed to publish {0} - publisher not available", typeof(T).Name);
+      publisher.Publish(message);
+      log.ForMethod().Verbose("Published {0} via game broker", typeof(T).Name);
     }
 
     /// <summary>

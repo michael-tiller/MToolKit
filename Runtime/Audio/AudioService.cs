@@ -53,7 +53,7 @@ namespace MToolKit.Runtime.Audio
       this.settingsSystem = settingsSystem;
       this.assetService = assetService;
 
-      log.ForMethod(nameof(AudioService)).Debug("AudioService constructor called with asset service: {Type}", assetService?.GetType().Name ?? "NULL");
+      log.ForMethod(nameof(AudioService)).Verbose("AudioService constructor called with asset service: {Type}", assetService?.GetType().Name ?? "NULL");
     }
 
     #region IAudioService Members
@@ -176,7 +176,7 @@ namespace MToolKit.Runtime.Audio
         return;
       }
 
-      log.ForMethod().Information("Initializing AudioService with settings integration");
+      log.ForMethod().Verbose("Initializing AudioService with settings integration");
 
       // Load the AudioSource prefab from Addressables if not already loaded
       await LoadAudioSourcePrefabAsync(ct);
@@ -187,7 +187,7 @@ namespace MToolKit.Runtime.Audio
       // Subscribe to volume changes
       if (settingsSystem?.AudioSettings != null)
       {
-        log.ForMethod().Debug("AudioSettings available, subscribing to volume changes");
+        log.ForMethod().Verbose("AudioSettings available, subscribing to volume changes");
         SubscribeToVolumeChanges();
       }
       else
@@ -196,7 +196,7 @@ namespace MToolKit.Runtime.Audio
       }
 
       isInitialized = true;
-      log.ForMethod().Information("AudioService initialized successfully");
+      log.ForMethod().Verbose("AudioService initialized successfully");
     }
 
     private async UniTask LoadAudioSourcePrefabAsync(CancellationToken ct = default)
@@ -213,7 +213,7 @@ namespace MToolKit.Runtime.Audio
       {
         try
         {
-          log.ForMethod().Information("Loading AudioSource prefab from Addressable AssetReference");
+          log.ForMethod().Verbose("Loading AudioSource prefab from Addressable AssetReference");
 
           string assetKey = config.AudioSourcePrefabReference.RuntimeKey.ToString();
           bool isAlreadyLoading = false;
@@ -225,14 +225,14 @@ namespace MToolKit.Runtime.Audio
             // Check if already loaded
             if (isPrefabLoaded && cachedAudioSourcePrefab != null)
             {
-              log.ForMethod().Information("Already loaded by this instance");
+              log.ForMethod().Warning("Already loaded by this instance");
               return;
             }
 
             // Check if asset is already loaded in Addressables
             if (config.AudioSourcePrefabReference.Asset != null)
             {
-              log.ForMethod().Information("AssetReference already loaded, using cached asset");
+              log.ForMethod().Verbose("AssetReference already loaded, using cached asset");
               GameObject loadedPrefab = config.AudioSourcePrefabReference.Asset as GameObject;
               if (loadedPrefab != null)
               {
@@ -253,7 +253,7 @@ namespace MToolKit.Runtime.Audio
           if (hasExistingHandle || isAlreadyLoading)
           {
             // Another thread is loading - wait for it to complete
-            log.ForMethod().Information("AssetReference is already being loaded by another thread, waiting for it");
+            log.ForMethod().Verbose("AssetReference is already being loaded by another thread, waiting for it");
 
             // Wait for the asset to be loaded by polling
             int maxAttempts = 20;
@@ -276,7 +276,7 @@ namespace MToolKit.Runtime.Audio
             {
               // Double-check - maybe another thread started loading
               if (activeLoads.Contains(assetKey))
-                log.ForMethod().Information("Another thread started loading, waiting");
+                log.ForMethod().Debug("Another thread started loading, waiting");
               // Will fall through to polling
               else
                 activeLoads.Add(assetKey);
@@ -300,7 +300,7 @@ namespace MToolKit.Runtime.Audio
               else
               {
                 // Another thread is loading, wait for it
-                log.ForMethod().Information("Waiting for another thread to finish loading");
+                log.ForMethod().Verbose("Waiting for another thread to finish loading");
                 int maxAttempts = 20;
                 int attempt = 0;
                 while (config.AudioSourcePrefabReference.Asset == null && attempt < maxAttempts)
@@ -319,7 +319,7 @@ namespace MToolKit.Runtime.Audio
               if (loadEx.Message.Contains("already been loaded") ||
                   loadEx.Message.Contains("Already loaded"))
               {
-                log.ForMethod().Information("AssetReference was already loaded by another thread, waiting for it");
+                log.ForMethod().Verbose("AssetReference was already loaded by another thread, waiting for it");
 
                 // Wait for the asset to be loaded by polling
                 int maxAttempts = 20;
@@ -356,7 +356,7 @@ namespace MToolKit.Runtime.Audio
               if (!isPrefabLoaded)
               {
                 cachedAudioSourcePrefab = prefab.GetComponent<AudioSource>();
-                log.ForMethod().Debug("Successfully loaded AudioSource prefab from Addressables");
+                log.ForMethod().Verbose("Successfully loaded AudioSource prefab from Addressables");
                 isPrefabLoaded = true;
               }
             }
@@ -377,7 +377,7 @@ namespace MToolKit.Runtime.Audio
       else
       {
         // No AssetReference configured, use direct prefab
-        log.ForMethod().Information("No AssetReference configured, using direct prefab");
+        log.ForMethod().Verbose("No AssetReference configured, using direct prefab");
         lock (assetLoadLock)
         {
           if (!isPrefabLoaded)
@@ -406,7 +406,7 @@ namespace MToolKit.Runtime.Audio
         return;
       }
 
-      log.ForMethod().Debug("Initializing AudioSource pool");
+      log.ForMethod().Verbose("Initializing AudioSource pool");
       audioSourcePool = new ObjectPool<AudioSource>(
         CreateAudioSource,
         source =>
@@ -424,7 +424,7 @@ namespace MToolKit.Runtime.Audio
         defaultCapacity: config.InitialPoolSize,
         maxSize: config.MaxPoolSize
         );
-      log.ForMethod().Debug("AudioSource pool initialized with capacity: {Capacity}, maxSize: {MaxSize}", config.InitialPoolSize, config.MaxPoolSize);
+      log.ForMethod().Verbose("AudioSource pool initialized with capacity: {Capacity}, maxSize: {MaxSize}", config.InitialPoolSize, config.MaxPoolSize);
     }
 
     private AudioSource CreateAudioSource()
@@ -470,7 +470,7 @@ namespace MToolKit.Runtime.Audio
         return;
       }
 
-      log.ForMethod().Debug("Subscribing to volume changes - MasterMixerGroup: {MixerGroup}", config.MasterMixerGroup?.name ?? "NULL");
+      log.ForMethod().Verbose("Subscribing to volume changes - MasterMixerGroup: {MixerGroup}", config.MasterMixerGroup?.name ?? "NULL");
 
       // Subscribe to volume changes and apply them to mixer groups
       subscriptions.Add(settingsSystem.AudioSettings.MasterVolume.Property.Subscribe(volume =>
@@ -486,7 +486,7 @@ namespace MToolKit.Runtime.Audio
         SetMixerVolume("InterfaceVolume", volume)));
 
       // Apply initial volume values to mixer
-      log.ForMethod().Debug("Applying initial volume values...");
+      log.ForMethod().Verbose("Applying initial volume values...");
       SetMixerVolume("MasterVolume", settingsSystem.AudioSettings.MasterVolume.Value);
       SetMixerVolume("MusicVolume", settingsSystem.AudioSettings.MusicVolume.Value);
       SetMixerVolume("GameVolume", settingsSystem.AudioSettings.GameVolume.Value);
@@ -503,7 +503,7 @@ namespace MToolKit.Runtime.Audio
       {
         bool success = config.MasterMixerGroup.audioMixer.SetFloat(parameterName, dbVolume);
         if (success)
-          log.ForMethod().Debug("Set mixer parameter {ParameterName} to {Volume} ({DBVolume} dB)", parameterName, volume, dbVolume);
+          log.ForMethod().Verbose("Set mixer parameter {ParameterName} to {Volume} ({DBVolume} dB)", parameterName, volume, dbVolume);
         else
           log.ForMethod().Warning("Failed to set mixer parameter: {ParameterName}", parameterName);
       }

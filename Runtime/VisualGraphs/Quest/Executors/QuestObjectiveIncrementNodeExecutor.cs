@@ -97,14 +97,14 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       }
       else
       {
-        // Initialize with unknown required value (will be set by quest definition)
         progress = new QuestObjectiveProgress
         {
           ObjectiveGuid = objectiveGuid,
           Current = 0,
-          Required = 1 // Default, should be overridden by quest definition
+          Required = objectiveDef.RequiredProgress
         };
-        log.ForMethod().Debug("Quest: Initialized new progress for objective {ObjectiveGuid}", objectiveGuid);
+        log.ForMethod().Debug("Quest: Initialized new progress for objective {ObjectiveGuid} (required: {Required})",
+          objectiveGuid, progress.Required);
       }
 
       // Increment progress

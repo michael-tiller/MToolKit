@@ -1,23 +1,29 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using MessagePipe;
 using MToolKit.Runtime.Core.Abstractions;
 using MToolKit.Runtime.MessageBus;
 using MToolKit.Runtime.MessageBus.Interfaces;
+using MToolKit.Runtime.Persistence;
+using MToolKit.Runtime.Persistence.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Bootstrap;
 using MToolKit.Runtime.VisualGraphs.Config;
+using MToolKit.Runtime.VisualGraphs.Dialogue.Executors;
+using MToolKit.Runtime.VisualGraphs.Event.Definitions;
 using MToolKit.Runtime.VisualGraphs.Executors;
+using MToolKit.Runtime.VisualGraphs.Persistence;
+using MToolKit.Runtime.VisualGraphs.Quest;
+using MToolKit.Runtime.VisualGraphs.Quest.Definitions;
 using MToolKit.Runtime.VisualGraphs.Quest.Executors;
+using MToolKit.Runtime.VisualGraphs.Quest.Messages;
 using MToolKit.Runtime.VisualGraphs.Runtime;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime.Loading;
-using MToolKit.Runtime.VisualGraphs.Dialogue.Executors;
-using MToolKit.Runtime.VisualGraphs.Quest.Definitions;
-using MToolKit.Runtime.Persistence;
-using MToolKit.Runtime.Persistence.ES3Integration;
-using System.Linq;
 using Serilog;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -25,8 +31,6 @@ using UnityEngine.AddressableAssets;
 using VContainer;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
-using MToolKit.Runtime.VisualGraphs.Quest;
-using MToolKit.Runtime.Persistence.Interfaces;
 
 namespace MToolKit.Runtime.VisualGraphs
 {
@@ -51,6 +55,8 @@ namespace MToolKit.Runtime.VisualGraphs
     private GraphEventRouter graphEventRouter;
     private IQuestManager questManager;
     private IDisposable questStartedSubscription;
+    private SaveSystemCoordinator registeredCoordinator;
+    private GraphStateSaveController registeredSaveController;
 
     [ShowInInspector]
     [ReadOnly]
@@ -71,7 +77,7 @@ namespace MToolKit.Runtime.VisualGraphs
     /// </summary>
     public override void Register(IContainerBuilder builder)
     {
-      log.ForGameObject(gameObject).Debug("Registering VisualGraphPlugin services");
+      log.ForGameObject(gameObject).Verbose("Registering VisualGraphPlugin services");
 
       // Register configuration
       if (config != null)
@@ -102,8 +108,8 @@ namespace MToolKit.Runtime.VisualGraphs
       builder.Register<IGraphLoader, GraphLoader>(Lifetime.Singleton);
 
       // Quest Manager (must be registered before VisualGraphEventEmitter which depends on it)
-      builder.Register<MToolKit.Runtime.VisualGraphs.Quest.QuestManager>(Lifetime.Singleton)
-        .As<MToolKit.Runtime.VisualGraphs.Quest.IQuestManager>();
+      builder.Register<QuestManager>(Lifetime.Singleton)
+        .As<IQuestManager>();
 
       // Event emitter adapter (registered first, QuestManager will be injected later)
       builder.Register<IEventEmitter, VisualGraphEventEmitter>(Lifetime.Singleton);
@@ -113,18 +119,18 @@ namespace MToolKit.Runtime.VisualGraphs
       // Registry is already registered above, so we can inject it directly
       if (config != null && config.DefaultRegistry != null)
       {
-        builder.Register<Persistence.GraphStateSaveController>(Lifetime.Singleton)
+        builder.Register<GraphStateSaveController>(Lifetime.Singleton)
           .WithParameter("registry", config.DefaultRegistry);
       }
       else
       {
-        builder.Register<Persistence.GraphStateSaveController>(Lifetime.Singleton);
+        builder.Register<GraphStateSaveController>(Lifetime.Singleton);
       }
 
       // Register EventBusBridge - try serialized field first, then find on GameObject
       if (eventBusBridge == null)
       {
-        eventBusBridge = gameObject.GetComponent<Bootstrap.EventBusBridge>();
+        eventBusBridge = gameObject.GetComponent<EventBusBridge>();
         if (eventBusBridge == null)
         {
           log.ForGameObject(gameObject).Warning("EventBusBridge not found on GameObject - graphs may not receive MessagePipe events");
@@ -134,7 +140,7 @@ namespace MToolKit.Runtime.VisualGraphs
       if (eventBusBridge != null)
       {
         builder.RegisterInstance(eventBusBridge);
-        log.ForGameObject(gameObject).Debug("EventBusBridge registered in DI container");
+        log.ForGameObject(gameObject).Verbose("EventBusBridge registered in DI container");
       }
 
       // Node executors - register all IGraphNodeExecutor implementations
@@ -198,12 +204,12 @@ namespace MToolKit.Runtime.VisualGraphs
       // Register the plugin instance
       builder.RegisterInstance(this).AsSelf();
 
-      log.ForGameObject(gameObject).Debug("VisualGraphPlugin registration completed");
+      log.ForGameObject(gameObject).Verbose("VisualGraphPlugin registration completed");
     }
 
     protected override GraphEventRouter CreateService(IObjectResolver resolver)
     {
-      log.ForGameObject(gameObject).Debug("Creating GraphEventRouter service");
+      log.ForGameObject(gameObject).Verbose("Creating GraphEventRouter service");
       return new GraphEventRouter();
     }
 
@@ -225,7 +231,7 @@ namespace MToolKit.Runtime.VisualGraphs
           config.EnableVerboseLogging, config.LoadAllOnStartup);
       }
 
-      log.ForGameObject(gameObject).Debug("Visual Graphs setup phase completed");
+      log.ForGameObject(gameObject).Verbose("Visual Graphs setup phase completed");
     }
 
     public override bool AreDependenciesReady(IObjectResolver resolver)
@@ -252,8 +258,8 @@ namespace MToolKit.Runtime.VisualGraphs
       {
         // Resolve dependencies
         graphLoader = resolver.Resolve<IGraphLoader>();
-        graphEventRouter = resolver.Resolve<IGraphEventRouter>() as Runtime.GraphEventRouter;
-        questManager = resolver.Resolve<Quest.IQuestManager>();
+        graphEventRouter = resolver.Resolve<IGraphEventRouter>() as GraphEventRouter;
+        questManager = resolver.Resolve<IQuestManager>();
 
         // Inject QuestManager into VisualGraphEventEmitter (break circular dependency)
         var eventEmitter = resolver.Resolve<IEventEmitter>() as VisualGraphEventEmitter;
@@ -266,11 +272,11 @@ namespace MToolKit.Runtime.VisualGraphs
         if (!resolver.TryResolve(out eventBusBridge))
         {
           // Try to find it on the GameObject as fallback
-          eventBusBridge = gameObject.GetComponent<Bootstrap.EventBusBridge>();
+          eventBusBridge = gameObject.GetComponent<EventBusBridge>();
           if (eventBusBridge == null)
           {
             log.ForGameObject(gameObject).Warning("EventBusBridge not found in DI or on GameObject - auto-creating");
-            eventBusBridge = gameObject.AddComponent<Bootstrap.EventBusBridge>();
+            eventBusBridge = gameObject.AddComponent<EventBusBridge>();
           }
         }
 
@@ -284,12 +290,12 @@ namespace MToolKit.Runtime.VisualGraphs
         // This ensures objective graph subscriptions are registered even for manually started quests
         try
         {
-          var questStartedSubscriber = GameMessageBroker.GetSubscriber<Quest.Messages.QuestStartedMessage>();
+          var questStartedSubscriber = GameMessageBroker.GetSubscriber<QuestStartedMessage>();
           if (questStartedSubscriber != null)
           {
             var handler = new QuestStartedMessageHandler(OnQuestStarted);
             questStartedSubscription = questStartedSubscriber.Subscribe(handler);
-            log.ForGameObject(gameObject).Debug("Subscribed to QuestStartedMessage for EventBusBridge re-subscription");
+            log.ForGameObject(gameObject).Verbose("Subscribed to QuestStartedMessage for EventBusBridge re-subscription");
           }
           else
           {
@@ -338,7 +344,7 @@ namespace MToolKit.Runtime.VisualGraphs
             {
               // Check if save system has already loaded (by checking if there's a last load time)
               // If so, manually trigger a load of our controller to restore quest data
-              var saveController = resolver.Resolve<Persistence.GraphStateSaveController>();
+              var saveController = resolver.Resolve<GraphStateSaveController>();
               log.ForGameObject(gameObject).Information("Save controller registered - checking if manual load is needed");
 
               // Manually trigger load to ensure quest data is restored if save system loaded before registration
@@ -353,7 +359,7 @@ namespace MToolKit.Runtime.VisualGraphs
 
         // Auto-start quest if configured (after save controller is registered)
         // This allows the save system to restore quests before auto-start runs
-        log.ForGameObject(gameObject).Debug("Quest: Checking auto-start conditions - config: {Config}, AutoStartFirstQuest: {AutoStart}, QuestDatabase: {Database}",
+        log.ForGameObject(gameObject).Verbose("Quest: Checking auto-start conditions - config: {Config}, AutoStartFirstQuest: {AutoStart}, QuestDatabase: {Database}",
           config != null ? "Present" : "NULL",
           config?.AutoStartFirstQuest ?? false,
           config?.QuestDatabase != null ? "Present" : "NULL");
@@ -365,7 +371,7 @@ namespace MToolKit.Runtime.VisualGraphs
         }
         else
         {
-          log.ForGameObject(gameObject).Debug("Quest: Auto-start conditions NOT met, skipping quest auto-start");
+          log.ForGameObject(gameObject).Verbose("Quest: Auto-start conditions NOT met, skipping quest auto-start");
         }
 
         log.ForGameObject(gameObject).Information("Visual Graphs plugin runtime initialization completed");
@@ -383,12 +389,12 @@ namespace MToolKit.Runtime.VisualGraphs
         // Try to resolve SaveSystemCoordinator
         if (!resolver.TryResolve<SaveSystemCoordinator>(out var saveCoordinator))
         {
-          log.ForGameObject(gameObject).Debug("SaveSystemCoordinator not found in DI - graph state persistence will not be available");
+          log.ForGameObject(gameObject).Verbose("SaveSystemCoordinator not found in DI - graph state persistence will not be available");
           return false;
         }
 
         // Resolve the save controller
-        if (!resolver.TryResolve<Persistence.GraphStateSaveController>(out var saveController))
+        if (!resolver.TryResolve<GraphStateSaveController>(out var saveController))
         {
           log.ForGameObject(gameObject).Warning("GraphStateSaveController not found in DI - cannot register with save system");
           return false;
@@ -396,6 +402,8 @@ namespace MToolKit.Runtime.VisualGraphs
 
         // Register with the save coordinator
         saveCoordinator.RegisterLocalController(saveController);
+        registeredCoordinator = saveCoordinator;
+        registeredSaveController = saveController;
         log.ForGameObject(gameObject).Information("Registered GraphStateSaveController with SaveSystemCoordinator");
         return true;
       }
@@ -407,14 +415,14 @@ namespace MToolKit.Runtime.VisualGraphs
       }
     }
 
-    private async UniTask LoadQuestDataIfNeededAsync(Persistence.GraphStateSaveController saveController, SaveSystemCoordinator saveCoordinator)
+    private async UniTask LoadQuestDataIfNeededAsync(GraphStateSaveController saveController, SaveSystemCoordinator saveCoordinator)
     {
       try
       {
         // Check if save data exists for graphs domain
         // Use reflection to access private es3Service field
         var es3ServiceField = saveController.GetType().GetField("es3Service",
-          System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+          BindingFlags.NonPublic | BindingFlags.Instance);
 
         if (es3ServiceField != null)
         {
@@ -434,7 +442,7 @@ namespace MToolKit.Runtime.VisualGraphs
               if (config != null && config.DefaultRegistry != null)
               {
                 // Check if quest definitions are already loaded
-                var existingQuestDefs = Runtime.GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
+                var existingQuestDefs = GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
                 log.ForGameObject(gameObject).Information("Found {Count} quest definitions already loaded in registry", existingQuestDefs.Count);
 
                 // Load quest definitions if not already loaded (or if LoadAllOnStartup is false)
@@ -442,7 +450,7 @@ namespace MToolKit.Runtime.VisualGraphs
                 {
                   log.ForGameObject(gameObject).Information("Loading quest definitions from registry before restoration");
                   await LoadQuestDefinitionsFromRegistryAsync(config.DefaultRegistry);
-                  var loadedQuestDefs = Runtime.GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
+                  var loadedQuestDefs = GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
                   log.ForGameObject(gameObject).Information("Now have {Count} quest definitions loaded in registry", loadedQuestDefs.Count);
                 }
               }
@@ -454,7 +462,7 @@ namespace MToolKit.Runtime.VisualGraphs
             }
             else
             {
-              log.ForGameObject(gameObject).Debug("No save data found for graphs domain - skipping manual load");
+              log.ForGameObject(gameObject).Verbose("No save data found for graphs domain - skipping manual load");
             }
           }
         }
@@ -468,6 +476,13 @@ namespace MToolKit.Runtime.VisualGraphs
     public override void Shutdown()
     {
       log.ForGameObject(gameObject).Information("Shutting down Visual Graphs plugin");
+
+      if (registeredCoordinator != null && registeredSaveController != null)
+      {
+        registeredCoordinator.UnregisterLocalController(registeredSaveController);
+        registeredCoordinator = null;
+        registeredSaveController = null;
+      }
 
       cts?.Cancel();
       cts?.Dispose();
@@ -514,8 +529,8 @@ namespace MToolKit.Runtime.VisualGraphs
           {
             questDefs.Add(questDef);
             // Register in the runtime registry for lookup by GUID
-            Runtime.GraphDefinitionRegistry.RegisterQuestDefinition(questDef);
-            log.ForGameObject(gameObject).Debug("Loaded quest definition '{QuestName}' ({QuestGuid}) from addressables",
+            GraphDefinitionRegistry.RegisterQuestDefinition(questDef);
+            log.ForGameObject(gameObject).Verbose("Loaded quest definition '{QuestName}' ({QuestGuid}) from addressables",
               questDef.DisplayName, questDef.Guid);
           }
           else
@@ -554,7 +569,7 @@ namespace MToolKit.Runtime.VisualGraphs
       var questDefs = await LoadQuestDefinitionsFromRegistryAsync(registry);
 
       // Use self-registered definitions (preferred) or fallback to loaded registry quests
-      var registeredQuestDefs = Runtime.GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
+      var registeredQuestDefs = GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
       if (registeredQuestDefs.Count > 0)
       {
         questDefs = registeredQuestDefs;
@@ -566,7 +581,7 @@ namespace MToolKit.Runtime.VisualGraphs
         // Objective graphs are loaded separately when quest starts (they're mandatory per objective)
         if (questDef.GraphAsset == null)
         {
-          log.ForGameObject(gameObject).Debug(
+          log.ForGameObject(gameObject).Verbose(
             "Skipping quest '{QuestName}' ({QuestId}) - no quest-level GraphAsset (quest-level graphs are optional)",
             questDef.DisplayName, questDef.Guid);
           continue;
@@ -579,7 +594,7 @@ namespace MToolKit.Runtime.VisualGraphs
           {
             if (runner == null)
             {
-              log.ForGameObject(gameObject).Debug(
+              log.ForGameObject(gameObject).Verbose(
                 "Quest '{QuestId}' has no quest-level graph (optional) - skipped",
                 questDef.Guid);
             }
@@ -595,7 +610,7 @@ namespace MToolKit.Runtime.VisualGraphs
       }
 
       // Use self-registered definitions (preferred) or fallback to registry
-      var dialogueDefs = Runtime.GraphDefinitionRegistry.GetAllDialogueDefinitions().ToList();
+      var dialogueDefs = GraphDefinitionRegistry.GetAllDialogueDefinitions().ToList();
       if (dialogueDefs.Count == 0 && registry != null && registry.DialogueDefinitions != null)
       {
         // Fallback to registry asset for backward compatibility
@@ -616,13 +631,31 @@ namespace MToolKit.Runtime.VisualGraphs
         }
       }
 
+      // Use self-registered event definitions (preferred) or fallback to registry
+      List<EventDefinition> eventDefs = GraphDefinitionRegistry.GetAllEventDefinitions().ToList();
+      if (eventDefs.Count == 0 && registry != null && registry.EventDefinitions != null)
+        // Fallback to registry asset for backward compatibility
+        eventDefs = registry.EventDefinitions.Where(d => d != null).ToList();
+
+      foreach (EventDefinition eventDef in eventDefs)
+        try
+        {
+          loadTasks.Add(graphLoader.LoadGraphAsync(eventDef.EventId, cts.Token).AsUniTask());
+        }
+        catch (Exception ex)
+        {
+          log.ForGameObject(gameObject).Error(ex,
+            "Failed to initialize event graph '{EventId}': {Message}",
+            eventDef.EventId, ex.Message);
+        }
+
       log.ForGameObject(gameObject).Information("Loading {Count} graphs...", loadTasks.Count);
 
       // Wait for all graphs to load
       try
       {
         await UniTask.WhenAll(loadTasks);
-        log.ForGameObject(gameObject).Information(
+        log.ForGameObject(gameObject).Debug(
           "Visual graph system initialized: {Count} graphs loaded", loadTasks.Count);
 
         // Now that graphs are loaded, subscribe to MessagePipe events
@@ -644,7 +677,7 @@ namespace MToolKit.Runtime.VisualGraphs
       }
     }
 
-    private void OnQuestStarted(Quest.Messages.QuestStartedMessage message)
+    private void OnQuestStarted(QuestStartedMessage message)
     {
       // Re-subscribe EventBusBridge to include new objective graph subscriptions
       if (eventBusBridge != null && graphEventRouter != null)
@@ -656,16 +689,16 @@ namespace MToolKit.Runtime.VisualGraphs
       }
     }
 
-    private sealed class QuestStartedMessageHandler : MessagePipe.IMessageHandler<Quest.Messages.QuestStartedMessage>
+    private sealed class QuestStartedMessageHandler : IMessageHandler<QuestStartedMessage>
     {
-      private readonly Action<Quest.Messages.QuestStartedMessage> action;
+      private readonly Action<QuestStartedMessage> action;
 
-      public QuestStartedMessageHandler(Action<Quest.Messages.QuestStartedMessage> action)
+      public QuestStartedMessageHandler(Action<QuestStartedMessage> action)
       {
         this.action = action ?? throw new ArgumentNullException(nameof(action));
       }
 
-      public void Handle(Quest.Messages.QuestStartedMessage message)
+      public void Handle(QuestStartedMessage message)
       {
         action(message);
       }
@@ -677,12 +710,12 @@ namespace MToolKit.Runtime.VisualGraphs
 
       try
       {
-        log.ForGameObject(gameObject).ForMethod().Debug("Quest: Resolving IQuestManager from DI container");
-        var questManager = resolver.Resolve<Quest.IQuestManager>();
+        log.ForGameObject(gameObject).ForMethod().Verbose("Quest: Resolving IQuestManager from DI container");
+        var questManager = resolver.Resolve<IQuestManager>();
         log.ForGameObject(gameObject).ForMethod().Information("Quest: IQuestManager resolved successfully: {Type}", questManager.GetType().Name);
 
         var database = config.QuestDatabase;
-        log.ForGameObject(gameObject).ForMethod().Debug("Quest: QuestDatabase: {Database}", database != null ? "Found" : "NULL");
+        log.ForGameObject(gameObject).ForMethod().Verbose("Quest: QuestDatabase: {Database}", database != null ? "Found" : "NULL");
 
         var quest = database.GetFirstQuest();
         if (quest == null)
@@ -813,13 +846,13 @@ namespace MToolKit.Runtime.VisualGraphs
       Log.Logger.ForContext<VisualGraphEventEmitter>().ForFeature("VisualGraphs"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 
-    private Quest.IQuestManager questManager;
+    private IQuestManager questManager;
 
     public VisualGraphEventEmitter()
     {
     }
 
-    public void SetQuestManager(Quest.IQuestManager questManager)
+    public void SetQuestManager(IQuestManager questManager)
     {
       this.questManager = questManager;
     }
@@ -837,8 +870,8 @@ namespace MToolKit.Runtime.VisualGraphs
       // Use GameMessageBroker to publish the concrete message type (VisualGraphs is a game system)
       try
       {
-        var publishMethod = typeof(MessageBus.GameMessageBroker)
-          .GetMethod(nameof(MessageBus.GameMessageBroker.Publish))
+        var publishMethod = typeof(GameMessageBroker)
+          .GetMethod(nameof(GameMessageBroker.Publish))
           ?.MakeGenericMethod(messageType);
 
         if (publishMethod == null)
@@ -848,14 +881,14 @@ namespace MToolKit.Runtime.VisualGraphs
         }
 
         publishMethod.Invoke(null, new object[] { message });
-        log.Debug("Emitted {MessageType} to GameMessageBroker (domain: {Domain})",
+        log.Verbose("Emitted {MessageType} to GameMessageBroker (domain: {Domain})",
           messageType.Name, domain ?? "none");
 
         // Extra logging for quest progress messages
-        if (messageType == typeof(Quest.Messages.QuestObjectiveProgressMessage))
+        if (messageType == typeof(QuestObjectiveProgressMessage))
         {
           log.ForMethod().Information("Quest: Published QuestObjectiveProgressMessage to GameMessageBroker (domain: {Domain})", domain ?? "none");
-          var progressMsg = (Quest.Messages.QuestObjectiveProgressMessage)message;
+          var progressMsg = (QuestObjectiveProgressMessage)message;
           if (questManager != null)
           {
             var objectiveComplete = progressMsg.Current >= progressMsg.Required;

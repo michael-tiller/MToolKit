@@ -58,6 +58,19 @@ namespace MToolKit.Runtime.VisualGraphs.Authoring
       guid = System.Guid.NewGuid().ToString();
       EditorUtility.SetDirty(this);
     }
+
+    /// <summary>
+    /// Override the auto-generated GUID with a specific value from a text annotation.
+    /// Only call this during fresh-wire import when honoring # guid: hints.
+    /// </summary>
+    public void SetGuidFromHint(string guidHint)
+    {
+      if (!string.IsNullOrEmpty(guidHint))
+      {
+        guid = guidHint;
+        EditorUtility.SetDirty(this);
+      }
+    }
 #endif
   }
 }

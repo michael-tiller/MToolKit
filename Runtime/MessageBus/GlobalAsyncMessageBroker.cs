@@ -1,7 +1,9 @@
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
@@ -48,77 +50,107 @@ namespace MToolKit.Runtime.MessageBus
 
       globalResolver = resolver;
       isInitialized = true;
-      log.ForMethod().Debug("GlobalAsyncMessageBroker initialized");
+      log.ForMethod().Verbose("GlobalAsyncMessageBroker initialized");
     }
 
     /// <summary>
-    ///   Get a publisher for the specified message type
+    ///   Get a publisher for the specified message type.
+    ///   Returns null if the broker is not initialized (shutdown/pre-init grace).
+    ///   Throws <see cref="InvalidOperationException"/> if the type is not registered with the VContainer scope —
+    ///   missing registrations are a developer error and silent no-ops cause recurring debugging sessions.
     /// </summary>
     public static IPublisher<T> GetPublisher<T>()
     {
       if (!isInitialized || globalResolver == null)
       {
-        log.ForMethod().Error("GlobalAsyncMessageBroker not initialized");
+        log.ForMethod().Verbose("GlobalAsyncMessageBroker not initialized; returning null publisher for {0}", typeof(T).Name);
         return null;
       }
 
       try
       {
         IPublisher<T> publisher = globalResolver.Resolve<IPublisher<T>>();
+        if (publisher == null)
+          throw BuildUnregisteredException<T>("IPublisher", null);
 #if UNITY_EDITOR
         accessedPublishers.TryAdd(typeof(T), true);
 #endif
         return publisher;
       }
+      catch (InvalidOperationException)
+      {
+        throw;
+      }
       catch (Exception ex)
       {
-        log.ForMethod().Error(ex, "Failed to resolve publisher for {0}", typeof(T).Name);
-        return null;
+        throw BuildUnregisteredException<T>("IPublisher", ex);
       }
     }
 
     /// <summary>
-    ///   Get a subscriber for the specified message type
+    ///   Get a subscriber for the specified message type.
+    ///   Returns null if the broker is not initialized (shutdown/pre-init grace).
+    ///   Throws <see cref="InvalidOperationException"/> if the type is not registered with the VContainer scope —
+    ///   missing registrations are a developer error and silent no-ops cause recurring debugging sessions.
     /// </summary>
     public static ISubscriber<T> GetSubscriber<T>()
     {
       if (!isInitialized || globalResolver == null)
       {
-        log.ForMethod().Error("GlobalAsyncMessageBroker not initialized");
+        log.ForMethod().Verbose("GlobalAsyncMessageBroker not initialized; returning null subscriber for {0}", typeof(T).Name);
         return null;
       }
 
       try
       {
         ISubscriber<T> subscriber = globalResolver.Resolve<ISubscriber<T>>();
+        if (subscriber == null)
+          throw BuildUnregisteredException<T>("ISubscriber", null);
 #if UNITY_EDITOR
         accessedSubscribers.TryAdd(typeof(T), true);
 #endif
         log.ForMethod().Verbose("Resolved subscriber for {0}", typeof(T).Name);
         return subscriber;
       }
+      catch (InvalidOperationException)
+      {
+        throw;
+      }
       catch (Exception ex)
       {
-        log.ForMethod().Error(ex, "Failed to resolve subscriber for {0}", typeof(T).Name);
-        return null;
+        throw BuildUnregisteredException<T>("ISubscriber", ex);
       }
     }
 
+    private static InvalidOperationException BuildUnregisteredException<T>(string role, Exception inner)
+    {
+      string typeName = typeof(T).Name;
+      string message =
+        $"[GlobalAsyncMessageBroker] No {role}<{typeName}> is registered in the VContainer scope. " +
+        $"Add `builder.RegisterMessageBroker<{typeName}>(options);` to GlobalInstaller.RegisterMessagePipe " +
+        $"(or the relevant installer). Pub/sub on unregistered types is a silent no-op without this check.";
+      log.ForMethod().Fatal(inner, message);
+      return new InvalidOperationException(message, inner);
+    }
+
     /// <summary>
-    ///   Publish a message using the global broker
+    ///   Publish a message using the global broker.
+    ///   No-ops silently if the broker is not initialized (shutdown/pre-init grace).
+    ///   Throws <see cref="InvalidOperationException"/> if T is not registered with the VContainer scope.
     /// </summary>
     public static void Publish<T>(T message)
     {
+      if (!IsAvailable())
+      {
+        log.ForMethod().Verbose("Skipping publish of {0} - broker not available (likely during shutdown or before initialization)", typeof(T).Name);
+        return;
+      }
+
+      // GetPublisher throws InvalidOperationException for unregistered types — let it propagate so the
+      // call site is the consistent failure point rather than a silent no-op.
       IPublisher<T> publisher = GetPublisher<T>();
-      if (publisher != null)
-      {
-        publisher.Publish(message);
-        log.ForMethod().Verbose("Published {0} via global broker", typeof(T).Name);
-      }
-      else
-      {
-        log.ForMethod().Warning("Failed to publish {0} - publisher not available", typeof(T).Name);
-      }
+      publisher.Publish(message);
+      log.ForMethod().Verbose("Published {0} via global broker", typeof(T).Name);
     }
 
     /// <summary>
@@ -310,7 +342,7 @@ namespace MToolKit.Runtime.MessageBus
       {
         // Use reflection to try to access VContainer's internal registry
         var resolverType = resolver.GetType();
-        var containerProperty = resolverType.GetProperty("Container", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+        var containerProperty = resolverType.GetProperty("Container", BindingFlags.Public | BindingFlags.Instance);
         
         if (containerProperty != null)
         {
@@ -318,11 +350,11 @@ namespace MToolKit.Runtime.MessageBus
           if (container != null)
           {
             // Try to get registrations
-            var registrationsProperty = container.GetType().GetProperty("Registrations", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            var registrationsProperty = container.GetType().GetProperty("Registrations", BindingFlags.Public | BindingFlags.Instance);
             if (registrationsProperty == null)
             {
               // Try alternative property names
-              var allRegistrationsProperty = container.GetType().GetProperty("AllRegistrations", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+              var allRegistrationsProperty = container.GetType().GetProperty("AllRegistrations", BindingFlags.Public | BindingFlags.Instance);
               if (allRegistrationsProperty != null)
                 registrationsProperty = allRegistrationsProperty;
             }
@@ -330,14 +362,14 @@ namespace MToolKit.Runtime.MessageBus
             if (registrationsProperty != null)
             {
               var registrations = registrationsProperty.GetValue(container);
-              if (registrations is System.Collections.IEnumerable enumerable)
+              if (registrations is IEnumerable enumerable)
               {
                 foreach (var registration in enumerable)
                 {
                   try
                   {
-                    var implementationTypeProperty = registration.GetType().GetProperty("ImplementationType", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-                    var serviceTypeProperty = registration.GetType().GetProperty("ServiceType", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                    var implementationTypeProperty = registration.GetType().GetProperty("ImplementationType", BindingFlags.Public | BindingFlags.Instance);
+                    var serviceTypeProperty = registration.GetType().GetProperty("ServiceType", BindingFlags.Public | BindingFlags.Instance);
                     
                     if (serviceTypeProperty != null)
                     {

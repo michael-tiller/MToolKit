@@ -1,16 +1,26 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Core.Interfaces;
 using Serilog;
 using VContainer;
+using ILogger = Serilog.ILogger;
+using Logger = Serilog.Core.Logger;
+
 
 namespace MToolKit.Runtime.Core
 {
+  
   /// <summary>
   ///   The plugin registry for managing game plugins and runtime plugins.
   /// </summary>
   public sealed class PluginRegistry
   {
+  
+    private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<PluginRegistry>().ForFeature("MToolKit.Core"));
+    private static ILogger log => logLazy.Value ?? Logger.None;
+    
     /// <summary>
     ///   The list of game plugins.
     /// </summary>
@@ -127,7 +137,8 @@ namespace MToolKit.Runtime.Core
             $"Plugin {pluginName} is missing required dependencies: {string.Join(", ", missingDependencies)}");
         }
 
-        plugin.PerformSetup(resolver);
+        using (StartupProfiling.Phase($"Plugin.{plugin.GetType().Name}.Setup"))
+          plugin.PerformSetup(resolver);
       }
     }
 
@@ -144,6 +155,7 @@ namespace MToolKit.Runtime.Core
         pluginsCopy = new List<IRuntimePlugin>(runtimePlugins);
       }
 
+      int initialized = 0;
       foreach (IRuntimePlugin plugin in pluginsCopy)
       {
         string pluginName = plugin.GetType().Name;
@@ -152,22 +164,69 @@ namespace MToolKit.Runtime.Core
         {
           try
           {
-            plugin.PerformRuntimeInitialization(resolver);
-            Log.Logger.ForContext<PluginRegistry>().Debug("Plugin {PluginName} runtime initialization completed successfully", pluginName);
+            using (StartupProfiling.Phase($"Plugin.{pluginName}.RuntimeInit"))
+              plugin.PerformRuntimeInitialization(resolver);
+            log.Verbose("Plugin {PluginName} runtime initialization completed successfully", pluginName);
+            initialized++;
           }
           catch (Exception ex)
           {
-            Log.Logger.ForContext<PluginRegistry>().Error(ex, "Plugin {PluginName} runtime initialization failed: {Message}", pluginName, ex.Message);
+            log.Error(ex, "Plugin {PluginName} runtime initialization failed: {Message}", pluginName, ex.Message);
           }
         }
         else
         {
           List<string> missingDeps = GetMissingDependencies(plugin, resolver);
           string missingDepsText = missingDeps.Count > 0 ? string.Join(", ", missingDeps) : "unknown dependencies";
-          Log.Logger.ForContext<PluginRegistry>().Error("Plugin {PluginName} dependencies not ready, skipping runtime initialization. Missing: {MissingDependencies}",
+          log.Error("Plugin {PluginName} dependencies not ready, skipping runtime initialization. Missing: {MissingDependencies}",
             pluginName, missingDepsText);
         }
       }
+      log.Debug("Runtime-initialized {Count}/{Total} plugins", initialized, pluginsCopy.Count);
+    }
+
+    /// <summary>
+    ///   Async Phase 3: awaits each plugin's <see cref="IRuntimePlugin.PerformRuntimeInitializationAsync"/>
+    ///   sequentially. Use this when at least one plugin needs its async runtime work
+    ///   to complete before subsequent boot steps (e.g. a scene transition) — fire-and-forget
+    ///   from the sync variant races scene transitions and can get cancelled mid-flight.
+    /// </summary>
+    public async UniTask PerformPluginRuntimeInitializationAsync(IObjectResolver resolver, CancellationToken ct = default)
+    {
+      List<IRuntimePlugin> pluginsCopy;
+      lock (_lockObject)
+      {
+        pluginsCopy = new List<IRuntimePlugin>(runtimePlugins);
+      }
+
+      int initialized = 0;
+      foreach (IRuntimePlugin plugin in pluginsCopy)
+      {
+        string pluginName = plugin.GetType().Name;
+
+        if (plugin.AreDependenciesReady(resolver))
+        {
+          try
+          {
+            using (StartupProfiling.Phase($"Plugin.{pluginName}.RuntimeInit"))
+              await plugin.PerformRuntimeInitializationAsync(resolver, ct);
+            log.Verbose("Plugin {PluginName} async runtime initialization completed successfully", pluginName);
+            initialized++;
+          }
+          catch (Exception ex)
+          {
+            log.Error(ex, "Plugin {PluginName} async runtime initialization failed: {Message}", pluginName, ex.Message);
+          }
+        }
+        else
+        {
+          List<string> missingDeps = GetMissingDependencies(plugin, resolver);
+          string missingDepsText = missingDeps.Count > 0 ? string.Join(", ", missingDeps) : "unknown dependencies";
+          log.Error("Plugin {PluginName} dependencies not ready, skipping async runtime initialization. Missing: {MissingDependencies}",
+            pluginName, missingDepsText);
+        }
+      }
+      log.Debug("Async runtime-initialized {Count}/{Total} plugins", initialized, pluginsCopy.Count);
     }
 
     /// <summary>

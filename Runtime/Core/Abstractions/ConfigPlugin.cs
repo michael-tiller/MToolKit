@@ -39,7 +39,7 @@ namespace MToolKit.Runtime.Core.Abstractions
     /// </summary>
     public override void Register(IContainerBuilder builder)
     {
-      log.ForGameObject(gameObject).ForMethod().Debug("Registering {0}", GetType().Name);
+      log.ForGameObject(gameObject).ForMethod().Verbose("Registering {0}", GetType().Name);
 
       if (config == null)
       {
@@ -54,7 +54,7 @@ namespace MToolKit.Runtime.Core.Abstractions
       // Call base registration
       base.Register(builder);
 
-      log.ForGameObject(gameObject).ForMethod().Debug("{0} registration completed", GetType().Name);
+      log.ForGameObject(gameObject).ForMethod().Verbose("{0} registration completed", GetType().Name);
     }
 
     /// <summary>

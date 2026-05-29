@@ -10,7 +10,6 @@ using Serilog;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
-using UnityEngine.ResourceManagement.Exceptions;
 using UnityEngine.ResourceManagement.ResourceProviders;
 using UnityEngine.SceneManagement;
 using ILogger = Serilog.ILogger;
@@ -66,7 +65,7 @@ namespace MToolKit.Runtime.Bootstrapper
       // Preload labels
       foreach (string label in manifest.Labels)
       {
-        log.ForMethod().Debug("Preloading label: {Label}", label);
+        log.ForMethod().Verbose("Preloading label: {Label}", label);
         await contentLoader.PreloadLabelAsync(label, ct);
       }
 
@@ -77,7 +76,7 @@ namespace MToolKit.Runtime.Bootstrapper
         AssetReferenceScene menuSceneRef = GlobalConstantsHelper.Instance.GlobalConstantsConfig.MenuSceneReference;
         if (menuSceneRef.RuntimeKeyIsValid())
         {
-          log.ForMethod().Information("Loading menu scene from GlobalConstantsConfig: {SceneGuid}", menuSceneRef.AssetGUID);
+          log.ForMethod().Verbose("Loading menu scene from GlobalConstantsConfig: {SceneGuid}", menuSceneRef.AssetGUID);
           await LoadSceneFromAssetReference(menuSceneRef, ct);
         }
         else
@@ -88,7 +87,7 @@ namespace MToolKit.Runtime.Bootstrapper
       }
       else
       {
-        log.ForMethod().Debug("No MenuSceneReference in GlobalConstantsConfig, using manifest scenes");
+        log.ForMethod().Verbose("No MenuSceneReference in GlobalConstantsConfig, using manifest scenes");
         await LoadScenesFromManifest(manifest, ct);
       }
 
@@ -104,7 +103,7 @@ namespace MToolKit.Runtime.Bootstrapper
         await UniTask.Yield();
       }
 
-      log.ForMethod().Information("Game content loaded successfully. Manifest: {ManifestPath}, Version: {Version}", path, manifest.Version);
+      log.ForMethod().Verbose("Game content loaded successfully. Manifest: {ManifestPath}, Version: {Version}", path, manifest.Version);
     }
 
     #endregion
@@ -148,7 +147,7 @@ namespace MToolKit.Runtime.Bootstrapper
         await handle.ToUniTask(cancellationToken: ct);
 
         if (handle.Status == AsyncOperationStatus.Succeeded)
-          log.ForMethod().Debug("Successfully loaded scene from AssetReference: {Guid}", assetRef.AssetGUID);
+          log.ForMethod().Verbose("Successfully loaded scene from AssetReference: {Guid}", assetRef.AssetGUID);
         else
           log.ForMethod().Warning("Scene load failed from AssetReference: {Guid}, Status: {Status}", assetRef.AssetGUID, handle.Status);
       }

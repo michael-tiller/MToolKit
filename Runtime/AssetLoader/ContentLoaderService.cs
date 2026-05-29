@@ -47,7 +47,7 @@ namespace MToolKit.Runtime.AssetLoader
       try
       {
         AsyncOperationHandle<IResourceLocator> initHandle = Addressables.InitializeAsync();
-        log.ForMethod().Debug("Addressables.InitializeAsync called, waiting for completion...");
+        log.ForMethod().Verbose("Addressables.InitializeAsync called, waiting for completion...");
 
         await initHandle.ToUniTask(cancellationToken: ct);
 
@@ -59,14 +59,14 @@ namespace MToolKit.Runtime.AssetLoader
         var resourceLocators = new List<IResourceLocator>();
         foreach (var locator in locators)
           resourceLocators.Add(locator);
-        log.ForMethod().Debug("Available resource locators: {Count}", resourceLocators.Count);
+        log.ForMethod().Verbose("Available resource locators: {Count}", resourceLocators.Count);
         foreach (IResourceLocator locator in resourceLocators)
         {
           // Count keys manually to avoid LINQ allocation
           int keyCount = 0;
           foreach (var key in locator.Keys)
             keyCount++;
-          log.ForMethod().Debug("Locator: {Locator}, Keys: {Keys}", locator, keyCount);
+          log.ForMethod().Verbose("Locator: {Locator}, Keys: {Keys}", locator, keyCount);
         }
       }
       catch (Exception ex)
@@ -151,7 +151,7 @@ namespace MToolKit.Runtime.AssetLoader
 
     public async UniTask PreloadLabelAsync(string label, CancellationToken ct = default)
     {
-      log.ForMethod().Debug("PreloadLabelAsync called for label: {Label}", label);
+      log.ForMethod().Verbose("PreloadLabelAsync called for label: {Label}", label);
 
       if (preloadedAssets.ContainsKey(label))
       {
@@ -165,7 +165,7 @@ namespace MToolKit.Runtime.AssetLoader
       // Load assets with progress tracking (this will download dependencies automatically)
       log.ForMethod().Verbose("Loading assets for label: {Label}", label);
       List<Object> assets = await LoadAssetsWithProgressAsync(label, ct);
-      log.ForMethod().Debug("Loaded {Count} assets for label: {Label}", assets.Count, label);
+      log.ForMethod().Verbose("Loaded {Count} assets for label: {Label}", assets.Count, label);
       Progress.Value = 1f;
 
       preloadedAssets[label] = new List<Object>(assets);
@@ -312,7 +312,7 @@ namespace MToolKit.Runtime.AssetLoader
       if (assetLoader is AddressablesAssetLoader)
       {
         // Get all locations for this label using the old Locate API which works in Editor
-        log.ForMethod().Debug("Loading resource locations for label: {Label}", label);
+        log.ForMethod().Verbose("Loading resource locations for label: {Label}", label);
 
         List<IResourceLocation> locationsToLoad = new();
 
@@ -331,7 +331,7 @@ namespace MToolKit.Runtime.AssetLoader
               if (!isScene && !isConfigAsset)
                 locationsToLoad.Add(location);
               else
-                log.ForMethod().Debug("Skipping {Type} asset: {Key}",
+                log.ForMethod().Verbose("Skipping {Type} asset: {Key}",
                   isScene ? "scene" : "config",
                   location.PrimaryKey);
             }
@@ -342,7 +342,7 @@ namespace MToolKit.Runtime.AssetLoader
           return new List<Object>();
         }
 
-        log.ForMethod().Information("Found {Count} loadable assets for label: {Label}", locationsToLoad.Count, label);
+        log.ForMethod().Verbose("Found {Count} loadable assets for label: {Label}", locationsToLoad.Count, label);
 
         // Load all assets in parallel using UniTask.WhenAll
         List<UniTask<Object>> loadTasks = new();
@@ -366,7 +366,7 @@ namespace MToolKit.Runtime.AssetLoader
         }
         Progress.Value = 1f;
 
-        log.ForMethod().Information("Successfully loaded {Count} assets for label: {Label}", loadedAssets.Count, label);
+        log.ForMethod().Verbose("Successfully loaded {Count} assets for label: {Label}", loadedAssets.Count, label);
         return loadedAssets;
       }
       // Fallback for Resources

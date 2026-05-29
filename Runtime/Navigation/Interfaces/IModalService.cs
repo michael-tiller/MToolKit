@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Navigation.Events;
@@ -9,6 +10,13 @@ namespace MToolKit.Runtime.Navigation.Interfaces
 {
   public interface IModalService
   {
+    /// <summary>
+    /// Spawn a <see cref="ModalView"/> (or subclass) on the overlay canvas.
+    /// <paramref name="postInit"/> runs after <c>Initialize</c> and lets callers do type-specific
+    /// setup (e.g., populating a scroll-list body) without leaking subclass-specific parameters
+    /// into the interface. Keep the hook synchronous and side-effect-light — the modal is already
+    /// pushed onto the navigation stack by the time it runs.
+    /// </summary>
     UniTask CreateModalView<T>(
       CancellationToken token,
       string modalName,
@@ -22,7 +30,8 @@ namespace MToolKit.Runtime.Navigation.Interfaces
       UnityAction action2 = null,
       EModalButtonType type3 = EModalButtonType.None,
       string text3 = null,
-      UnityAction action3 = null)
+      UnityAction action3 = null,
+      Action<T> postInit = null)
       where T : ModalView;
 
     UniTask CreateTimedModalView(
