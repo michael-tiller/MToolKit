@@ -457,6 +457,23 @@ namespace MToolKit.Runtime.Persistence
       }
     }
 
+        /// <summary>When true, the auto-save loop and scene-change auto-save are suspended (dev/test hook for save-migration smokes that stamp the on-disk save and reload it). Not persisted; runtime-only.</summary>
+        private bool autoSaveSuspended;
+
+        /// <summary>
+        ///   Suspends or resumes auto-save without mutating <c>saveConfig.EnableAutoSave</c>. A save-migration
+        ///   smoke uses this to stamp a controller's on-disk schema version and reload it without the auto-save
+        ///   loop (or a scene-change auto-save) re-stamping over it back to current via <c>PrepareForSave</c>.
+        /// </summary>
+        /// <param name="suspended">True to suspend auto-save; false to resume (when <c>EnableAutoSave</c>).</param>
+        public void SetAutoSaveSuspended(bool suspended)
+        {
+            autoSaveSuspended = suspended;
+            if (suspended) StopAutoSave();
+            else if (saveConfig.EnableAutoSave && !IsAutoSaveRunning.Value) StartAutoSave();
+            log.ForMethod().Information("Auto-save {0}", suspended ? "SUSPENDED (dev/test hook)" : "resumed");
+        }
+
         /// <summary>
         ///   Starts the auto-save system using UniTask
         /// </summary>
@@ -503,8 +520,8 @@ namespace MToolKit.Runtime.Persistence
           // Wait for the configured interval
           await UniTask.Delay(TimeSpan.FromSeconds(saveConfig.AutoSaveIntervalSeconds), cancellationToken: ct);
 
-          // Skip auto-save if we're already saving or loading, or if the save block is set (F2).
-          if (IsSaving.Value || IsLoading.Value || IsSaveBlocked.Value)
+          // Skip auto-save if suspended (dev/test hook), already saving or loading, or the save block is set (F2).
+          if (autoSaveSuspended || IsSaving.Value || IsLoading.Value || IsSaveBlocked.Value)
           {
             log.ForMethod().Verbose("Skipping auto-save - save/load in progress or save blocked");
             continue;
@@ -559,6 +576,11 @@ namespace MToolKit.Runtime.Persistence
         /// </summary>
         public async UniTask TriggerAutoSaveAsync(CancellationToken ct = default)
     {
+      if (autoSaveSuspended)
+      {
+        log.ForMethod().Debug("Auto-save suspended (dev/test hook), skipping manual trigger");
+        return;
+      }
       if (!saveConfig.EnableAutoSave)
       {
         log.ForMethod().Debug("Auto-save is disabled, skipping manual trigger");
