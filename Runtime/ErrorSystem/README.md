@@ -2,6 +2,9 @@
 
 @brief Global Error Handling with Graceful Degradation
 
+<!-- usewhen: You need to show a fatal/dev error ON SCREEN (e.g. a boot/DI failure) instead of only logging to the console -->
+<!-- entrypoint: GlobalAsyncMessageBroker.Publish(new ErrorRequestMessage("msg", fatal: true)) -->
+
 # Error System - Global Error Handling with Graceful Degradation
 
 Global error handling with graceful degradation and user-friendly error messages.

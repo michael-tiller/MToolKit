@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Core.Interfaces;
+using MToolKit.Runtime.ErrorSystem.Messages;
+using MToolKit.Runtime.MessageBus;
 using Serilog;
 using VContainer;
 using ILogger = Serilog.ILogger;
@@ -128,17 +130,50 @@ namespace MToolKit.Runtime.Core
 
       foreach (IRuntimePlugin plugin in pluginsCopy)
       {
-        // Validate dependencies before setup
-        if (!plugin.ValidateDependencies(resolver))
+        string pluginName = plugin.GetType().Name;
+        try
         {
-          string pluginName = plugin.GetType().Name;
-          List<string> missingDependencies = GetMissingDependencies(plugin, resolver);
-          throw new InvalidOperationException(
-            $"Plugin {pluginName} is missing required dependencies: {string.Join(", ", missingDependencies)}");
-        }
+          // Validate dependencies before setup
+          if (!plugin.ValidateDependencies(resolver))
+          {
+            List<string> missingDependencies = GetMissingDependencies(plugin, resolver);
+            throw new InvalidOperationException(
+              $"Plugin {pluginName} is missing required dependencies: {string.Join(", ", missingDependencies)}");
+          }
 
-        using (StartupProfiling.Phase($"Plugin.{plugin.GetType().Name}.Setup"))
-          plugin.PerformSetup(resolver);
+          using (StartupProfiling.Phase($"Plugin.{pluginName}.Setup"))
+            plugin.PerformSetup(resolver);
+        }
+        catch (Exception ex)
+        {
+          // A plugin's setup throwing here (missing DI registration, ctor fault, etc.) otherwise
+          // bubbles straight out of LifetimeScope.Awake and dies as a silent console exception —
+          // common during dev when one plugin forgets to register a service another plugin resolves.
+          // Surface it on the global ErrorSystem bus so it flies the ErrorPanel (fatal => OK quits),
+          // then rethrow to preserve the existing fail-loud boot-abort semantics. Publishing is
+          // best-effort and must never mask the original failure.
+          log.Error(ex, "Plugin {PluginName} setup failed: {Message}", pluginName, ex.Message);
+          TryPublishFatalError($"Plugin '{pluginName}' failed to initialize:\n{ex.Message}");
+          throw;
+        }
+      }
+    }
+
+    /// <summary>
+    ///   Best-effort surface of a fatal boot error on the global ErrorSystem bus
+    ///   (<see cref="ErrorRequestMessage"/>). Swallows any publish failure so a missing/uninitialized
+    ///   ErrorSystem can never mask the original exception the caller is about to rethrow.
+    /// </summary>
+    /// <param name="message">User-facing error text shown in the ErrorPanel.</param>
+    private static void TryPublishFatalError(string message)
+    {
+      try
+      {
+        GlobalAsyncMessageBroker.Publish(new ErrorRequestMessage(message, fatal: true));
+      }
+      catch (Exception pubEx)
+      {
+        log.Warning(pubEx, "Failed to surface fatal error on ErrorSystem bus (may not be initialized yet)");
       }
     }
 
