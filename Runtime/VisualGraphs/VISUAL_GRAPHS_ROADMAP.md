@@ -445,95 +445,110 @@ Plans authored by downstream projects that depend on this roadmap. They scope wh
 
 **Critical for:** Reactive event-driven systems where multiple game systems interact to create emergent gameplay 
 
-### 9.0 Type-Safe Variable Foundation & Runtime Contexts ⏳ **PLANNED** (Prerequisite for 9.1)
+### Phase-Wide Design Constraints (read before implementing ANY 9.x sub-phase)
 
-**Goal:** Establish type-safe variable system foundation and clean context APIs before building variable nodes
+A predecessor framework shipped this exact feature set, regretted most of its abstractions, and documented why in an extraction post-mortem (see Dirigible's `vgraph_dirigible_parity_plan.md` → "Prior Art & Lessons Learned"). Every 9.x sub-phase below preserves its full capability set but is constrained to a deliberately smaller implementation shape:
+
+1. **Variables are data, not wrapper objects.** A variable is a serializable declaration (key + type + default) — the pattern `GraphVariableSet.GraphVariableEntry` already uses. No `VariableDefinition<T>` generic identity-object hierarchy.
+2. **One flat context interface.** Scopes (graph/quest/player/world) are data on one context type, not N capability interfaces. No factory/resolver class webs.
+3. **One cross-scope access path.** Scoped key resolution (e.g. `player.gold` vs local `gold`) through a single resolver. 9.0.2 contexts and 9.4 cross-graph state queries MUST share it — two mechanisms for the same capability is the predecessor's "emission vs firing" mistake repeated.
+4. **No serialized generics.** xNode nodes are ScriptableObjects; `SomeNode<T>` will not serialize. Use the existing `GenericStateCheckNode` pattern: one concrete node + type dropdown (`EGraphVariableType`) + export-time validation. Deep generic hierarchies are post-mortem mistake #4.
+5. **Execution model ground rules:** all graph execution happens on the Unity main thread — no locks, no `OperationLock`, no transaction system on the critical path. Loop nodes carry a hard max-iteration guard (default 1000, configurable, fail-loud on breach). Duplicate message delivery is handled by `GraphRunner` sequence-id dedup, not by making individual operations "idempotent".
+6. **Every sub-phase ships tests.** MToolKit currently has ZERO test files (no `Tests/` directory exists — the Phase 5 claim of 609 test methods is aspirational). Phase 5 creates the test asmdef/harness; each 9.x sub-phase below lists its own test deliverables and may not be marked complete without them.
+7. **Persistence and text authoring are part of "supported type".** A variable type is only supported when it round-trips ES3 save/load (`GraphStateSnapshot`) AND the text authoring format (9.7). "Supports Vector3" without both is not done.
+
+### 9.0 Typed Variable Foundation & Runtime Contexts ⏳ **PLANNED** (Prerequisite for 9.1)
+
+**Goal:** Establish a declared-variable system (typed declarations + defaults + validation) and a clean context API before building variable nodes
 
 **Status:** Not yet implemented
 
 **Why Critical:**
-- Phase 9.1 plans variable nodes, but they need type safety foundation
-- Current system uses string keys (`"variableName"`), which is error-prone
-- Need `VariableDefinition<T>` for compile-time type safety and default values
-- Need Runtime Contexts API for clean abstraction over raw `IGraphState` access
-- Prevents bugs from typos, type mismatches, and null reference exceptions
+- Phase 9.1 plans variable nodes, but they need a declaration foundation: today nothing declares which keys a graph uses, so typos and type mismatches surface only at runtime
+- `GraphVariableSet.GraphVariableEntry` (key + `EGraphVariableType` + typed default) is ALREADY the right declaration shape — build on it, don't replace it
+- Need export-time validation: `XNodeGraphExporter` can check every node's state-key reference against the graph's declared variables and reject type mismatches at author time
+- Need a thin typed accessor over `IGraphState` so node executors stop hand-rolling `TryGet`/convert/default logic
+- The string-keyed `IGraphState` API (`TryGet<T>`/`Set<T>`) stays — it is the storage substrate and the backward-compat surface; declarations layer on top
 
-**9.0.1 Type-Safe Variable Foundation:**
+**9.0.1 Typed Variable Foundation:**
 
 **Implementation Tasks:**
-- [ ] Create `VariableDefinition<T>` sealed class
-  - Immutable, shared across instances
-  - Type-safe key with default value
-  - `IEquatable<VariableDefinition<T>>` for dictionary keys
+- [ ] Promote `GraphVariableSet.GraphVariableEntry` to the canonical variable declaration
+  - Extract to `GraphVariableDeclaration` (key, `EGraphVariableType`, typed default, optional description for editor/text tooling)
+  - `GraphVariableSet` becomes a list of declarations; `ApplyTo(IGraphState)` behavior unchanged
+  - Extend `EGraphVariableType` beyond String/Int/Float/Bool with the pinned v1 additions: `Vector3`, `Vector2`, `Color` (closed list — no `etc.`; new types require an entry in the type table below)
+- [ ] Attach a declaration set to graph assets
+  - Graph assets (`QuestGraphAsset`/`DialogueGraphAsset`/`EventGraphAsset`) reference an optional `GraphVariableSet` as their declared-variables block (this is what the 9.1 editor picker and the 9.7 text importer read/write)
+  - Document the existing init precedence and keep it: `GlobalGraphVariables` → definition initial variables → restored save state (wins)
+- [ ] Create `IVariableStorage` typed accessor (thin wrapper over `IGraphState`, NOT a parallel store)
+  - `Get<T>(string key, T fallbackDefault)` / `Set<T>(string key, T value)` — resolves declared default when the key is absent
+  - `Increment`/`Decrement`/`Add`/`Multiply` for int/float — **default-initializing** (missing key starts from the declared default, never throws). Note: these are NOT idempotent and must not be described as such; replay protection against duplicate message delivery lives in `GraphRunner` sequence-id handling (see constraint #5)
+  - Emits `IGraphStateChangeDebugEvent` on every mutation so the graph debugger sees variable writes (the debug surface already exists — wire into it)
+- [ ] Export-time validation in `XNodeGraphExporter`
+  - Every `GenericState*`/9.1 node key reference checked against the declaration set: unknown key = warning, type mismatch = error
+  - Undeclared keys remain legal at runtime (mod/dynamic keys), but authored graphs validate clean
+- [ ] Backward compatibility — pinned, not vague:
+  - `IGraphState` string-key API unchanged; existing `GenericState*` nodes keep working unmodified
+  - Saves written before 9.0 load unchanged (`GraphStateSnapshot` format untouched by this sub-phase)
 
-- [ ] Create `IVariableStorage` interface
-  - `Get<T>(VariableDefinition<T> variable)` - Type-safe get with default value fallback
-  - `Set<T>(VariableDefinition<T> variable, T value)` - Type-safe set
-  - `Increment(VariableDefinition<int> variable, int amount)` - Idempotent increment
-  - `Decrement`, `Add`, `Multiply` operations
+**Type support table (the definition of "supported"):** each type must have — typed default in `GraphVariableDeclaration`, ES3 round-trip through `GraphStateSnapshot` (9.0.4), text-format literal syntax (9.7), comparison semantics for 9.1 check nodes (or an explicit "not comparable" entry, e.g. Color supports Equals only).
 
-- [ ] Implement `VariableStorage` wrapping `IGraphState`
-  - Delegates to `IGraphState` but with type safety
-  - Handles default values from `VariableDefinition<T>`
-  - Idempotent operations (no null ref exceptions)
-
-- [ ] Update `GraphVariableSet` to use `VariableDefinition<T>`
-  - Replace string keys with type-safe definitions
-  - Maintain backward compatibility during transition
+**Tests (required for completion):**
+- Declaration default fallback, typed get/set round-trip per supported type
+- `ApplyTo` precedence: global → initial → restored save wins
+- Export validation: unknown key warns, type mismatch errors
+- Arithmetic ops on missing keys start from declared defaults
 
 **Files to Create:**
-- `Runtime/VisualGraphs/Variables/VariableDefinition.cs`
+- `Runtime/VisualGraphs/Variables/GraphVariableDeclaration.cs`
 - `Runtime/VisualGraphs/Variables/IVariableStorage.cs`
 - `Runtime/VisualGraphs/Variables/VariableStorage.cs`
 
 **Files to Modify:**
-- `Runtime/VisualGraphs/Variables/GraphVariableSet.cs` - Use `VariableDefinition<T>`
+- `Runtime/VisualGraphs/Variables/GraphVariableSet.cs` - entries become `GraphVariableDeclaration`; extend `EGraphVariableType`
+- `Runtime/VisualGraphs/Export/XNodeGraphExporter.cs` - declaration validation pass
+- Graph asset types - optional declared-variables reference
 
-**9.0.2 Runtime Contexts & Cross-Context Variable Access:**
+**9.0.2 Runtime Contexts & Cross-Scope Variable Access:**
 
-**Goal:** Provide clean API layer for quest/player contexts and enable cross-context variable access
+**Goal:** Provide ONE clean context API over raw `IGraphState` access and ONE cross-scope variable access path
 
 **Why Critical:**
 - Current code uses raw `IGraphState` access everywhere, making it hard to test and maintain
 - No clean API for quest-specific operations (get/set quest variables, fire quest events)
 - No way to access player-level variables from quest graphs
-- No abstraction for "quest context" vs "player context" vs "world context"
+- The capability set is unchanged from the original spec (quest/player/world scopes, bidirectional cross-scope access); the SHAPE is constrained by post-mortem mistakes #3 (one context interface split into N capability interfaces) and #4 (multi-generic resolver gymnastics) — see Phase-Wide Design Constraints
 
 **Implementation Tasks:**
-- [ ] Create Runtime Context interfaces
-  - `IQuestContext` - Clean API for quest operations (wraps `QuestDefinition` + `QuestRuntimeState`)
-  - `IPlayerContext` - Player-level state and operations
-  - `IWorldContext` - World-level state (future)
+- [ ] Create ONE flat `IGraphContext` interface
+  - `Scope` (enum: `Graph`, `Player`, `World` — quest contexts are `Graph`-scoped contexts whose owner is a quest), owner id, `IVariableStorage` access, event firing
+  - Quest convenience members live as extension methods over `IGraphContext` + `QuestRuntimeState`, NOT as a separate `IQuestContext` interface
+- [ ] Create `GraphContextRegistry` (single class, VContainer-registered)
+  - Construction is a registry method (`GetOrCreate(scope, ownerId, state)`) — no separate `IContextFactory`/`ContextFactory` pair; split a factory out later only if a second construction policy actually appears
+  - Player and World scopes are lazily-created singleton contexts backed by their own `IGraphState` instances (persisted via 9.0.4)
+- [ ] Implement scoped key resolution — the single cross-scope access path
+  - Key syntax: bare `gold` = local scope; `player.gold`, `world.time_of_day`, `quest:<questId>.kills` = explicit scope
+  - One `ScopedKeyResolver` parses the key and routes to the right context's storage; missing scope target = declared-default fallback + warning log, never a throw
+  - This SAME resolver backs 9.4's cross-graph state query nodes and 9.5's interpolation/conditions — one path, three consumers (constraint #3)
+- [ ] Refactor `QuestManager` to use `IGraphContext`
+  - Replace raw `IGraphState` access with the context API
+  - Backward compat pinned: public `QuestManager` API signatures unchanged; `IGraphState` remains reachable for existing executors
 
-- [ ] Create `IContextFactory` and `IContextRegistry`
-  - Factory creates contexts from definitions + state
-  - Registry tracks active contexts
-  - VContainer integration for DI
-
-- [ ] Implement `IContextResolver` for cross-context access
-  - Quest → Player variable access
-  - Player → Quest variable access
-  - Context resolution with fallback logic
-
-- [ ] Refactor `QuestManager` to use `IQuestContext`
-  - Replace raw `IGraphState` access with context API
-  - Update quest lifecycle methods to use contexts
-  - Maintain backward compatibility during transition
+**Tests (required for completion):**
+- Scoped key parsing (all four forms, malformed keys fail loud)
+- Quest → Player and Player → Quest access through the resolver
+- Missing-scope fallback returns declared default and logs
+- `QuestManager` behavior unchanged under the refactor (characterization tests)
 
 **Files to Create:**
-- `Runtime/VisualGraphs/Contexts/IQuestContext.cs`
-- `Runtime/VisualGraphs/Contexts/IPlayerContext.cs`
-- `Runtime/VisualGraphs/Contexts/QuestContext.cs`
-- `Runtime/VisualGraphs/Contexts/PlayerContext.cs`
-- `Runtime/VisualGraphs/Contexts/IContextFactory.cs`
-- `Runtime/VisualGraphs/Contexts/IContextRegistry.cs`
-- `Runtime/VisualGraphs/Contexts/ContextFactory.cs`
-- `Runtime/VisualGraphs/Contexts/ContextRegistry.cs`
-- `Runtime/VisualGraphs/Contexts/IContextResolver.cs`
-- `Runtime/VisualGraphs/Contexts/ContextResolver.cs`
+- `Runtime/VisualGraphs/Contexts/IGraphContext.cs`
+- `Runtime/VisualGraphs/Contexts/GraphContext.cs`
+- `Runtime/VisualGraphs/Contexts/GraphContextRegistry.cs`
+- `Runtime/VisualGraphs/Contexts/ScopedKeyResolver.cs`
+- `Runtime/VisualGraphs/Contexts/QuestContextExtensions.cs`
 
 **Files to Modify:**
-- `Runtime/VisualGraphs/Quest/QuestManager.cs` - Use `IQuestContext` instead of raw state
+- `Runtime/VisualGraphs/Quest/QuestManager.cs` - Use `IGraphContext` instead of raw state
 
 **9.0.3 GameRules System:**
 
@@ -545,38 +560,67 @@ Plans authored by downstream projects that depend on this roadmap. They scope wh
 - Centralize cross-quest behavior (e.g., "complete 10 quests" achievement)
 - Enable game-wide rules that react to any quest event
 
+**Implementation shape (constraint — post-mortem mistake #8 is "a rules engine on top of an event bus"):** a rule is NOT a new execution construct. `EventGraphAsset` (now landed) is already a generic message responder; a GameRule is an always-active Event graph plus rule metadata. `GameRuleDefinition` wraps an `EventGraphAsset` reference with ordering/activation data, and rule execution flows through the EXISTING `GraphEventRouter`/`GraphRunner` path — no parallel `GameRuleExecutor` engine.
+
 **Implementation Tasks:**
 - [ ] Create `GameRuleDefinition` ScriptableObject
-  - Rule name, context type, event types to listen for
-  - Reference to `QuestGraphAsset` containing rule logic
-  - Condition for when rule is active
+  - Rule name, event types to listen for
+  - Reference to `EventGraphAsset` containing rule logic (NOT `QuestGraphAsset` — that reference predates Phase A landing the Event component)
+  - Activation condition (a 9.5 condition over scoped keys, e.g. `world.difficulty >= 2`)
   - Execution order and enable/disable flag
-
-- [ ] Create `GameRuleExecutor`
-  - Executes rule graphs when matching events fire
-  - Manages rule lifecycle (enable/disable, priority)
-  - Integrates with `GraphEventRouter`
-
 - [ ] Create `GameRuleRegistry`
-  - Registers all `GameRuleDefinition` assets
-  - Provides lookup by context type and event type
-  - VContainer integration
-
+  - Registers all `GameRuleDefinition` assets, sorted by execution order
+  - Provides lookup by event type; VContainer integration
+  - Rule variables live in the `World` scope context (9.0.2) so "complete 10 quests" counters survive across quests and persist via 9.0.4
 - [ ] Integrate with `GraphEventRouter`
-  - Rules fire before/after quest-specific graphs
-  - Configurable execution order
-  - Error isolation (rule failures don't break quests)
+  - Rules fire in declared order, before/after (configurable) the event's domain-specific graphs
+  - Error isolation: a throwing rule graph is caught, logged loud, and disabled for the session — rule failures never break quest delivery
+  - Re-entrancy guard: a rule whose graph emits the same event type it subscribes to is detected (depth counter) and fails loud rather than looping
+
+**Tests (required for completion):**
+- Rule fires for matching event type, respects execution order
+- Disabled rule and false activation condition do not fire
+- Throwing rule is isolated (subsequent rules + quest graphs still run) and disabled
+- Self-triggering rule trips the re-entrancy guard
+- Rule counter in World scope survives save/load (with 9.0.4)
 
 **Files to Create:**
 - `Runtime/VisualGraphs/Rules/GameRuleDefinition.cs`
-- `Runtime/VisualGraphs/Rules/GameRuleExecutor.cs`
 - `Runtime/VisualGraphs/Rules/GameRuleRegistry.cs`
 - `Editor/VisualGraphs/Rules/GameRuleDefinitionEditor.cs`
 
 **Files to Modify:**
-- `Runtime/VisualGraphs/Runtime/GraphEventRouter.cs` - Execute rules before/after quest graphs
+- `Runtime/VisualGraphs/Runtime/GraphEventRouter.cs` - Execute rule graphs in order around domain graphs, with error isolation
 
-**Note:** This phase must complete before Phase 9.1 variable nodes, as nodes will use `VariableDefinition<T>` instead of string keys.
+**9.0.4 Variable Persistence & Schema-Change Behavior:**
+
+**Goal:** Every supported variable type round-trips save/load, and changing declarations between releases has defined behavior
+
+**Why Critical:**
+- `GraphStateSaveController` + `ES3Type_GraphStateSnapshot` already persist graph state — but the snapshot has only ever carried String/Int/Float/Bool values. The 9.0.1 type expansion (Vector3/Vector2/Color) and the new Player/World scope contexts (9.0.2) are not persisted until this lands
+- "Restored save state wins" interacts with content updates: defined behavior must be written down, not discovered in bug reports
+
+**Implementation Tasks:**
+- [ ] Extend `GraphStateSnapshot`/`ES3Type_GraphStateSnapshot` to round-trip every type in the 9.0.1 type table
+  - Unknown/unserializable value types fail loud at save time (log + skip with warning), never silently drop on load
+- [ ] Persist Player and World scope contexts through `GraphStateSaveController` alongside per-graph states (new save keys under the existing `graphs_` domain prefix)
+- [ ] Specify and test schema-change behavior:
+  - New declared variable, absent from save → declared default applies (precedence chain already yields this; pin it with a test)
+  - Changed default for a key present in the save → saved value wins (document loudly in the changelog — designers must version-bump or migrate to force new defaults)
+  - Removed declaration, value still in save → value loads as undeclared key (legal), export validation no longer references it
+  - Type changed for an existing key → load-time mismatch is detected, saved value discarded with a loud warning, declared default applies
+- [ ] Cross-reference Phase 8 (Graph Versioning): variable schema changes ride the same graph-version field; no separate variable-version mechanism
+
+**Tests (required for completion):**
+- Round-trip per supported type (save → load → typed equality), including through `GenericStateSetNode`-written values
+- Player/World scope round-trip
+- All four schema-change behaviors above
+
+**Files to Modify:**
+- `Runtime/VisualGraphs/Persistence/ES3Type_GraphStateSnapshot.cs`
+- `Runtime/VisualGraphs/Persistence/GraphStateSaveController.cs`
+
+**Note:** 9.0 must complete before Phase 9.1 variable nodes, as 9.1 nodes validate against declarations (9.0.1), resolve scoped keys (9.0.2), and depend on the persistence guarantees (9.0.4).
 
 ---
 
@@ -585,49 +629,62 @@ Plans authored by downstream projects that depend on this roadmap. They scope wh
 **Current:** Linear/branching execution only  
 **Target:** Full programming capabilities
 
-**Prerequisite:** Phase 9.0 (Type-Safe Variable Foundation) must be complete
+**Prerequisite:** Phase 9.0 (Typed Variable Foundation) must be complete
 
-- [ ] Create variable system nodes (using `VariableDefinition<T>` from Phase 9.0)
-  - `GetVariableNode<T>` - Read any variable type using `VariableDefinition<T>`
-  - `SetVariableNode<T>` - Write any variable type using `VariableDefinition<T>`
-  - `IncrementVariableNode` - Increment int variable (idempotent)
-  - `DecrementVariableNode` - Decrement int variable (idempotent)
+**Execution & data-flow model for 9.1 (pinned — read first):**
+- **All 9.1 nodes are state-key-mediated.** Operands are read from state keys (scoped syntax allowed), results are written to a state key. Data pins / colored wires arrive in 9.3; nothing in 9.1 may depend on them. The existing `MessageFieldGetNode` → state key → `GenericStateCheckNode` chain is the established pattern.
+- **Field naming convention (mandatory, so 9.3 can add data pins without redesigning nodes):** inputs are `InputKeyA`/`InputKeyB` (or `InputKeys` list), inline fallback constants are `ConstantA`/`ConstantB`, output is `OutputKey`. A node uses the constant when the corresponding key field is empty.
+- **No serialized generics** (constraint #4). Where the original spec said `SomeNode<T>`, build ONE concrete node with an `EGraphVariableType` dropdown and runtime dispatch — exactly like `GenericStateCheckNode.ComparisonOperator` works today. Export-time validation (9.0.1) catches type misuse at author time.
+- **Editor variable picker** reads the graph's declared-variables block (9.0.1) — a dropdown of declared keys with type filtering (only int/float keys offered on `AddNode` operands). Free-text entry stays available for undeclared/mod keys, validated as a warning.
+- **Loop safety** (constraint #5): every loop node carries `MaxIterations` (default 1000); breach aborts the graph run with a loud error including graph id + node id. Loops execute synchronously within one run — a loop body may not await message arrival.
+- **Sequencing note:** 9.4 (Systemic Gameplay Primitives) is the FIRST SLICE of this sub-phase — the math/logic/state-query/transform subset Dirigible needs now. Build 9.4's manifest first; 9.1's remainder (flow control, collections, the long math tail) follows. The two file manifests are disjoint — do not double-count.
+
+- [ ] Create variable system nodes (validating against 9.0.1 declarations)
+  - `SetVariableNode` - Write a typed value or copy from another key (type dropdown, replaces the `GetVariableNode<T>`/`SetVariableNode<T>` generic pair; "get" as a standalone node is meaningless until 9.3 data pins — reading is what `InputKey` fields do)
+  - `IncrementVariableNode` / `DecrementVariableNode` - int/float, default-initializing from declaration (NOT idempotent — see 9.0.1)
   - `ToggleVariableNode` - Toggle bool variable
-  - Support for: int, float, bool, string, Vector3, Quaternion, Color, etc.
-  - **Type-safe variable picker in editor** (select from `VariableDefinition<T>` assets)
+  - Type coverage: the full 9.0.1 type table (string, int, float, bool, Vector3, Vector2, Color)
 
 - [ ] Create flow control nodes
-  - `BranchNode` - If/then/else logic
-  - `SwitchNode` - Switch statement with multiple cases
-  - `ForLoopNode` - Iterate N times
-  - `WhileLoopNode` - Loop while condition true
-  - `ForEachNode` - Iterate over collections
-  - `BreakNode` - Exit loop early
-  - `ReturnNode` - Exit graph early
+  - `BranchNode` - If/then/else over a 9.5 condition or a bool state key
+  - `SwitchNode` - Multi-way branch on a state key value (cases are typed literals; default port mandatory)
+  - `ForLoopNode` - Iterate N times (N from key or constant; loop index written to a declared key; `MaxIterations` guard)
+  - `WhileLoopNode` - Loop while condition true (`MaxIterations` guard is NOT optional here)
+  - `ForEachNode` - Iterate over a collection state value (gated on the collection representation decision below)
+  - `BreakNode` - Exit innermost loop early (executor tracks loop nesting; export validation rejects `BreakNode` outside a loop body)
+  - `ReturnNode` - Exit graph run early (define interaction with `GraphRunner` completion + debug events: emits normal run-complete, not an error)
 
 - [ ] Create comparison nodes
-  - `EqualsNode<T>`, `NotEqualsNode<T>`
-  - `GreaterThanNode<T>`, `LessThanNode<T>`
-  - `IsNullNode`, `IsValidNode`
-  - `ContainsNode` - Check collection membership
+  - `CompareNode` - one node, type dropdown + operator dropdown (Equals/NotEquals/GreaterThan/LessThan/GreaterThanOrEqual/LessThanOrEqual), two input keys/constants, bool output key — supersedes the `EqualsNode<T>`/`GreaterThanNode<T>` per-operator family while covering the same capability; reuse the operator semantics already shipped in `GenericStateCheckNode`
+  - `IsNullNode` / `IsValidNode` - key-exists + non-null checks (relate to `IGraphState.Contains`)
+  - `ContainsNode` - Check collection membership (gated on collection representation)
 
 - [ ] Create math nodes
-  - Arithmetic: `AddNode`, `SubtractNode`, `MultiplyNode`, `DivideNode`, `ModuloNode`
+  - Arithmetic: `AddNode`, `SubtractNode`, `MultiplyNode`, `DivideNode`, `ModuloNode` (int+float via type dropdown; div/mod by zero = loud error, output key untouched)
   - Vector math: `Vector3AddNode`, `Vector3DotNode`, `Vector3CrossNode`, `NormalizeNode`
   - Trigonometry: `SinNode`, `CosNode`, `TanNode`, `Atan2Node`
   - Utility: `ClampNode`, `LerpNode`, `RandomRangeNode`, `RoundNode`, `FloorNode`, `CeilNode`
+  - **`RandomRangeNode` determinism:** draws from a per-graph-run RNG seeded via `IGraphContext` (injectable/seedable for tests and for deterministic replay; LAIRD's generation pipeline requires determinism). Never `UnityEngine.Random` statics. RNG seed/state is part of graph state so save/load doesn't reroll outcomes.
 
 - [ ] Create logic nodes
   - `AndNode`, `OrNode`, `NotNode`, `XorNode`
   - `NandNode`, `NorNode`
-  - Chaining support for multiple conditions
+  - `AndNode`/`OrNode` take an input-key LIST (n-ary), which is the "chaining support" — no chained-node spaghetti needed for multi-condition checks
 
-- [ ] Create collection nodes
+- [ ] Create collection nodes — **representation decision required first**
+  - Decision to make before any collection node: how a collection lives inside `IGraphState`'s `Dictionary<string, object>` AND round-trips ES3 + text. Recommended: `List<object>` of supported scalar types only (no nested collections in v1); `DictionaryNode`/`HashSetNode` ship only with a serialization story, else they stay in this list as explicitly blocked
   - `ArrayCreateNode`, `ArrayAddNode`, `ArrayRemoveNode`, `ArrayGetNode`, `ArraySetNode`
   - `ArrayLengthNode`, `ArrayClearNode`, `ArrayContainsNode`
   - `ListNode`, `DictionaryNode`, `HashSetNode`
 
-**Files to Create:** ~50+ node types in `Runtime/VisualGraphs/Authoring/Nodes/Core/`
+**Tests (required for completion):**
+- Per node: executor behavior over state keys incl. missing-key default fallback and scoped keys
+- Loop guards: `WhileLoopNode` with always-true condition aborts loudly at `MaxIterations`
+- `BreakNode` outside loop rejected at export; nested-loop break exits innermost only
+- Seeded `RandomRangeNode` reproduces sequences; RNG state survives save/load
+- Division by zero / type-mismatch operands fail loud, never silently write defaults
+
+**Files to Create:** ~40 concrete node types + executors in `Runtime/VisualGraphs/Authoring/Nodes/Core/` and `Runtime/VisualGraphs/Executors/Core/` (the type-dropdown consolidation reduces the original ~50+ generic estimate without dropping any capability)
 
 ---
 
@@ -651,8 +708,9 @@ Plans authored by downstream projects that depend on this roadmap. They scope wh
 - [ ] Add type validation during export
   - Verify port type compatibility
   - Detect type mismatches
-  - Auto-conversion where safe (int → float)
+  - Auto-conversion where safe (int → float ONLY in v1; float → int is lossy and requires an explicit conversion node)
   - Error on incompatible connections
+  - Complements (does not replace) 9.0.1 declaration validation: ports validate node-to-node connections, declarations validate node-to-state references — both run in the same `XNodeGraphExporter` pass
 
 - [ ] Support generic nodes
   - `CompareNode<T>` works with any comparable type
@@ -684,9 +742,9 @@ Plans authored by downstream projects that depend on this roadmap. They scope wh
   - Cache pure node results within single execution
 
 - [ ] Create pure function nodes
-  - Mark nodes as `[Pure]` - no side effects
+  - Mark nodes as `[Pure]` - no side effects. **Pinned definition: pure = no state writes, no message emission.** A node that READS graph state may be `[Pure]`, but its cached result is invalidated by any state write within the same execution — "cache within single execution" alone is wrong when a later impure node mutates a key the pure node read
   - Auto-execute when output is needed
-  - Never execute twice in same frame
+  - Never execute twice in same execution unless an upstream state dependency changed
   - Visualize differently in editor (rounded corners)
 
 - [ ] Support for default values
@@ -700,9 +758,11 @@ Plans authored by downstream projects that depend on this roadmap. They scope wh
 
 ---
 
-### 9.4 Systemic Gameplay Primitives
+### 9.4 Systemic Gameplay Primitives — FIRST SLICE of 9.1, ship before 9.1's remainder
 
 **Goal:** Enable reactive, event-driven systems that create emergent gameplay through system interactions
+
+**Relationship to 9.1 (pinned):** this sub-phase IS the prioritized subset of 9.1's node catalog — the same state-key-mediated execution model, field naming convention, type-dropdown consolidation, and test requirements apply (see the 9.1 preamble). The node lists below are the build order; the file manifest below is authoritative for these nodes and 9.1's manifest excludes them. This is also the sub-phase that satisfies Dirigible's parity-plan Phase C minimum (variables + get/set + math + boolean branching), together with 9.0 and the 9.7 text round-trip.
 
 **Why This Matters:**
 Games like RimWorld, Project Zomboid, and SS14 create emergent gameplay through systems reacting to each other. This phase provides the primitives needed for graphs to:
@@ -728,10 +788,11 @@ Games like RimWorld, Project Zomboid, and SS14 create emergent gameplay through 
   - **Use Case:** "If health < 50% AND stamina < 25% AND not in safe zone → trigger panic behavior"
 
 - [ ] **State query nodes (ENABLES cross-system queries)**
-  - `GetStateNode<T>` - Read state from any graph by key
-  - `SetStateNode<T>` - Write state to any graph
-  - `HasStateNode` - Check if state key exists
-  - `QueryStateNode` - Query multiple state values at once
+  - All cross-graph access goes through the 9.0.2 `ScopedKeyResolver` — `world.temperature`, `quest:<id>.kills` — NOT a second "read any graph by key" mechanism (constraint #3). These nodes are the existing `GenericStateGet/Set` capabilities extended with scoped-key support; prefer extending those executors over new node types
+  - `GetStateNode` - Read a (scoped) state key into a local key (type dropdown, not `<T>` — constraint #4)
+  - `SetStateNode` - Write a local value/key to a (scoped) state key
+  - `HasStateNode` - Check if a (scoped) state key exists
+  - `QueryStateNode` - Batch-read multiple (scoped) keys into local keys in one node
   - **Use Case:** Weather system checks crop growth state, AI checks player inventory state
 
 - [ ] **Data transformation nodes (ENABLES system communication)**
@@ -799,10 +860,10 @@ CropGraph:
   [can_plant] → EnableCropPlanting
 ```
 
-**Files to Create:**
+**Files to Create (authoritative for these nodes; 9.1's manifest excludes them):**
 - `Runtime/VisualGraphs/Authoring/Nodes/Core/Math/*.cs` (~15 nodes)
 - `Runtime/VisualGraphs/Authoring/Nodes/Core/Logic/*.cs` (~5 nodes)
-- `Runtime/VisualGraphs/Authoring/Nodes/Core/State/*.cs` (~4 nodes)
+- `Runtime/VisualGraphs/Authoring/Nodes/Core/State/*.cs` (~4 nodes, or extensions to the existing `GenericState*` family — decide at implementation, don't ship both)
 - `Runtime/VisualGraphs/Authoring/Nodes/Core/Transform/*.cs` (~5 nodes)
 - `Runtime/VisualGraphs/Executors/Math/*.cs` (~15 executors)
 - `Runtime/VisualGraphs/Executors/Logic/*.cs` (~5 executors)
@@ -811,7 +872,13 @@ CropGraph:
 
 **Total:** ~58 new files (nodes + executors)
 
-**Note:** This section focuses on the MINIMUM needed for systemic gameplay. Full visual scripting (loops, functions, etc.) comes in Phase 11, but these primitives unlock RimWorld/Zomboid-style emergent gameplay NOW.
+**Acceptance criteria (Dirigible parity-plan Phase C, verifiable end-to-end):**
+- [ ] A graph authored from a Storyteller-style parameter set ("raid targets structure X with N enemies and reward Y") consumes declared variables `targetStructure`/`enemyCount`/`rewardItem` injected at start
+- [ ] Pattern 1 below (rain intensity → growth multiplier) runs live: message field → math node → state write, observable via the graph debugger's state-change events
+- [ ] Pattern 2 below (multi-condition AND) runs live with n-ary `AndNode` inputs
+- [ ] All four patterns covered by tests, not just demos
+
+**Note:** This section focuses on the MINIMUM needed for systemic gameplay. Full visual scripting (loops, functions, etc.) comes in 9.1's remainder and Phase 11, but these primitives unlock RimWorld/Zomboid-style emergent gameplay NOW.
 
 ---
 
@@ -833,33 +900,45 @@ CropGraph:
 
 **Advanced Solution (Future Enhancement):**
 
+**Implementation shape (constraint — the predecessor's `DynamicValueBuilder` pattern is post-mortem mistake #5: 571 lines of builder docs, validate-only vs validate-and-build modes, surface area exceeding value):** the capability set (dynamic values, interpolation, composable conditions, dynamic visibility) is fully preserved, but the mechanism is ONE serializable `DynamicValue` discriminated union + ONE resolver — no builder-pattern class family, no per-type builder interfaces, no build-mode flags.
+
 **9.5.1 Reusable Condition System:**
-- Create `IConditionEvaluator` interface for pluggable condition logic
+- Create `IConditionEvaluator` interface for pluggable condition logic (mod extension point — registered via VContainer like `IGraphNodeExecutor`)
 - Implement `ConditionRegistry` with ScriptableObject definitions for reusable conditions
 - Create `ConditionDefinition` ScriptableObjects that can be shared across graphs
-- Add world state abstraction (`IWorldStateReader`) for querying game state outside graph state
+  - A condition = left `DynamicValue`, operator (the `GenericStateCheckNode` operator set), right `DynamicValue`, plus And/Or/Not composition over child conditions
+- Add world state abstraction (`IWorldStateReader`) for querying live game systems outside graph state
+  - Scope note: the `world.*` scoped-key prefix (9.0.2) reads the persisted World CONTEXT; `IWorldStateReader` reads LIVE game services (positions, inventory contents). Two different sources — document the distinction at the interface, expose both to conditions, do not merge them
 - Enable conditions to be composed and reused (e.g., "HasItem" + "QuestComplete" = "CanStartDialogue")
 
 **9.5.2 Dynamic Value Resolution & Visibility Conditions:**
 - [ ] Create `VariableStringInterpolator` for runtime string interpolation
   - Resolve `"Quest {questName} - {progress}/{total}"` at runtime
-  - Support for variable references in strings
+  - `{...}` references resolve through the 9.0.2 `ScopedKeyResolver` — so `{player.gold}` and `{quest:main_01.kills}` work everywhere strings are interpolated (constraint #3: same resolver, third consumer)
+  - Unresolvable reference renders a loud placeholder (`{?key}`) and logs a warning — never throws in UI paths, never silently renders empty
+  - This is also the mechanism for the parity plan's `{targetStructure}`/`{rewardItem}` parameterization of node string fields
 
-- [ ] Create `DynamicValueBuilder` pattern for complex conditions
-  - `IDynamicValueBuilder<T>` interface for building conditions
-  - `IDynamicValueResolver<T>` for resolving at runtime
-  - Builder types: concrete values, variable references, math operations, conditionals
+- [ ] Create `DynamicValue` — one serializable type, not a builder family
+  - Discriminated union: `Constant` (typed literal per the 9.0.1 type table) | `VariableRef` (scoped key) | `Expression` (binary math op over two child `DynamicValue`s) | `Conditional` (condition ? value : value)
+  - ONE `DynamicValueResolver` evaluates it against an `IGraphContext`; depth-capped (default 8) to keep authored expressions readable and resolution bounded
+  - Serializes as plain data → works in SO inspectors, text authoring (9.7), and generated content alike
 
-- [ ] Implement `VisibilityConditionBuilder` for quest/region visibility
+- [ ] Implement visibility conditions for quest/region visibility (a `ConditionDefinition`, not a separate builder type)
   - Dynamic visibility based on player state (level, quests, variables)
-  - Locked state conditions ("why is this locked?")
+  - Locked state conditions ("why is this locked?") — each condition carries an optional designer-facing reason string (interpolated, so "Requires level {player.level_required}" works)
   - Availability conditions (prerequisites evaluation)
-  - Replace static `EQuestVisibility` enum with dynamic conditions
+  - Replace static `EQuestVisibility` enum with dynamic conditions — **migration task: existing `QuestDefinition` assets with enum visibility get equivalent `ConditionDefinition`s; enum stays readable during transition and a deprecation warning logs on load**
 
 - [ ] Integrate with `QuestDefinition` and `QuestManager`
-  - `QuestDefinition.VisibilityCondition` uses `DynamicValueBuilder`
+  - `QuestDefinition.VisibilityCondition` is a `ConditionDefinition` reference (or inline condition)
   - `QuestManager.IsQuestLocked()` evaluates dynamic conditions
   - UI can query "why is quest locked?" for tooltips
+
+**Tests (required for completion):**
+- `DynamicValue` resolution per union case, depth cap trips loudly
+- Interpolator: scoped refs, missing-key placeholder, no-throw guarantee
+- Condition composition (And/Or/Not nesting) and `IConditionEvaluator` plugin dispatch
+- Enum→condition visibility migration produces equivalent lock states
 
 **Files to Create:**
 - `Runtime/VisualGraphs/Conditions/IConditionEvaluator.cs`
@@ -869,10 +948,8 @@ CropGraph:
 - `Runtime/VisualGraphs/Authoring/Nodes/Conditions/ConditionCheckNode.cs`
 - `Runtime/VisualGraphs/Executors/Conditions/ConditionCheckNodeExecutor.cs`
 - `Runtime/VisualGraphs/Values/VariableStringInterpolator.cs`
-- `Runtime/VisualGraphs/Values/IDynamicValueBuilder.cs`
-- `Runtime/VisualGraphs/Values/IDynamicValueResolver.cs`
-- `Runtime/VisualGraphs/Values/DynamicValueBuilder.cs`
-- `Runtime/VisualGraphs/Values/VisibilityConditionBuilder.cs`
+- `Runtime/VisualGraphs/Values/DynamicValue.cs`
+- `Runtime/VisualGraphs/Values/DynamicValueResolver.cs`
 
 **Files to Modify:**
 - `Runtime/VisualGraphs/Quest/Definitions/QuestDefinition.cs` - Add `VisibilityCondition` field
@@ -922,7 +999,42 @@ CropGraph:
 - `Runtime/VisualGraphs/Authoring/Nodes/Transactions/CommitTransactionNode.cs`
 - `Runtime/VisualGraphs/Authoring/Nodes/Transactions/RollbackTransactionNode.cs`
 
-**Priority:** Medium - May not be needed if operations are simple. Evaluate based on actual use cases.
+**Priority:** Low — **explicitly gated (post-mortem mistake #9: "complex transaction system without a specific concurrency requirement").** Under constraint #5 all graph execution is main-thread, which removes the concurrency motivation entirely. Do not start this sub-phase until a NAMED, demonstrated use case exists (written down here with a repro of the partial-state failure it prevents). Not on Dirigible's critical path; failure-atomicity for simple cases is better served by validating inputs before the first state write.
+
+---
+
+### 9.7 Variable & Logic Text Authoring Round-Trip ⏳ **PLANNED** (Required for Dirigible parity Phase C)
+
+**Goal:** Variables and logic declared in the text authoring formats (`.quest.txt` / `.events.txt`) round-trip to graph assets and back — modders and the Storyteller pipeline author variables without opening xNode
+
+**Why Critical:**
+- Dirigible's parity plan (Phase C) requires: "The text authoring format must round-trip variables: `.quest.txt` declares variables, the importer wires them to graph state, the runtime reads them"
+- xNode is the team-facing authoring layer; text is the modder-facing AND generation-facing layer (LAIRD/Storyteller emits text, not SO graphs). Without this sub-phase, 9.0–9.5 are team-only features
+- Generated content ("raid with N enemies, reward Y") parameterizes through declared variables + `{interpolation}` — both must survive export → text → import unchanged
+
+**Split of responsibilities (pinned):**
+- **MToolKit side (this roadmap):** text schema definition for variable declarations and `DynamicValue`/condition literals; export of a graph's declared-variables block to text; import wiring into `GraphVariableSet` declarations
+- **Dirigible side (parity plan):** `QuestTextParser`/`QuestTextImporter`/`QuestGraphWirer` and the Event-text equivalents consume the schema; hot-reload (parity Phase E) builds on it
+
+**Implementation Tasks:**
+- [ ] Define the text schema for variable declarations
+  - A `variables:` block: `key: type = default` (e.g. `enemyCount: int = 5`, `spawnPoint: vector3 = (0, 0, 0)`)
+  - Literal syntax for every type in the 9.0.1 type table — a type without text syntax is not "supported" (constraint #7)
+  - Scoped-key references and `{interpolation}` use identical syntax in text and node string fields
+- [ ] Exporter: graph asset declared-variables block → text `variables:` block (deterministic ordering so diffs are stable)
+- [ ] Importer: text `variables:` block → `GraphVariableSet` declarations on the imported graph asset
+  - Round-trip property: export(import(text)) == text (modulo whitespace), import(export(asset)) == asset declarations
+  - Unknown type name or malformed default = import ERROR with file/line, never a silently-skipped declaration
+- [ ] Condition/`DynamicValue` text syntax for 9.5 constructs referenced from text-authored graphs (e.g. `visible_when: player.level >= 5 and quest:intro.complete == true`)
+- [ ] Conflict policy: per Dirigible's content-authoring convention, on unrecoverable divergence TEXT WINS (importer idempotent, exporter destructive) — same rule as the `.item.txt` cascade
+
+**Tests (required for completion):**
+- Round-trip per type (declaration + default literal)
+- Malformed declarations fail with file/line diagnostics
+- Interpolated strings and scoped keys survive round-trip byte-identical
+- Condition text syntax parses to the same `ConditionDefinition` shape the inspector produces
+
+**Files to Create/Modify (seam resolved):** the existing text pipeline (`QuestTextParser`/`QuestTextImporter`/`QuestGraphWirer`) lives in Dirigible at `Assets/_Dirigible/Source/Quests/Editor/` — parser/importer/exporter changes are Dirigible work and extend those files (do NOT create a second parser). MToolKit's contribution is the data surface those tools target: the declared-variables block on graph assets (9.0.1) and serializable `DynamicValue`/`ConditionDefinition` shapes (9.5), plus this schema spec as the contract. The schema definition itself lives in this roadmap's companion doc (`MESSAGE_DATA_FLOW.md` or a new `TEXT_AUTHORING_SCHEMA.md`) so both repos implement against one document.
 
 ---
 
