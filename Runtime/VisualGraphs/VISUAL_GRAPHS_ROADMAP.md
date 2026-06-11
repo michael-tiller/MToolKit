@@ -513,7 +513,7 @@ A predecessor framework shipped this exact feature set, regretted most of its ab
 - `Runtime/VisualGraphs/Export/XNodeGraphExporter.cs` - declaration validation pass
 - Graph asset types - optional declared-variables reference
 
-**9.0.2 Runtime Contexts & Cross-Scope Variable Access:**
+**9.0.2 Runtime Contexts & Cross-Scope Variable Access:** ⏳ **9.0.2a SHIPPED 2026-06-11** (contexts + registry + resolver, 48 EditMode tests; MToolKit.Tests.Editor 172/172 green) — **9.0.2b PENDING** (QuestManager characterization suite + refactor + `QuestContextExtensions`)
 
 **Goal:** Provide ONE clean context API over raw `IGraphState` access and ONE cross-scope variable access path
 
@@ -524,34 +524,41 @@ A predecessor framework shipped this exact feature set, regretted most of its ab
 - The capability set is unchanged from the original spec (quest/player/world scopes, bidirectional cross-scope access); the SHAPE is constrained by post-mortem mistakes #3 (one context interface split into N capability interfaces) and #4 (multi-generic resolver gymnastics) — see Phase-Wide Design Constraints
 
 **Implementation Tasks:**
-- [ ] Create ONE flat `IGraphContext` interface
+- [x] Create ONE flat `IGraphContext` interface **(9.0.2a)**
   - `Scope` (enum: `Graph`, `Player`, `World` — quest contexts are `Graph`-scoped contexts whose owner is a quest), owner id, `IVariableStorage` access, event firing
-  - Quest convenience members live as extension methods over `IGraphContext` + `QuestRuntimeState`, NOT as a separate `IQuestContext` interface
-- [ ] Create `GraphContextRegistry` (single class, VContainer-registered)
+  - Quest convenience members live as extension methods over `IGraphContext` + `QuestRuntimeState`, NOT as a separate `IQuestContext` interface — **deferred to 9.0.2b** (zero consumers until the QuestManager refactor)
+  - *(as built: `EGraphContextScope` + `IGraphContext` in `Contexts/IGraphContext.cs`; `GraphContext` backs `Variables` with 9.0.1 `VariableStorage` and never re-wraps the supplied state in `DebuggableGraphState` — wrap policy belongs to the state's creator; `Emit` delegates to the injected `IEventEmitter`, the outbound bus path, NOT the inbound router)*
+- [x] Create `GraphContextRegistry` (single class, VContainer-registered) **(9.0.2a)**
   - Construction is a registry method (`GetOrCreate(scope, ownerId, state)`) — no separate `IContextFactory`/`ContextFactory` pair; split a factory out later only if a second construction policy actually appears
   - Player and World scopes are lazily-created singleton contexts backed by their own `IGraphState` instances (persisted via 9.0.4)
-- [ ] Implement scoped key resolution — the single cross-scope access path
+  - *(as built: Player/World normalize/ignore owner id and reject a supplied state/declarations; Graph requires a non-empty owner + a state on first create, and a DIFFERENT non-null state for an existing owner throws — the legitimate re-create path is `Remove` then `GetOrCreate`. `SetScopeDeclarations` (load-order tolerant) wires authored Player/World declarations from `VisualGraphConfig`. `GetScopeStateOrNull` is the 9.0.4 persistence seam. Main-thread only, no locks.)*
+- [x] Implement scoped key resolution — the single cross-scope access path **(9.0.2a)**
   - Key syntax: bare `gold` = local scope; `player.gold`, `world.time_of_day`, `quest:<questId>.kills` = explicit scope
-  - One `ScopedKeyResolver` parses the key and routes to the right context's storage; missing scope target = declared-default fallback + warning log, never a throw
+  - One `ScopedKeyResolver` parses the key and routes to the right context's storage. **Fallback semantics (clarified from the original one-liner so spec, tests and impl agree — three distinct cases):** (a) target context resolves and the key is unset but DECLARED → the target's declared default returns SILENTLY (a legitimate value, not a miss); (b) target resolves, key unset and UNDECLARED → warning + caller-supplied fallback; (c) the target CONTEXT itself is missing (a `quest:<id>` with no live context — Player/World are lazily created and never miss) → warning + caller-supplied fallback (a declared default is unreachable here by construction, since declarations live on the missing target's storage). `Set` on a missing target → warning + no-op. **A miss never throws; only MALFORMED key syntax fails loud** (ArgumentException, including through `Get`/`Set`).
   - This SAME resolver backs 9.4's cross-graph state query nodes and 9.5's interpolation/conditions — one path, three consumers (constraint #3)
-- [ ] Refactor `QuestManager` to use `IGraphContext`
-  - Replace raw `IGraphState` access with the context API
+  - *(as built: ordinal grammar, no trimming; `quest:` id runs to the first dot, key remainder verbatim. `ScopedKeyRef` + static `Parse` are public for 9.5 authoring-time syntax checks. Warning behavior is asserted via a real Serilog collecting sink (`SerilogSinkScope`), not just no-throw.)*
+- [ ] Refactor `QuestManager` to use `IGraphContext` — **9.0.2b** (characterization suite first: QuestManager has zero existing tests, full-lifecycle depth)
+  - Replace raw `IGraphState` access with the context API; register Graph contexts with `ownerId = questGuid` exactly (the verbatim id `ScopedKeyResolver` parses from `quest:<id>` — contract pinned in `GraphContextRegistry`'s XML doc)
   - Backward compat pinned: public `QuestManager` API signatures unchanged; `IGraphState` remains reachable for existing executors
 
 **Tests (required for completion):**
-- Scoped key parsing (all four forms, malformed keys fail loud)
-- Quest → Player and Player → Quest access through the resolver
-- Missing-scope fallback returns declared default and logs
-- `QuestManager` behavior unchanged under the refactor (characterization tests)
+- [x] Scoped key parsing (all four forms, malformed keys fail loud) **(9.0.2a)**
+- [x] Quest → Player and Player → Quest access through the resolver **(9.0.2a)**
+- [x] Missing-scope fallback (three-case semantics above) returns the right value and logs **(9.0.2a)**
+- [ ] `QuestManager` behavior unchanged under the refactor (characterization tests) — **9.0.2b**
 
 **Files to Create:**
-- `Runtime/VisualGraphs/Contexts/IGraphContext.cs`
-- `Runtime/VisualGraphs/Contexts/GraphContext.cs`
-- `Runtime/VisualGraphs/Contexts/GraphContextRegistry.cs`
-- `Runtime/VisualGraphs/Contexts/ScopedKeyResolver.cs`
-- `Runtime/VisualGraphs/Contexts/QuestContextExtensions.cs`
+- [x] `Runtime/VisualGraphs/Contexts/IGraphContext.cs` **(9.0.2a)**
+- [x] `Runtime/VisualGraphs/Contexts/GraphContext.cs` **(9.0.2a)**
+- [x] `Runtime/VisualGraphs/Contexts/GraphContextRegistry.cs` **(9.0.2a)**
+- [x] `Runtime/VisualGraphs/Contexts/ScopedKeyResolver.cs` **(9.0.2a)**
+- [ ] `Runtime/VisualGraphs/Contexts/QuestContextExtensions.cs` — **9.0.2b**
 
-**Files to Modify:**
+**Files Modified (9.0.2a):**
+- `Runtime/VisualGraphs/Config/VisualGraphConfig.cs` — optional Player/World declared-variable blocks
+- `Runtime/VisualGraphs/VisualGraphPlugin.cs` — register registry + resolver, wire scope declarations
+
+**Files to Modify (9.0.2b):**
 - `Runtime/VisualGraphs/Quest/QuestManager.cs` - Use `IGraphContext` instead of raw state
 
 **9.0.3 GameRules System:**
