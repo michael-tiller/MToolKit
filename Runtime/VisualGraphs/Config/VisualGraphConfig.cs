@@ -46,6 +46,16 @@ namespace MToolKit.Runtime.VisualGraphs.Config
     [ShowIf(nameof(QuestDatabase))]
     [Tooltip("Auto-start the first quest from the database on plugin setup")]
     public bool AutoStartFirstQuest = false;
+
+    [BoxGroup("Scoped Variables")]
+    [Tooltip("Optional declared-variables block for the Player scope (player.<key>). Supplies typed defaults " +
+             "for cross-scope reads. Without this, Player-scope declared defaults are unavailable at runtime.")]
+    public Variables.GraphVariableSet PlayerVariables;
+
+    [BoxGroup("Scoped Variables")]
+    [Tooltip("Optional declared-variables block for the World scope (world.<key>). Supplies typed defaults " +
+             "for cross-scope reads. Without this, World-scope declared defaults are unavailable at runtime.")]
+    public Variables.GraphVariableSet WorldVariables;
   }
 }
 

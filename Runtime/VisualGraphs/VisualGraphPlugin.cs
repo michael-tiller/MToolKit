@@ -114,6 +114,11 @@ namespace MToolKit.Runtime.VisualGraphs
       // Event emitter adapter (registered first, QuestManager will be injected later)
       builder.Register<IEventEmitter, VisualGraphEventEmitter>(Lifetime.Singleton);
 
+      // Runtime contexts + scoped key resolution (9.0.2a) — concrete types; the QuestManager refactor (9.0.2b)
+      // injects GraphContextRegistry directly. In-method order is irrelevant (VContainer resolves at Build).
+      builder.Register<Contexts.GraphContextRegistry>(Lifetime.Singleton);
+      builder.Register<Contexts.ScopedKeyResolver>(Lifetime.Singleton);
+
       // Save/load controller for graph state persistence
       // Note: Requires GraphEventRouter (registered above), IES3Service (from GlobalInstaller), and IQuestManager (registered above)
       // Registry is already registered above, so we can inject it directly
@@ -199,6 +204,14 @@ namespace MToolKit.Runtime.VisualGraphs
         {
           registry.Register(executor);
         }
+
+        // Wire authored Player/World declared-variables onto their scope contexts (9.0.2a). Must precede the
+        // first GetOrCreate for each scope; the registry logs-and-ignores a late call, so this is safe here.
+        var contextRegistry = container.Resolve<Contexts.GraphContextRegistry>();
+        if (config != null && config.PlayerVariables != null)
+          contextRegistry.SetScopeDeclarations(Contexts.EGraphContextScope.Player, config.PlayerVariables);
+        if (config != null && config.WorldVariables != null)
+          contextRegistry.SetScopeDeclarations(Contexts.EGraphContextScope.World, config.WorldVariables);
       });
 
       // Register the plugin instance
