@@ -23,12 +23,12 @@ namespace MToolKit.Tests.Editor.VisualGraphs.State
       return Track(ScriptableObject.CreateInstance<GraphVariableSet>());
     }
 
-    private static GraphVariableSet.GraphVariableEntry IntEntry(string key, int value)
+    private static GraphVariableDeclaration IntEntry(string key, int value)
     {
-      return new GraphVariableSet.GraphVariableEntry
+      return new GraphVariableDeclaration
       {
         key = key,
-        type = GraphVariableSet.EGraphVariableType.Int,
+        type = EGraphVariableType.Int,
         intValue = value
       };
     }
@@ -62,13 +62,13 @@ namespace MToolKit.Tests.Editor.VisualGraphs.State
     public void ApplyTo_WritesEachSupportedTypeAsTyped()
     {
       var set = NewSet();
-      set.entries.Add(new GraphVariableSet.GraphVariableEntry
-        { key = "s", type = GraphVariableSet.EGraphVariableType.String, stringValue = "hello" });
+      set.entries.Add(new GraphVariableDeclaration
+        { key = "s", type = EGraphVariableType.String, stringValue = "hello" });
       set.entries.Add(IntEntry("i", 7));
-      set.entries.Add(new GraphVariableSet.GraphVariableEntry
-        { key = "f", type = GraphVariableSet.EGraphVariableType.Float, floatValue = 1.5f });
-      set.entries.Add(new GraphVariableSet.GraphVariableEntry
-        { key = "b", type = GraphVariableSet.EGraphVariableType.Bool, boolValue = true });
+      set.entries.Add(new GraphVariableDeclaration
+        { key = "f", type = EGraphVariableType.Float, floatValue = 1.5f });
+      set.entries.Add(new GraphVariableDeclaration
+        { key = "b", type = EGraphVariableType.Bool, boolValue = true });
 
       var state = new InMemoryGraphState();
       set.ApplyTo(state);
@@ -93,6 +93,42 @@ namespace MToolKit.Tests.Editor.VisualGraphs.State
       set.ApplyTo(state);
 
       Assert.That(state.AsReadOnly(), Is.Empty, "entries with an empty key are skipped");
+    }
+
+    [Test]
+    public void ApplyTo_WritesVector3Vector2ColorAsTyped()
+    {
+      var set = NewSet();
+      set.entries.Add(new GraphVariableDeclaration
+        { key = "v3", type = EGraphVariableType.Vector3, vector3Value = new Vector3(1f, 2f, 3f) });
+      set.entries.Add(new GraphVariableDeclaration
+        { key = "v2", type = EGraphVariableType.Vector2, vector2Value = new Vector2(4f, 5f) });
+      set.entries.Add(new GraphVariableDeclaration
+        { key = "c", type = EGraphVariableType.Color, colorValue = Color.red });
+
+      var state = new InMemoryGraphState();
+      set.ApplyTo(state);
+
+      Assert.That(state.TryGet<Vector3>("v3", out var v3), Is.True);
+      Assert.That(v3, Is.EqualTo(new Vector3(1f, 2f, 3f)));
+      Assert.That(state.TryGet<Vector2>("v2", out var v2), Is.True);
+      Assert.That(v2, Is.EqualTo(new Vector2(4f, 5f)));
+      Assert.That(state.TryGet<Color>("c", out var c), Is.True);
+      Assert.That(c, Is.EqualTo(Color.red));
+    }
+
+    [Test]
+    public void ApplyTo_SkipsNullEntry()
+    {
+      var set = NewSet();
+      set.entries.Add(null); // Unity list serialization can produce null slots
+      set.entries.Add(IntEntry("hp", 5));
+
+      var state = new InMemoryGraphState();
+      set.ApplyTo(state);
+
+      Assert.That(state.TryGet<int>("hp", out var hp), Is.True, "null entries are skipped, the rest still apply");
+      Assert.That(hp, Is.EqualTo(5));
     }
 
     private static int Read(GraphRunnerHarness harness, string key)

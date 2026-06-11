@@ -1,14 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using MToolKit.Runtime.Utilities;
 using MToolKit.Runtime.VisualGraphs.Authoring;
+using MToolKit.Runtime.VisualGraphs.Authoring.Nodes.Message;
+using MToolKit.Runtime.VisualGraphs.Authoring.Nodes.State;
 using MToolKit.Runtime.VisualGraphs.Dialogue.Graphs;
 using MToolKit.Runtime.VisualGraphs.Event.Graphs;
 using MToolKit.Runtime.VisualGraphs.Quest.Graphs;
+using MToolKit.Runtime.VisualGraphs.Quest.Nodes;
 using MToolKit.Runtime.VisualGraphs.Runtime.DTOs;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
+using MToolKit.Runtime.VisualGraphs.Variables;
 using Serilog;
 using UnityEngine;
 using XNode;
@@ -375,8 +380,232 @@ namespace MToolKit.Runtime.VisualGraphs.Export
         ValidateAssetReferences(node, graph.name, errors);
       }
 
+      ValidateVariableDeclarations(graph, GetDeclaredVariables(graph), errors);
+
       if (errors.Any())
         throw new InvalidGraphException($"Graph validation failed:\n{string.Join("\n", errors)}");
+    }
+
+    /// <summary>
+    ///   The graph asset's optional declared-variables block, if its type carries one.
+    /// </summary>
+    private static GraphVariableSet GetDeclaredVariables(NodeGraph graph)
+    {
+      return graph switch
+      {
+        QuestGraphAsset quest => quest.DeclaredVariables,
+        DialogueGraphAsset dialogue => dialogue.DeclaredVariables,
+        EventGraphAsset evt => evt.DeclaredVariables,
+        _ => null
+      };
+    }
+
+    /// <summary>
+    ///   Validate node state-key references against the graph's declared variables. Entirely skipped when no
+    ///   declaration set is attached (opt-in — undeclared graphs export exactly as before). Unknown keys are
+    ///   warnings (dynamic/mod keys stay legal at runtime); structural and type problems are errors.
+    ///   All literal parsing uses the invariant culture (executors currently parse with the current culture —
+    ///   tracked as technical debt).
+    /// </summary>
+    private static void ValidateVariableDeclarations(NodeGraph graph, GraphVariableSet set, List<string> errors)
+    {
+      if (set == null || set.entries == null || set.entries.Count == 0) return;
+
+      var seenKeys = new HashSet<string>(StringComparer.Ordinal);
+      foreach (var entry in set.entries)
+      {
+        if (entry == null) continue;
+
+        if (string.IsNullOrWhiteSpace(entry.key))
+        {
+          errors.Add($"Graph '{graph.name}': declared variable with an empty key.");
+          continue;
+        }
+
+        if (!Enum.IsDefined(typeof(EGraphVariableType), entry.type))
+        {
+          errors.Add($"Graph '{graph.name}': declared variable '{entry.key}' has out-of-range type value {(int)entry.type}.");
+          continue;
+        }
+
+        if (!seenKeys.Add(entry.key))
+          errors.Add($"Graph '{graph.name}': duplicate declared variable key '{entry.key}'.");
+      }
+
+      foreach (var node in graph.nodes)
+      {
+        switch (node)
+        {
+          case GenericStateSetNode setNode:
+            ValidateSetNode(graph, set, setNode, errors);
+            break;
+          case GenericStateCheckNode checkNode:
+            ValidateCheckNode(graph, set, checkNode, errors);
+            break;
+          case GenericStateGetNode getNode:
+            ValidateGetNode(graph, set, getNode, errors);
+            break;
+          case MessageFieldGetNode fieldGetNode:
+            WarnIfUndeclared(graph, set, fieldGetNode.StateKey, fieldGetNode.name);
+            break;
+          case QuestEmitEventNode emitNode:
+            if (emitNode.Payload == null) break;
+            foreach (var parameter in emitNode.Payload)
+            {
+              if (parameter != null && parameter.ValueType == ParameterValueType.Variable)
+                WarnIfUndeclared(graph, set, parameter.VariableName, emitNode.name);
+            }
+            break;
+        }
+      }
+    }
+
+    /// <summary>
+    ///   Unknown key = warning, not error: undeclared keys remain legal at runtime for dynamic/mod use.
+    /// </summary>
+    private static bool WarnIfUndeclared(NodeGraph graph, GraphVariableSet set, string key, string nodeName)
+    {
+      if (string.IsNullOrEmpty(key) || set.Find(key) != null) return false;
+
+      Debug.LogWarning($"Graph '{graph.name}': node '{nodeName}' references undeclared state key '{key}'. " +
+                       "Declare it in DeclaredVariables, or ignore if intentionally dynamic.");
+      return true;
+    }
+
+    private static void ValidateSetNode(NodeGraph graph, GraphVariableSet set, GenericStateSetNode node, List<string> errors)
+    {
+      if (string.IsNullOrEmpty(node.StateKey)) return; // empty key is the existing runtime warning's job
+      if (WarnIfUndeclared(graph, set, node.StateKey, node.name)) return;
+
+      // The ValueType dropdown only offers these four; anything else is corrupted authoring data.
+      if (!TryMapValueType(node.ValueType, out var nodeType))
+      {
+        errors.Add($"Graph '{graph.name}': node '{node.name}' has unknown ValueType '{node.ValueType}'.");
+        return;
+      }
+
+      var declaration = set.Find(node.StateKey);
+      if (declaration.type != nodeType)
+      {
+        errors.Add($"Graph '{graph.name}': node '{node.name}' writes '{node.StateKey}' as {nodeType} " +
+                    $"but it is declared {declaration.type}.");
+        return;
+      }
+
+      // The executor parses Value at runtime and only warns on failure — catch it at author time instead.
+      // Empty Value mirrors the executor's default-to-"0" behavior and is always parseable.
+      if (!string.IsNullOrEmpty(node.Value) && !LiteralParsesAs(node.Value, nodeType))
+        errors.Add($"Graph '{graph.name}': node '{node.name}' Value '{node.Value}' does not parse as {nodeType} " +
+                    $"for declared key '{node.StateKey}'.");
+    }
+
+    private static void ValidateCheckNode(NodeGraph graph, GraphVariableSet set, GenericStateCheckNode node, List<string> errors)
+    {
+      if (string.IsNullOrEmpty(node.StateKey)) return;
+      if (WarnIfUndeclared(graph, set, node.StateKey, node.name)) return;
+
+      var declaration = set.Find(node.StateKey);
+      var isOrderingOperator = node.ComparisonOperator != "Equals" && node.ComparisonOperator != "NotEquals";
+
+      switch (declaration.type)
+      {
+        case EGraphVariableType.Int:
+        case EGraphVariableType.Float:
+          if (!double.TryParse(node.ExpectedValue, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+            errors.Add($"Graph '{graph.name}': node '{node.name}' ExpectedValue '{node.ExpectedValue}' " +
+                        $"is not numeric but '{node.StateKey}' is declared {declaration.type}.");
+          break;
+
+        case EGraphVariableType.Bool:
+          // The executor compares via Convert.ToBoolean, which accepts only true/false — "1"/"0" throw at runtime
+          // (the Set-node parser accepts them; the Check-node comparison does not).
+          if (!bool.TryParse(node.ExpectedValue, out _))
+            errors.Add($"Graph '{graph.name}': node '{node.name}' ExpectedValue '{node.ExpectedValue}' " +
+                        $"must be 'true' or 'false' for bool key '{node.StateKey}'.");
+          if (isOrderingOperator)
+            errors.Add($"Graph '{graph.name}': node '{node.name}' uses ordering operator '{node.ComparisonOperator}' " +
+                        $"on bool key '{node.StateKey}'.");
+          break;
+
+        case EGraphVariableType.Vector3:
+        case EGraphVariableType.Vector2:
+        case EGraphVariableType.Color:
+          // The executor falls back to ToString comparison for structs — culture/precision-unstable. No struct
+          // checks until typed literals/comparers exist.
+          errors.Add($"Graph '{graph.name}': node '{node.name}' checks '{node.StateKey}' declared {declaration.type}; " +
+                      "state checks do not support struct types.");
+          break;
+      }
+    }
+
+    private static void ValidateGetNode(NodeGraph graph, GraphVariableSet set, GenericStateGetNode node, List<string> errors)
+    {
+      var sourceDeclared = !string.IsNullOrEmpty(node.SourceStateKey) &&
+                           !WarnIfUndeclared(graph, set, node.SourceStateKey, node.name) &&
+                           set.Find(node.SourceStateKey) != null;
+      var destinationDeclared = !string.IsNullOrEmpty(node.DestinationStateKey) &&
+                                !WarnIfUndeclared(graph, set, node.DestinationStateKey, node.name) &&
+                                set.Find(node.DestinationStateKey) != null;
+
+      var sourceType = sourceDeclared ? set.Find(node.SourceStateKey).type : (EGraphVariableType?)null;
+      var destinationType = destinationDeclared ? set.Find(node.DestinationStateKey).type : (EGraphVariableType?)null;
+
+      if (sourceType.HasValue && destinationType.HasValue && sourceType.Value != destinationType.Value)
+        errors.Add($"Graph '{graph.name}': node '{node.name}' copies '{node.SourceStateKey}' ({sourceType}) " +
+                    $"into '{node.DestinationStateKey}' ({destinationType}).");
+
+      // The default path writes the inferred default into the DESTINATION key, so the destination declaration
+      // is what a bad default corrupts; fall back to the source declaration when only that is available.
+      var defaultTarget = destinationType ?? sourceType;
+      if (!defaultTarget.HasValue) return;
+
+      if (defaultTarget.Value is EGraphVariableType.Vector3 or EGraphVariableType.Vector2 or EGraphVariableType.Color)
+      {
+        errors.Add($"Graph '{graph.name}': node '{node.name}' default path writes to a {defaultTarget} key; " +
+                    "default-value inference only produces bool/int/float/string.");
+        return;
+      }
+
+      var inferred = InferDefaultValueType(node.DefaultValue);
+      if (inferred != defaultTarget.Value)
+        errors.Add($"Graph '{graph.name}': node '{node.name}' DefaultValue '{node.DefaultValue}' infers as {inferred} " +
+                    $"but the target key is declared {defaultTarget}.");
+    }
+
+    private static bool TryMapValueType(string valueType, out EGraphVariableType mapped)
+    {
+      switch (valueType?.ToLowerInvariant())
+      {
+        case "string": mapped = EGraphVariableType.String; return true;
+        case "int": mapped = EGraphVariableType.Int; return true;
+        case "float": mapped = EGraphVariableType.Float; return true;
+        case "bool": mapped = EGraphVariableType.Bool; return true;
+        default: mapped = default; return false;
+      }
+    }
+
+    private static bool LiteralParsesAs(string value, EGraphVariableType type)
+    {
+      return type switch
+      {
+        EGraphVariableType.String => true,
+        EGraphVariableType.Int => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _),
+        EGraphVariableType.Float => float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out _),
+        // Mirrors the Set executor's parser: 1/0 and (case-insensitive) true/false.
+        EGraphVariableType.Bool => value == "1" || value == "0" || bool.TryParse(value, out _),
+        _ => false
+      };
+    }
+
+    /// <summary>
+    ///   Mirror of the Get executor's default-value inference order: bool → int → float → string.
+    /// </summary>
+    private static EGraphVariableType InferDefaultValueType(string defaultValue)
+    {
+      if (bool.TryParse(defaultValue, out _)) return EGraphVariableType.Bool;
+      if (int.TryParse(defaultValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)) return EGraphVariableType.Int;
+      if (float.TryParse(defaultValue, NumberStyles.Float, CultureInfo.InvariantCulture, out _)) return EGraphVariableType.Float;
+      return EGraphVariableType.String;
     }
 
     /// <summary>

@@ -470,26 +470,30 @@ A predecessor framework shipped this exact feature set, regretted most of its ab
 - Need a thin typed accessor over `IGraphState` so node executors stop hand-rolling `TryGet`/convert/default logic
 - The string-keyed `IGraphState` API (`TryGet<T>`/`Set<T>`) stays — it is the storage substrate and the backward-compat surface; declarations layer on top
 
-**9.0.1 Typed Variable Foundation:**
+**9.0.1 Typed Variable Foundation:** ✅ **SHIPPED 2026-06-11** (48 new EditMode tests, MToolKit.Tests.Editor 259/259 green)
 
 **Implementation Tasks:**
-- [ ] Promote `GraphVariableSet.GraphVariableEntry` to the canonical variable declaration
+- [x] Promote `GraphVariableSet.GraphVariableEntry` to the canonical variable declaration
   - Extract to `GraphVariableDeclaration` (key, `EGraphVariableType`, typed default, optional description for editor/text tooling)
   - `GraphVariableSet` becomes a list of declarations; `ApplyTo(IGraphState)` behavior unchanged
   - Extend `EGraphVariableType` beyond String/Int/Float/Bool with the pinned v1 additions: `Vector3`, `Vector2`, `Color` (closed list — no `etc.`; new types require an entry in the type table below)
-- [ ] Attach a declaration set to graph assets
+  - *(as built: `EGraphVariableType` promoted to a top-level enum in `Variables/GraphVariableDeclaration.cs` — values 0-3 preserved, 4-6 added; `GraphVariableEntry` deleted outright (zero serialized data existed); field names preserved for YAML structural compat; stale Odin `ShowIf` string expressions fixed in passing via the value-comparison overload; `colorValue` defaults to `Color.white`)*
+- [x] Attach a declaration set to graph assets
   - Graph assets (`QuestGraphAsset`/`DialogueGraphAsset`/`EventGraphAsset`) reference an optional `GraphVariableSet` as their declared-variables block (this is what the 9.1 editor picker and the 9.7 text importer read/write)
   - Document the existing init precedence and keep it: `GlobalGraphVariables` → definition initial variables → restored save state (wins)
-- [ ] Create `IVariableStorage` typed accessor (thin wrapper over `IGraphState`, NOT a parallel store)
+  - *(as built: `DeclaredVariables` is validation/tooling metadata, NOT an init leg — declared defaults reach runtime via `VariableStorage` fallback, no loader changes)*
+- [x] Create `IVariableStorage` typed accessor (thin wrapper over `IGraphState`, NOT a parallel store)
   - `Get<T>(string key, T fallbackDefault)` / `Set<T>(string key, T value)` — resolves declared default when the key is absent
-  - `Increment`/`Decrement`/`Add`/`Multiply` for int/float — **default-initializing** (missing key starts from the declared default, never throws). Note: these are NOT idempotent and must not be described as such; replay protection against duplicate message delivery lives in `GraphRunner` sequence-id handling (see constraint #5)
-  - Emits `IGraphStateChangeDebugEvent` on every mutation so the graph debugger sees variable writes (the debug surface already exists — wire into it)
-- [ ] Export-time validation in `XNodeGraphExporter`
+  - `Increment`/`Decrement`/`Add`/`Multiply` for int/float — **default-initializing** (missing key starts from the declared default, never throws). Note: these are NOT idempotent and must not be described as such (no replay protection exists on this surface; `GraphRunner` sequence-id dedup is still an open 9.0.x gap pinned by the test harness)
+  - *(as built, pinned decisions: `VariableStorage` does NOT self-emit debug events — mutations emit `IGraphStateChangeDebugEvent` only when the wrapped state is a `DebuggableGraphState`, which is every loader-constructed runtime state (exactly one event per write, no double emission). `Set<T>` enforces the declared type by EXACT runtime-type match (null legal only for declared String) — a typed accessor must not become a typed-storage bypass. `Get<T>` on a stored-wrong-type value returns the CALLER fallback, never the declared default. Arithmetic is strictly typed (int ops never touch float declarations and vice versa). Null/empty keys: Contains false / Get fallback / mutations no-op. NOT yet wired into GraphLoader or executors — consumers arrive in 9.0.2/9.1.)*
+- [x] Export-time validation in `XNodeGraphExporter`
   - Every `GenericState*`/9.1 node key reference checked against the declaration set: unknown key = warning, type mismatch = error
   - Undeclared keys remain legal at runtime (mod/dynamic keys), but authored graphs validate clean
-- [ ] Backward compatibility — pinned, not vague:
+  - *(as built: validation is entirely skipped when no `DeclaredVariables` set is attached (pure opt-in; runtime export output unchanged for existing graphs). Declaration sets self-validate: duplicate keys / empty keys / out-of-range enum values = errors. Covered surfaces: `GenericStateSetNode` (incl. unknown-`ValueType` error, declared-primitive `Value` parse check, vector/color targets rejected), `GenericStateCheckNode` (bool `ExpectedValue` must be true/false — the executor's `Convert.ToBoolean` throws on "1"/"0"; ordering operators on bool rejected; Vector/Color checks rejected entirely until 9.5 typed comparers — runtime falls back to culture-unstable ToString), `GenericStateGetNode` (source/destination type mismatch; `DefaultValue` validated against the DESTINATION declaration via the executor's bool→int→float→string inference order), plus unknown-key warnings on `MessageFieldGetNode.StateKey` and `QuestEmitEventNode` Variable-kind payloads (deeper typing for those two deferred to 9.1). Validation parses invariant-culture; executors parse current-culture — known gap, logged in Dirigible `Roadmap/TECHNICAL_DEBT.md` 2026-06-11.)*
+- [x] Backward compatibility — pinned, not vague:
   - `IGraphState` string-key API unchanged; existing `GenericState*` nodes keep working unmodified
   - Saves written before 9.0 load unchanged (`GraphStateSnapshot` format untouched by this sub-phase)
+  - *(verified: zero code references to the old nested types remain; `IGraphState`/`InMemoryGraphState`/`DebuggableGraphState`/`GraphStateSnapshot`/executors/`GraphLoader`/`GraphRunner` untouched. NOTE: Vector3/Vector2/Color round-trip in MEMORY only — ES3 persistence for them is 9.0.4, not yet proven.)*
 
 **Type support table (the definition of "supported"):** each type must have — typed default in `GraphVariableDeclaration`, ES3 round-trip through `GraphStateSnapshot` (9.0.4), text-format literal syntax (9.7), comparison semantics for 9.1 check nodes (or an explicit "not comparable" entry, e.g. Color supports Equals only).
 
