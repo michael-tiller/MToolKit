@@ -136,7 +136,7 @@ namespace MToolKit.Runtime.Persistence.Migration
       {
         if (!AllowsLegacyHashlessLoad(loadedVersion))
         {
-          Log.Error("Save refused: no scaffold metadata stamp (ADR-0004); delete file to start fresh. LoadedVersion={LoadedVersion}", loadedVersion);
+          Log.Error("Save refused: no SaveSchemaHash stamp; cannot safely validate hashless save shape (ADR-0004/ADR-0016). LoadedVersion={LoadedVersion}", loadedVersion);
           return MigrationOutcome.RefusedFatal;
         }
         Log.Information("Loading legacy hashless save. LoadedVersion={LoadedVersion}", loadedVersion);
