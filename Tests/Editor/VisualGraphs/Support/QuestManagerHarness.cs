@@ -1,6 +1,7 @@
 using System;
 using MessagePipe;
 using MToolKit.Runtime.MessageBus;
+using MToolKit.Runtime.VisualGraphs.Contexts;
 using MToolKit.Runtime.VisualGraphs.Quest;
 using MToolKit.Runtime.VisualGraphs.Quest.Messages;
 using MToolKit.Runtime.VisualGraphs.Runtime;
@@ -29,6 +30,9 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Support
     /// <summary>Captures graph-emitted messages (QuestManager passes this as its <c>IEventEmitter</c>).</summary>
     public RecordingEmitter Emitter { get; } = new();
 
+    /// <summary>The context registry QuestManager attaches quest Graph contexts to (9.0.2b).</summary>
+    public GraphContextRegistry ContextRegistry { get; }
+
     public QuestManagerHarness()
     {
       var builder = new ContainerBuilder();
@@ -53,6 +57,8 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Support
       GameMessageBroker.Reset();
       GameMessageBroker.Initialize(resolver);
 
+      ContextRegistry = new GraphContextRegistry(Emitter);
+
       Manager = new QuestManager(
         new GraphEventRouter(),
         new NodeExecutorRegistry(),
@@ -62,7 +68,8 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Support
         resolver.Resolve<IPublisher<QuestCompletedMessage>>(),
         resolver.Resolve<IPublisher<QuestAbandonedMessage>>(),
         resolver.Resolve<IPublisher<QuestClaimedMessage>>(),
-        resolver.Resolve<IPublisher<CampaignCompletedMessage>>());
+        resolver.Resolve<IPublisher<CampaignCompletedMessage>>(),
+        ContextRegistry);
     }
 
     /// <summary>The static-broker subscriber for <typeparamref name="T" /> (resolves from the harness scope).</summary>

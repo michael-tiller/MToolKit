@@ -513,7 +513,7 @@ A predecessor framework shipped this exact feature set, regretted most of its ab
 - `Runtime/VisualGraphs/Export/XNodeGraphExporter.cs` - declaration validation pass
 - Graph asset types - optional declared-variables reference
 
-**9.0.2 Runtime Contexts & Cross-Scope Variable Access:** ⏳ **9.0.2a SHIPPED 2026-06-11** (contexts + registry + resolver, 48 EditMode tests; MToolKit.Tests.Editor 172/172 green) — **9.0.2b PENDING** (QuestManager characterization suite + refactor + `QuestContextExtensions`)
+**9.0.2 Runtime Contexts & Cross-Scope Variable Access:** ✅ **SHIPPED** — **9.0.2a 2026-06-11** (contexts + registry + resolver, 48 EditMode tests) — **9.0.2b 2026-06-12** (QuestManager characterization suite 13 tests green pre- AND post-refactor + refactor onto `IGraphContext` + `QuestContextExtensions`; MToolKit.Tests.Editor 185/185 green)
 
 **Goal:** Provide ONE clean context API over raw `IGraphState` access and ONE cross-scope variable access path
 
@@ -537,22 +537,23 @@ A predecessor framework shipped this exact feature set, regretted most of its ab
   - One `ScopedKeyResolver` parses the key and routes to the right context's storage. **Fallback semantics (clarified from the original one-liner so spec, tests and impl agree — three distinct cases):** (a) target context resolves and the key is unset but DECLARED → the target's declared default returns SILENTLY (a legitimate value, not a miss); (b) target resolves, key unset and UNDECLARED → warning + caller-supplied fallback; (c) the target CONTEXT itself is missing (a `quest:<id>` with no live context — Player/World are lazily created and never miss) → warning + caller-supplied fallback (a declared default is unreachable here by construction, since declarations live on the missing target's storage). `Set` on a missing target → warning + no-op. **A miss never throws; only MALFORMED key syntax fails loud** (ArgumentException, including through `Get`/`Set`).
   - This SAME resolver backs 9.4's cross-graph state query nodes and 9.5's interpolation/conditions — one path, three consumers (constraint #3)
   - *(as built: ordinal grammar, no trimming; `quest:` id runs to the first dot, key remainder verbatim. `ScopedKeyRef` + static `Parse` are public for 9.5 authoring-time syntax checks. Warning behavior is asserted via a real Serilog collecting sink (`SerilogSinkScope`), not just no-throw.)*
-- [ ] Refactor `QuestManager` to use `IGraphContext` — **9.0.2b** (characterization suite first: QuestManager has zero existing tests, full-lifecycle depth)
+- [x] Refactor `QuestManager` to use `IGraphContext` — **9.0.2b** (characterization suite first: QuestManager has zero existing tests, full-lifecycle depth)
   - Replace raw `IGraphState` access with the context API; register Graph contexts with `ownerId = questGuid` exactly (the verbatim id `ScopedKeyResolver` parses from `quest:<id>` — contract pinned in `GraphContextRegistry`'s XML doc)
   - Backward compat pinned: public `QuestManager` API signatures unchanged; `IGraphState` remains reachable for existing executors
+  - *(as built 2026-06-12: characterize-first honored — 13-test full-lifecycle suite (`QuestManagerCharacterizationTests` + `QuestManagerHarness`, real broker over a minimal MessagePipe/VContainer scope) green against the PRE-refactor code, then unchanged-green after. The context wraps the quest's LIVE `GraphState` (created against the final retained state after the cached-vs-fresh resolution, never the temporary), so `context.Variables` and executors' raw `state.Set` hit the same dict — `QuestRuntimeState.GraphState` stays public. QuestManager routes only the keys it OWNS through the context (`__quest_guid`/`__quest_definition` via `SetQuestIdentity`, the `__objective_{guid}_progress` mirror); the executor-owned `objective_{guid}` key is deliberately untouched. Context lifetime tracks the live state: attach = Remove-then-GetOrCreate on start/restore (covers cached `questStates` reuse after abandon); removed on abandon, claim, restore-clear, and `Dispose` — NOT on complete (quest stays in `completedUnclaimedQuests`, state save-relevant). One pinned-compat deviation, deliberate: the CONSTRUCTOR gained a required `GraphContextRegistry` param (DI auto-resolves — production registration unchanged; all direct construction sites updated incl. TemplateGame's `QuestManagerTests`/`QuestManagerPropertyTests`); lifecycle/query method signatures unchanged.)*
 
 **Tests (required for completion):**
 - [x] Scoped key parsing (all four forms, malformed keys fail loud) **(9.0.2a)**
 - [x] Quest → Player and Player → Quest access through the resolver **(9.0.2a)**
 - [x] Missing-scope fallback (three-case semantics above) returns the right value and logs **(9.0.2a)**
-- [ ] `QuestManager` behavior unchanged under the refactor (characterization tests) — **9.0.2b**
+- [x] `QuestManager` behavior unchanged under the refactor (characterization tests) — **9.0.2b** *(13/13 green pre- and post-refactor; plus TemplateGame `QuestManagerTests` 88/88 + `QuestManagerPropertyTests` 14/14 from Dirigible's runner)*
 
 **Files to Create:**
 - [x] `Runtime/VisualGraphs/Contexts/IGraphContext.cs` **(9.0.2a)**
 - [x] `Runtime/VisualGraphs/Contexts/GraphContext.cs` **(9.0.2a)**
 - [x] `Runtime/VisualGraphs/Contexts/GraphContextRegistry.cs` **(9.0.2a)**
 - [x] `Runtime/VisualGraphs/Contexts/ScopedKeyResolver.cs` **(9.0.2a)**
-- [ ] `Runtime/VisualGraphs/Contexts/QuestContextExtensions.cs` — **9.0.2b**
+- [x] `Runtime/VisualGraphs/Contexts/QuestContextExtensions.cs` — **9.0.2b** *(thin typed wrappers over `IGraphContext.Variables` for the QuestManager-owned keys; no `IQuestContext` interface)*
 
 **Files Modified (9.0.2a):**
 - `Runtime/VisualGraphs/Config/VisualGraphConfig.cs` — optional Player/World declared-variable blocks
