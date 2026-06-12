@@ -613,24 +613,34 @@ A predecessor framework shipped this exact feature set, regretted most of its ab
 - "Restored save state wins" interacts with content updates: defined behavior must be written down, not discovered in bug reports
 
 **Implementation Tasks:**
-- [ ] Extend `GraphStateSnapshot`/`ES3Type_GraphStateSnapshot` to round-trip every type in the 9.0.1 type table
+- [x] Extend `GraphStateSnapshot`/`ES3Type_GraphStateSnapshot` to round-trip every type in the 9.0.1 type table
   - Unknown/unserializable value types fail loud at save time (log + skip with warning), never silently drop on load
-- [ ] Persist Player and World scope contexts through `GraphStateSaveController` alongside per-graph states (new save keys under the existing `graphs_` domain prefix)
-- [ ] Specify and test schema-change behavior:
+  - *(as built 2026-06-12: ES3's native polymorphic object envelope (`__type`) already round-trips boxed Vector3/Vector2/Color typed — proven test-first, NO per-type encoding added. The save-time check is an ES3-serializability probe (`GetOrCreateES3Type` null/`isUnsupported`) PLUS an explicit delegate rejection, NOT a seven-type whitelist — graph state legitimately carries infra values (`Dialogue.NextNodeIds` `List<string>`, MessageFieldGet-written values) that must keep saving. Delegates needed the explicit gate because ES3 "successfully" writes them as an empty `{"__type"}` envelope that corrupts on load. Residual: a non-delegate type with zero serializable members slips through the same way; ES3's reflected-type classes are internal, no clean hook. Filter lives in `GraphSnapshotSchemaSanitizer.FilterUnserializable`.)*
+- [x] Persist Player and World scope contexts through `GraphStateSaveController` alongside per-graph states (new save keys under the existing `graphs_` domain prefix)
+  - *(as built: keys `graphs_player_scope_state` / `graphs_world_scope_state`, one `GraphStateSnapshot` each with `GraphId` = the reserved owner id, validated on load (mismatch → warn + skip). Restore runs BEFORE quest-manager restoration (quest graphs may read `player.*`/`world.*` during restore) via `GraphContextRegistry.RestoreScopeState`, which forces lazy scope creation and sanitizes against the registry-held scope declarations. A scope never created in a session DELETES its key on save so stale state can't resurrect. Controller takes an optional `GraphContextRegistry` (VContainer fills it); `VisualGraphPlugin.LoadQuestDataIfNeededAsync` now delegates key-existence to `HasSaveData()`.)*
+- [x] Specify and test schema-change behavior:
   - New declared variable, absent from save → declared default applies (precedence chain already yields this; pin it with a test)
   - Changed default for a key present in the save → saved value wins (document loudly in the changelog — designers must version-bump or migrate to force new defaults)
   - Removed declaration, value still in save → value loads as undeclared key (legal), export validation no longer references it
   - Type changed for an existing key → load-time mismatch is detected, saved value discarded with a loud warning, declared default applies
-- [ ] Cross-reference Phase 8 (Graph Versioning): variable schema changes ride the same graph-version field; no separate variable-version mechanism
+  - *(as built: behavior #4 is load-time sanitization in `GraphSnapshotSchemaSanitizer.SanitizeTypeMismatches`, called from `GraphRunner.ImportState` (graph scope, against the runner's new optional declarations) and `GraphContextRegistry.RestoreScopeState` (Player/World). Discard is REPLACE-with-declared-default, not remove — import MERGES into state and loaders apply initial variables first, so removal would leave a stale initialized value visible. `VariableStorage.Get<T>`'s runtime corruption rule (wrong type → caller fallback, never declared default) is untouched. **Shared quest state:** quest-level + objective runners share one `QuestRuntimeState.GraphState`, so `QuestManager` builds ONE aggregate declaration set per quest (`BuildQuestDeclarationAggregate`: quest graph first, then objectives by index; duplicate same-type dedupes, conflicting type warns + first-wins; invalid entries skipped) and passes it to the quest context AND every quest-owned runner on BOTH attach paths (`StartQuestAsync` and `RestoreCompletedQuestDirectlyAsync`) — import sanitization is order-independent and `quest:<id>.key` scoped reads resolve the same schema. Also fixed en route: the quest-level runner now gets `questState.GraphState`, not the discarded local, when a cached runtime state is reused; `ImportState` with null `Data` is now a guarded no-op (the old pinned NRE).)*
+- [x] Cross-reference Phase 8 (Graph Versioning): variable schema changes ride the same graph-version field; no separate variable-version mechanism
+  - *(Phase 8 is unbuilt — when it lands, variable schema changes ride its graph-version field; 9.0.4 added no version mechanism of its own.)*
 
-**Tests (required for completion):**
+**Tests (required for completion):** *(all shipped 2026-06-12 — MToolKit.Tests.Editor 207/207 green from Dirigible's runner)*
 - Round-trip per supported type (save → load → typed equality), including through `GenericStateSetNode`-written values
+  - *(as built: `ES3SnapshotFileRoundTripTests` (+struct typed round-trip, +single-snapshot wire path, +unsupported-skip-with-warning) and `GenericStateSetNodeRoundTripTests` — the node leg covers bool/int/float/string only; the node cannot author Vector/Color (no text parser until 9.5), structs are covered by direct-Set tests.)*
 - Player/World scope round-trip
+  - *(as built: `ScopeStatePersistenceTests` — all seven types per scope, stale-key deletion, GraphId validation, mismatch sanitization, declaration-timing contract (restore-before-declarations loads undeclared; late `SetScopeDeclarations` rejected loudly), live-value overwrite.)*
 - All four schema-change behaviors above
+  - *(as built: `GraphStateSchemaChangeTests` — the four behaviors, merge-semantics overwrite, shared-state two-runner order-independence, and the QuestManager aggregate wiring on both attach paths driven with a pre-cancelled token so graph loads abort synchronously in EditMode.)*
 
 **Files to Modify:**
 - `Runtime/VisualGraphs/Persistence/ES3Type_GraphStateSnapshot.cs`
 - `Runtime/VisualGraphs/Persistence/GraphStateSaveController.cs`
+- *(as built, additionally: `Persistence/GraphSnapshotSchemaSanitizer.cs` (new), `Contexts/GraphContextRegistry.cs`, `Runtime/GraphRunner.cs`, `Runtime/Loading/GraphLoader.cs`, `Quest/QuestManager.cs`, `VisualGraphPlugin.cs`)*
+
+> **CHANGELOG-LOUD (behavior #2):** changing a declared variable's DEFAULT does **not** affect existing saves — the saved value wins by design. Designers must version-bump or migrate the graph to force a new default onto old saves.
 
 **Note:** 9.0 must complete before Phase 9.1 variable nodes, as 9.1 nodes validate against declarations (9.0.1), resolve scoped keys (9.0.2), and depend on the persistence guarantees (9.0.4).
 

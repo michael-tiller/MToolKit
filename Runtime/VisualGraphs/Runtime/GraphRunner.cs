@@ -28,19 +28,22 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
     private readonly NodeExecutorRegistry executors;
     private readonly IServiceProvider services;
     private readonly IGraphState state;
+    private readonly Variables.GraphVariableSet declarations;
 
     public GraphRunner(
       IRuntimeGraphDefinition definition,
       IGraphState state,
       NodeExecutorRegistry executors,
       IServiceProvider services,
-      IEventEmitter emitter)
+      IEventEmitter emitter,
+      Variables.GraphVariableSet declarations = null)
     {
       Definition = definition ?? throw new ArgumentNullException(nameof(definition));
       this.state = state ?? throw new ArgumentNullException(nameof(state));
       this.executors = executors ?? throw new ArgumentNullException(nameof(executors));
       this.services = services ?? throw new ArgumentNullException(nameof(services));
       this.emitter = emitter ?? throw new ArgumentNullException(nameof(emitter));
+      this.declarations = declarations; // optional — runners sharing one state must share ONE set (9.0.4)
     }
 
     #region IGraphRunner Members
@@ -363,10 +366,15 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
 
     public void ImportState(GraphStateSnapshot snapshot)
     {
-      if (snapshot == null || snapshot.GraphId != GraphId)
+      if (snapshot == null || snapshot.GraphId != GraphId || snapshot.Data == null)
         return;
 
-      foreach (var kv in snapshot.Data)
+      // 9.0.4 schema-change behavior #4: a saved value whose type no longer matches its declaration is
+      // discarded loudly and the declared default applies — sanitize a copy, never the caller's snapshot.
+      var data = new Dictionary<string, object>(snapshot.Data);
+      Persistence.GraphSnapshotSchemaSanitizer.SanitizeTypeMismatches(data, declarations, GraphId);
+
+      foreach (var kv in data)
         state.Set(kv.Key, kv.Value);
     }
 

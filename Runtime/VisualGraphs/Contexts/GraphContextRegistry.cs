@@ -164,6 +164,33 @@ namespace MToolKit.Runtime.VisualGraphs.Contexts
       return contexts.TryGetValue((scope, constant), out var ctx) ? ctx.State : null;
     }
 
+    /// <summary>
+    ///   Persistence seam (9.0.4): restore saved key/values into the Player or World context's backing state,
+    ///   forcing lazy creation if needed. Sanitizes against the scope's declarations FIRST (schema-change
+    ///   behavior #4: a type-mismatched saved value is discarded loudly and the declared default overwrites
+    ///   whatever the state holds). Declaration timing is pinned here: restore after
+    ///   <see cref="SetScopeDeclarations" /> sanitizes against the schema; restore BEFORE it sanitizes against
+    ///   nothing (all values load as undeclared — legal) and the late SetScopeDeclarations is then logged and
+    ///   ignored as usual. Graph scope throws — graph snapshots restore through their runner's ImportState.
+    /// </summary>
+    public void RestoreScopeState(EGraphContextScope scope, IReadOnlyDictionary<string, object> data)
+    {
+      if (scope == EGraphContextScope.Graph)
+        throw new ArgumentException("Graph states restore through their runner, not the registry.", nameof(scope));
+      if (data == null) return;
+
+      var context = GetOrCreateScopeSingleton(scope, null, null, null);
+      var declarations = scope == EGraphContextScope.Player ? playerDeclarations : worldDeclarations;
+
+      var sanitized = new Dictionary<string, object>(data);
+      Persistence.GraphSnapshotSchemaSanitizer.SanitizeTypeMismatches(sanitized, declarations,
+        scope == EGraphContextScope.Player ? PlayerOwnerId : WorldOwnerId);
+
+      var state = ((GraphContext)context).State;
+      foreach (var kv in sanitized)
+        state.Set(kv.Key, kv.Value);
+    }
+
     private static (EGraphContextScope, string) NormalizeKey(EGraphContextScope scope, string ownerId)
     {
       return scope switch

@@ -391,15 +391,18 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Runtime
     }
 
     [Test]
-    public void ImportState_MatchingSnapshotWithNullData_ThrowsNullReference()
+    public void ImportState_MatchingSnapshotWithNullData_IsNoOp()
     {
       var h = new GraphRunnerHarness(GraphDefBuilder.New().Id("g1").Build());
+      h.State.Set("k", "existing");
 
-      // Current behavior: a matching snapshot whose Data is null throws inside the foreach. Pinned so the
-      // Phase 9 refactor surfaces the change if it adds a guard. ExportState always sets Data, so this only
-      // arises for hand/ES3-constructed snapshots.
-      Assert.Throws<NullReferenceException>(() =>
+      // 9.0.4 added the guard the old pin anticipated: a matching snapshot whose Data is null (only possible
+      // for hand/ES3-constructed snapshots — ExportState always sets Data) imports nothing, consistent with
+      // the null-snapshot and wrong-GraphId guards. Existing state is untouched.
+      Assert.DoesNotThrow(() =>
         h.Runner.ImportState(new GraphStateSnapshot { GraphId = "g1", Data = null }));
+      Assert.That(h.State.TryGet<string>("k", out var value), Is.True);
+      Assert.That(value, Is.EqualTo("existing"), "a null-Data import must not disturb existing state");
     }
   }
 }

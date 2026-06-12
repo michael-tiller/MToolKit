@@ -432,52 +432,38 @@ namespace MToolKit.Runtime.VisualGraphs
     {
       try
       {
-        // Check if save data exists for graphs domain
-        // Use reflection to access private es3Service field
-        var es3ServiceField = saveController.GetType().GetField("es3Service",
-          BindingFlags.NonPublic | BindingFlags.Instance);
-
-        if (es3ServiceField != null)
+        // Single source of truth for "does the graphs domain have anything to restore" — includes the
+        // 9.0.4 Player/World scope keys, so a save carrying only scope state still triggers the late load.
+        if (saveController.HasSaveData())
         {
-          var es3Service = es3ServiceField.GetValue(saveController) as IES3Service;
+          log.ForGameObject(gameObject).Information("Save data exists for graphs domain - ensuring quest definitions are loaded before restoration");
 
-          if (es3Service != null)
+          // Always ensure quest definitions are loaded before restoring
+          // Even if LoadAllOnStartup is true, the save system might load before InitializeGraphsAsync completes
+          if (config != null && config.DefaultRegistry != null)
           {
-            var hasQuestData = es3Service.KeyExists("graphs_quest_manager_state");
-            var hasGraphData = es3Service.KeyExists("graphs_graph_states");
+            // Check if quest definitions are already loaded
+            var existingQuestDefs = GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
+            log.ForGameObject(gameObject).Information("Found {Count} quest definitions already loaded in registry", existingQuestDefs.Count);
 
-            if (hasQuestData || hasGraphData)
+            // Load quest definitions if not already loaded (or if LoadAllOnStartup is false)
+            if (existingQuestDefs.Count == 0 || !config.LoadAllOnStartup)
             {
-              log.ForGameObject(gameObject).Information("Save data exists for graphs domain - ensuring quest definitions are loaded before restoration");
-
-              // Always ensure quest definitions are loaded before restoring
-              // Even if LoadAllOnStartup is true, the save system might load before InitializeGraphsAsync completes
-              if (config != null && config.DefaultRegistry != null)
-              {
-                // Check if quest definitions are already loaded
-                var existingQuestDefs = GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
-                log.ForGameObject(gameObject).Information("Found {Count} quest definitions already loaded in registry", existingQuestDefs.Count);
-
-                // Load quest definitions if not already loaded (or if LoadAllOnStartup is false)
-                if (existingQuestDefs.Count == 0 || !config.LoadAllOnStartup)
-                {
-                  log.ForGameObject(gameObject).Information("Loading quest definitions from registry before restoration");
-                  await LoadQuestDefinitionsFromRegistryAsync(config.DefaultRegistry);
-                  var loadedQuestDefs = GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
-                  log.ForGameObject(gameObject).Information("Now have {Count} quest definitions loaded in registry", loadedQuestDefs.Count);
-                }
-              }
-
-              // Manually trigger load on the controller
-              log.ForGameObject(gameObject).Information("Calling LoadAsync on GraphStateSaveController to restore quest data");
-              await saveController.LoadAsync(default);
-              log.ForGameObject(gameObject).Information("Manually loaded quest data after late registration");
-            }
-            else
-            {
-              log.ForGameObject(gameObject).Verbose("No save data found for graphs domain - skipping manual load");
+              log.ForGameObject(gameObject).Information("Loading quest definitions from registry before restoration");
+              await LoadQuestDefinitionsFromRegistryAsync(config.DefaultRegistry);
+              var loadedQuestDefs = GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
+              log.ForGameObject(gameObject).Information("Now have {Count} quest definitions loaded in registry", loadedQuestDefs.Count);
             }
           }
+
+          // Manually trigger load on the controller
+          log.ForGameObject(gameObject).Information("Calling LoadAsync on GraphStateSaveController to restore quest data");
+          await saveController.LoadAsync(default);
+          log.ForGameObject(gameObject).Information("Manually loaded quest data after late registration");
+        }
+        else
+        {
+          log.ForGameObject(gameObject).Verbose("No save data found for graphs domain - skipping manual load");
         }
       }
       catch (Exception ex)

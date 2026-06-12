@@ -15,10 +15,10 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Support
   /// </summary>
   public sealed class GraphRunnerHarness
   {
-    public GraphRunnerHarness(TestRuntimeGraphDefinition definition)
+    public GraphRunnerHarness(TestRuntimeGraphDefinition definition, MToolKit.Runtime.VisualGraphs.Variables.GraphVariableSet declarations = null)
     {
       Definition = definition;
-      Runner = new GraphRunner(definition, State, Executors, new NullServiceProvider(), Emitter);
+      Runner = new GraphRunner(definition, State, Executors, new NullServiceProvider(), Emitter, declarations);
     }
 
     public TestRuntimeGraphDefinition Definition { get; }

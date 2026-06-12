@@ -32,16 +32,20 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
     private readonly IES3Service es3Service;
     private readonly IQuestManager? questManager;
     private readonly VisualGraphRegistry? registry;
+    private readonly Contexts.GraphContextRegistry? contextRegistry;
     private readonly string domainPrefix;
     private const string GraphStatesSaveKey = "graph_states";
     private const string QuestManagerSaveKey = "quest_manager_state";
+    private const string PlayerScopeSaveKey = "player_scope_state";
+    private const string WorldScopeSaveKey = "world_scope_state";
 
-    public GraphStateSaveController(IGraphEventRouter router, IES3Service es3Service, IQuestManager? questManager = null, VisualGraphRegistry? registry = null)
+    public GraphStateSaveController(IGraphEventRouter router, IES3Service es3Service, IQuestManager? questManager = null, VisualGraphRegistry? registry = null, Contexts.GraphContextRegistry? contextRegistry = null)
     {
       this.router = router ?? throw new ArgumentNullException(nameof(router));
       this.es3Service = es3Service ?? throw new ArgumentNullException(nameof(es3Service));
       this.questManager = questManager; // Optional - QuestManager may not be available
       this.registry = registry; // Optional - Registry for dynamic quest loading
+      this.contextRegistry = contextRegistry; // Optional - Player/World scope persistence (9.0.4)
       domainPrefix = $"{Domain.ToString().ToLower()}_"; // e.g., "graphs_"
     }
 
@@ -51,7 +55,9 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
     {
       var graphStatesKey = $"{domainPrefix}{GraphStatesSaveKey}";
       var questManagerKey = $"{domainPrefix}{QuestManagerSaveKey}";
-      return es3Service.KeyExists(graphStatesKey) || es3Service.KeyExists(questManagerKey);
+      return es3Service.KeyExists(graphStatesKey) || es3Service.KeyExists(questManagerKey) ||
+             es3Service.KeyExists($"{domainPrefix}{PlayerScopeSaveKey}") ||
+             es3Service.KeyExists($"{domainPrefix}{WorldScopeSaveKey}");
     }
 
     public async UniTask SaveAsync(CancellationToken ct = default)
@@ -106,6 +112,14 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
         var graphStatesKey = $"{domainPrefix}{GraphStatesSaveKey}";
         await es3Service.SaveAsync(graphStatesKey, stateMap, ct);
 
+        // Save Player/World scope contexts (9.0.4). A scope never created this session deletes its key so a
+        // stale scope from an earlier session can't resurrect on the next load.
+        if (contextRegistry != null)
+        {
+          await SaveScopeStateAsync(Contexts.EGraphContextScope.Player, $"{domainPrefix}{PlayerScopeSaveKey}", Contexts.GraphContextRegistry.PlayerOwnerId, ct);
+          await SaveScopeStateAsync(Contexts.EGraphContextScope.World, $"{domainPrefix}{WorldScopeSaveKey}", Contexts.GraphContextRegistry.WorldOwnerId, ct);
+        }
+
         // Save QuestManager state if available with domain prefix
         if (questManager != null)
         {
@@ -155,11 +169,26 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
         var questManagerKey = $"{domainPrefix}{QuestManagerSaveKey}";
         var hasGraphStates = es3Service.KeyExists(graphStatesKey);
         var hasQuestManagerState = es3Service.KeyExists(questManagerKey);
+        var playerScopeKey = $"{domainPrefix}{PlayerScopeSaveKey}";
+        var worldScopeKey = $"{domainPrefix}{WorldScopeSaveKey}";
+        var hasScopeState = es3Service.KeyExists(playerScopeKey) || es3Service.KeyExists(worldScopeKey);
 
-        if (!hasGraphStates && !hasQuestManagerState)
+        if (!hasGraphStates && !hasQuestManagerState && !hasScopeState)
         {
-          log.ForMethod().Information("No saved graph or quest state data found - starting fresh");
+          log.ForMethod().Information("No saved graph, quest, or scope state data found - starting fresh");
           return;
+        }
+
+        // Restore Player/World scope contexts FIRST (9.0.4) — quest graph execution during quest restoration
+        // may already read player.* / world.* keys through ScopedKeyResolver.
+        if (contextRegistry != null)
+        {
+          await LoadScopeStateAsync(Contexts.EGraphContextScope.Player, playerScopeKey, Contexts.GraphContextRegistry.PlayerOwnerId, ct);
+          await LoadScopeStateAsync(Contexts.EGraphContextScope.World, worldScopeKey, Contexts.GraphContextRegistry.WorldOwnerId, ct);
+        }
+        else if (hasScopeState)
+        {
+          log.ForMethod().Warning("Save data contains Player/World scope state but no GraphContextRegistry was provided - scope state not restored");
         }
 
         // Load graph states from ES3 (with domain prefix)
@@ -362,6 +391,69 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
       {
         log.ForMethod().Error(ex, "Failed to load graph states: {Message}", ex.Message);
         throw;
+      }
+    }
+
+    private async UniTask SaveScopeStateAsync(Contexts.EGraphContextScope scope, string saveKey, string ownerId, CancellationToken ct)
+    {
+      try
+      {
+        var state = contextRegistry!.GetScopeStateOrNull(scope);
+        if (state == null)
+        {
+          // Scope never created this session — remove any stale key so it can't resurrect on next load.
+          if (es3Service.KeyExists(saveKey))
+          {
+            es3Service.DeleteKey(saveKey);
+            log.ForMethod().Information("{Scope} scope not active this session - deleted stale save key", scope);
+          }
+          return;
+        }
+
+        var snapshot = new GraphStateSnapshot
+        {
+          GraphId = ownerId,
+          Data = new Dictionary<string, object>(state.AsReadOnly().ToDictionary(kv => kv.Key, kv => kv.Value))
+        };
+        await es3Service.SaveAsync(saveKey, snapshot, ct);
+        log.ForMethod().Verbose("Saved {Scope} scope state ({KeyCount} keys)", scope, snapshot.Data.Count);
+      }
+      catch (Exception ex)
+      {
+        log.ForMethod().Error(ex, "Failed to save {Scope} scope state: {Message}", scope, ex.Message);
+        // Don't fail the entire save if one scope fails
+      }
+    }
+
+    private async UniTask LoadScopeStateAsync(Contexts.EGraphContextScope scope, string saveKey, string expectedOwnerId, CancellationToken ct)
+    {
+      if (!es3Service.KeyExists(saveKey)) return;
+
+      try
+      {
+        var snapshot = await es3Service.LoadAsync<GraphStateSnapshot>(saveKey, new GraphStateSnapshot(), ct);
+        if (snapshot?.Data == null)
+        {
+          log.ForMethod().Warning("Loaded null/empty {Scope} scope snapshot - skipping", scope);
+          return;
+        }
+
+        // Snapshot identity must match the scope owner — cross-key or corrupt scope data never restores
+        // silently (mirrors the GraphId guard in GraphRunner.ImportState).
+        if (!string.Equals(snapshot.GraphId, expectedOwnerId, StringComparison.Ordinal))
+        {
+          log.ForMethod().Warning("{Scope} scope snapshot has unexpected GraphId '{GraphId}' (expected '{Expected}') - skipping restore",
+            scope, snapshot.GraphId, expectedOwnerId);
+          return;
+        }
+
+        contextRegistry!.RestoreScopeState(scope, snapshot.Data);
+        log.ForMethod().Information("Restored {Scope} scope state ({KeyCount} keys)", scope, snapshot.Data.Count);
+      }
+      catch (Exception ex)
+      {
+        log.ForMethod().Error(ex, "Failed to load {Scope} scope state: {Message}", scope, ex.Message);
+        // Don't fail the entire load if one scope fails
       }
     }
   }
