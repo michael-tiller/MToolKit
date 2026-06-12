@@ -9,7 +9,10 @@
     "MToolKit.Runtime.Slog",
     "UniTask",
     "XNode",
-    "ES3"
+    "ES3",
+    "VContainer",
+    "MessagePipe",
+    "MessagePipe.VContainer"
   ],
   "includePlatforms": [
     "Editor"
