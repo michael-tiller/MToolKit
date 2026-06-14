@@ -8,6 +8,16 @@ Releases are cut as annotated git tags and follow strict SemVer 2.0.0. Version
 numbers are orthogonal to product milestones — a major bump signals an API break,
 not a roadmap milestone.
 
+## [Unreleased]
+
+### Changed
+
+- `SubviewButton.targetSubview` is no longer `[Required]`, and `OnClickSetSubview` null-guards a missing target — it logs a warning (Serilog) and returns instead of throwing, so a tab whose subview isn't wired degrades gracefully rather than NRE-ing.
+
+### Fixed
+
+- `NavigationService.PushAsync` now activates the target canvas GameObject before pushing a view. Canvases that sit dormant during gameplay (e.g. the Overlay canvas used for modals) previously stayed inactive, so a modal pushed onto them never rendered. Activation only — never deactivates here, since other canvas types share this path and may be expected to stay active when their stack is empty.
+
 ## [1.0.0] - 2026-05-28
 
 First release cut as an annotated git tag and the switchover to strict SemVer 2.0.0.
