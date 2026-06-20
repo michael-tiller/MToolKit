@@ -63,6 +63,7 @@ namespace MToolKit.Runtime.Persistence
       IsAutoSaveRunning = new ReactiveProperty<bool>(false);
       IsAutoSaveExecuting = new ReactiveProperty<bool>(false);
       IsSaveBlocked = new ReactiveProperty<bool>(false);
+      RestoreInProgress = new ReactiveProperty<bool>(false);
 
       log.ForMethod().Verbose("SaveSystemCoordinator created with auto-save enabled: {0}", saveConfig.EnableAutoSave);
     }
@@ -83,6 +84,18 @@ namespace MToolKit.Runtime.Persistence
     ///   do NOT recreate it). Blocks BOTH local and global save paths uniformly (Phase F boundary F2).
     /// </summary>
     public ReactiveProperty<bool> IsSaveBlocked { get; }
+
+    /// <summary>
+    ///   True while a session restore is in progress, spanning a WIDER window than
+    ///   <see cref="IsLoading"/>: opened by the startup orchestrator the moment it commits to the
+    ///   LOAD path — BEFORE world generation streams its initial chunks — and closed after
+    ///   <see cref="LoadAsync"/> completes. <see cref="IsLoading"/> only covers the
+    ///   <see cref="LoadAsync"/> call itself, which runs AFTER world-gen, so content generators
+    ///   that react to chunk streaming (e.g. surface scatter) must gate on THIS flag to avoid
+    ///   replaying generation on top of restored save data. Driven externally by the orchestrator;
+    ///   this coordinator only holds it.
+    /// </summary>
+    public ReactiveProperty<bool> RestoreInProgress { get; }
 
 
     /// <summary>
@@ -155,6 +168,7 @@ namespace MToolKit.Runtime.Persistence
       IsSaving?.Dispose();
       IsLoading?.Dispose();
       IsSaveBlocked?.Dispose();
+      RestoreInProgress?.Dispose();
       LastSaveTime?.Dispose();
       LastLoadTime?.Dispose();
       IsAutoSaveRunning?.Dispose();
