@@ -4,7 +4,7 @@ using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-namespace Theme.Swatch.Editor
+namespace MToolKit.Theme.Swatch.Editor
 {
   [CustomEditor(typeof(Swatch), true)]
   [CanEditMultipleObjects]

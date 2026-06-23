@@ -2,7 +2,7 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace Theme.Swatch.Editor
+namespace MToolKit.Theme.Swatch.Editor
 {
   [CustomPropertyDrawer(typeof(Swatch))]
   public class SwatchDrawer : PropertyDrawer

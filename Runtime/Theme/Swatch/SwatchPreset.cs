@@ -2,7 +2,7 @@ using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace Theme.Swatch
+namespace MToolKit.Theme.Swatch
 {
   [RequireComponent(typeof(Graphic))]
   public class SwatchPreset : ThemePreset<Swatch>

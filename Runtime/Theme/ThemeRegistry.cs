@@ -2,7 +2,7 @@ using System.Linq;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
-namespace Theme
+namespace MToolKit.Theme
 {
   [CreateAssetMenu(menuName = "MToolKit/Theme/Theme/ThemeRegistry", fileName = "ThemeRegistry")]
   [InlineEditor]

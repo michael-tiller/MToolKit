@@ -2,7 +2,7 @@ using Sirenix.OdinInspector;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace Theme.Spacing
+namespace MToolKit.Theme.Spacing
 {
   [RequireComponent(typeof(HorizontalOrVerticalLayoutGroup))]
   public class SpacingPreset : ThemePreset<Spacing>

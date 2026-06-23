@@ -2,7 +2,7 @@ using Sirenix.OdinInspector;
 using TMPro;
 using UnityEngine;
 
-namespace Theme.Typeset
+namespace MToolKit.Theme.Typeset
 {
   [RequireComponent(typeof(TMP_Text))]
   public class TypesetPreset : ThemePreset<Typeset>
@@ -15,7 +15,6 @@ namespace Theme.Typeset
     [SerializeField]
     private bool useOverrideMat;
 
-    [Required]
     [SerializeField]
     [ShowIf(nameof(useOverrideMat))]
     private Material overrideMaterial;

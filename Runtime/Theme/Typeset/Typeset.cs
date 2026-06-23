@@ -2,7 +2,7 @@ using Sirenix.OdinInspector;
 using TMPro;
 using UnityEngine;
 
-namespace Theme.Typeset
+namespace MToolKit.Theme.Typeset
 {
   [CreateAssetMenu(menuName = "MToolKit/Theme/Typeset/Typeset", fileName = "NewTypeset")]
   [InlineEditor]

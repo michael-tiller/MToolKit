@@ -2,7 +2,7 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace Theme.Swatch.Editor
+namespace MToolKit.Theme.Swatch.Editor
 {
   /// Shared, editor-only config holding the default swatch-preview icon for ALL swatches.
   /// Create one via Assets > Create > Dirigible > Swatch Editor Config and wire DefaultIcon.

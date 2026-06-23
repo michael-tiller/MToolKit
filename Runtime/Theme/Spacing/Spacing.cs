@@ -1,7 +1,7 @@
 using Sirenix.OdinInspector;
 using UnityEngine;
 
-namespace Theme.Spacing
+namespace MToolKit.Theme.Spacing
 {
   [CreateAssetMenu(menuName = "MToolKit/Theme/Spacing/Spacing", fileName = "NewSpacing")]
   [InlineEditor]

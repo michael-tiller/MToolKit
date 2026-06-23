@@ -2,7 +2,7 @@ using System.Linq;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
-namespace Theme.Swatch
+namespace MToolKit.Theme.Swatch
 {
   [CreateAssetMenu(menuName = "MToolKit/Theme/Swatch/SwatchRegistry", fileName = "SwatchRegistry")]
   [InlineEditor]

@@ -2,7 +2,7 @@ using R3;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
-namespace Theme
+namespace MToolKit.Theme
 {
   /// <summary>
   ///   Base for components that bind a themed asset (swatch, typeset, ...) to a target component and

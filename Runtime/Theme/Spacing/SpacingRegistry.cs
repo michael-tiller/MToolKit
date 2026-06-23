@@ -2,7 +2,7 @@ using System.Linq;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
-namespace Theme.Spacing
+namespace MToolKit.Theme.Spacing
 {
   [CreateAssetMenu(menuName = "MToolKit/Theme/Spacing/SpacingRegistry", fileName = "SpacingRegistry")]
   [InlineEditor]

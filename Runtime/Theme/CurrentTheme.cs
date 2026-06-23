@@ -8,9 +8,9 @@ using UnityEngine.Events;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
 
-namespace Theme
+namespace MToolKit.Theme
 {
-  public class CurrentTheme : Singleton<CurrentTheme>
+  public class CurrentTheme : Singleton<CurrentTheme>, IThemeService
   {
     [Serializable]
     public class ThemeEvent : UnityEvent<Theme, Theme> { } // concrete subclass is the only way UnityEvent<T0,T1> serializes/shows in Inspector

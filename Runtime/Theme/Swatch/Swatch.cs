@@ -1,7 +1,7 @@
 using Sirenix.OdinInspector;
 using UnityEngine;
 
-namespace Theme.Swatch
+namespace MToolKit.Theme.Swatch
 {
   [CreateAssetMenu(menuName = "MToolKit/Theme/Swatch/Swatch", fileName = "NewSwatch")]
   public class Swatch : ScriptableObject

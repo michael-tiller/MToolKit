@@ -28,9 +28,9 @@ using MToolKit.Runtime.Music;
 using MToolKit.Runtime.Navigation;
 using MToolKit.Runtime.Navigation.Events;
 using MToolKit.Runtime.Persistence;
-using MToolKit.Runtime.Persistence.Migration;
 using MToolKit.Runtime.Persistence.ES3Integration;
 using MToolKit.Runtime.Persistence.Interfaces;
+using MToolKit.Runtime.Persistence.Migration;
 using MToolKit.Runtime.Settings;
 using MToolKit.Runtime.Settings.Ini;
 using Serilog;
@@ -271,6 +271,9 @@ namespace MToolKit.Runtime.Installer
 
       // Register SaveDomainControllerRegistry globally
       builder.Register<SaveDomainControllerRegistry>(Lifetime.Singleton);
+
+      // Register IThemeService globally
+      builder.RegisterComponent(CurrentTheme.Instance).As(IThemeService);
 
       // Register PluginRegistry globally so it's available in all scenes
       builder.Register<PluginRegistry>(Lifetime.Singleton);

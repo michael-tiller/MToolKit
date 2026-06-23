@@ -1,4 +1,4 @@
-namespace Theme.Swatch
+namespace MToolKit.Theme.Swatch
 {
   public enum ESwatchType
   {

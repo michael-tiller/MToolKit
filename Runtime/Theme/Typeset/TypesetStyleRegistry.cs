@@ -2,7 +2,7 @@ using System.Linq;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
-namespace Theme.Typeset
+namespace MToolKit.Theme.Typeset
 {
   [CreateAssetMenu(menuName = "MToolKit/Theme/Typeset/TypesetStyleRegistry", fileName = "TypesetStyleRegistry")]
   [InlineEditor]

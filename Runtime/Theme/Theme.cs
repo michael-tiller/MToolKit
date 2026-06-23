@@ -1,10 +1,10 @@
+using MToolKit.Theme.Spacing;
+using MToolKit.Theme.Swatch;
+using MToolKit.Theme.Typeset;
 using Sirenix.OdinInspector;
-using Theme.Spacing;
-using Theme.Swatch;
-using Theme.Typeset;
 using UnityEngine;
 
-namespace Theme
+namespace MToolKit.Theme
 {
   [CreateAssetMenu(menuName = "MToolKit/Theme/Theme/Theme", fileName = "NewTheme")]
   public class Theme : ScriptableObject
