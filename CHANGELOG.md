@@ -10,6 +10,10 @@ not a roadmap milestone.
 
 ## [Unreleased]
 
+### Added
+
+- Runtime theme system (`MToolKit.Theme`). `CurrentTheme` singleton broadcasts the active `Theme` over R3 (`OnThemeUpdated` value stream + `OnThemeChanged` old/new pair) plus a serialized `UnityEvent<Theme, Theme>` for Inspector listeners. A generic `ThemePreset<TAsset>` base binds a themed ScriptableObject to a target component and follows theme changes — resolving the same-Id asset from each new theme, falling back to the wired anchor, with an `overrideTheme` emergency hatch (Odin warning). Concrete presets: `SwatchPreset` (`Graphic` colour), `TypesetPreset` (TMP font / size / style / spacing + optional override material for outlines), `SpacingPreset` (`HorizontalOrVerticalLayoutGroup` padding / gap). `SwatchRegistry` / `TypesetStyleRegistry` / `SpacingRegistry` resolve assets by name-Id; `Theme` aggregates them. Enables light/dark and localization-font theming.
+
 ### Changed
 
 - `SubviewButton.targetSubview` is no longer `[Required]`, and `OnClickSetSubview` null-guards a missing target — it logs a warning (Serilog) and returns instead of throwing, so a tab whose subview isn't wired degrades gracefully rather than NRE-ing.
