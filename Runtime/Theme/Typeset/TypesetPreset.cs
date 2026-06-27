@@ -36,7 +36,11 @@ namespace MToolKit.Theme.Typeset
 
       Text.font = typeset.Font; // assigning font resets to the font's default material...
       Text.enableAutoSizing = typeset.AutoSizeFont;
-      if (typeset.AutoSizeFont) Text.fontSizeMin = typeset.FontSizeMin;
+      if (typeset.AutoSizeFont)
+      {
+        Text.fontSizeMin = typeset.FontSizeMin;
+        Text.fontSizeMax = typeset.FontSize;
+      }
       Text.fontSize = typeset.FontSize;
       Text.fontStyle = typeset.FontStyle;
       Text.lineSpacing = typeset.LineSpacing;

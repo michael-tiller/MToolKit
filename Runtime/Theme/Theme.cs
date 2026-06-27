@@ -1,3 +1,4 @@
+using MToolKit.Runtime.Utilities;
 using MToolKit.Theme.Spacing;
 using MToolKit.Theme.Swatch;
 using MToolKit.Theme.Typeset;
@@ -7,10 +8,8 @@ using UnityEngine;
 namespace MToolKit.Theme
 {
   [CreateAssetMenu(menuName = "MToolKit/Theme/Theme/Theme", fileName = "NewTheme")]
-  public class Theme : ScriptableObject
+  public class Theme : SemanticScriptableObject
   {
-    public string Id => name;
-
     [field: SerializeField]
     [field: Required]
     public TypesetStyleRegistry TypesetStyleRegistry { get; private set; }

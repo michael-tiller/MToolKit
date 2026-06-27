@@ -1,3 +1,4 @@
+using MToolKit.Runtime.Utilities;
 using Sirenix.OdinInspector;
 using TMPro;
 using UnityEngine;
@@ -6,10 +7,8 @@ namespace MToolKit.Theme.Typeset
 {
   [CreateAssetMenu(menuName = "MToolKit/Theme/Typeset/Typeset", fileName = "NewTypeset")]
   [InlineEditor]
-  public class Typeset : ScriptableObject
+  public class Typeset : SemanticScriptableObject
   {
-    public string Id => name;
-
     [field: SerializeField]
     public TMP_FontAsset Font { get; private set; }
 

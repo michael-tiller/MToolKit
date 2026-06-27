@@ -1,13 +1,12 @@
+using MToolKit.Runtime.Utilities;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
 namespace MToolKit.Theme.Swatch
 {
   [CreateAssetMenu(menuName = "MToolKit/Theme/Swatch/Swatch", fileName = "NewSwatch")]
-  public class Swatch : ScriptableObject
+  public class Swatch : SemanticScriptableObject
   {
-    public string Id => name;
-
     [field: SerializeField]
     public ESwatchType Type { get; private set; }
 

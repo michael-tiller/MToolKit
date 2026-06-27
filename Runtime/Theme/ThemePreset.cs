@@ -1,3 +1,4 @@
+using MToolKit.Runtime.Utilities;
 using R3;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -10,8 +11,8 @@ namespace MToolKit.Theme
   ///   change the same-Id asset is resolved from the new theme and applied, falling back to <c>start</c>
   ///   when the new theme has no asset under that Id. Enables light/dark and localization-font themes.
   /// </summary>
-  /// <typeparam name="TAsset">The themed ScriptableObject; its asset name is its stable Id.</typeparam>
-  public abstract class ThemePreset<TAsset> : MonoBehaviour where TAsset : ScriptableObject
+  /// <typeparam name="TAsset">The themed ScriptableObject; its <see cref="SemanticScriptableObject.Id" /> is its stable token across themes.</typeparam>
+  public abstract class ThemePreset<TAsset> : MonoBehaviour where TAsset : SemanticScriptableObject
   {
     [SerializeField]
     [Required]
@@ -77,7 +78,7 @@ namespace MToolKit.Theme
 
       if (!overrideTheme) // emergency hatch: when overriding, always show the configured `start`
       {
-        TAsset next = theme != null ? Resolve(theme, start.name) : null; // name == Id, stable across themes
+        TAsset next = theme != null ? Resolve(theme, start.Id) : null; // Id is the stable semantic token across themes
         if (next != null) cached = next;
         else if (cached == null) cached = start; // no match in the new theme -> keep what we have
       }

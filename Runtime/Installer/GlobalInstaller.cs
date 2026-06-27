@@ -272,8 +272,7 @@ namespace MToolKit.Runtime.Installer
       // Register SaveDomainControllerRegistry globally
       builder.Register<SaveDomainControllerRegistry>(Lifetime.Singleton);
 
-      // Register IThemeService globally
-      builder.RegisterComponent(CurrentTheme.Instance).As(IThemeService);
+      // NOTE: IThemeService (CurrentTheme) is intentionally NOT registered here.
 
       // Register PluginRegistry globally so it's available in all scenes
       builder.Register<PluginRegistry>(Lifetime.Singleton);
