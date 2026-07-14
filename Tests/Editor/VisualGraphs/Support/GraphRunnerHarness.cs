@@ -2,6 +2,7 @@ using System.Threading;
 using MToolKit.Runtime.MessageBus.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
+using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime.State;
 
 namespace MToolKit.Tests.Editor.VisualGraphs.Support
@@ -15,13 +16,13 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Support
   /// </summary>
   public sealed class GraphRunnerHarness
   {
-    public GraphRunnerHarness(TestRuntimeGraphDefinition definition, MToolKit.Runtime.VisualGraphs.Variables.GraphVariableSet declarations = null)
+    public GraphRunnerHarness(IRuntimeGraphDefinition definition, MToolKit.Runtime.VisualGraphs.Variables.GraphVariableSet declarations = null)
     {
       Definition = definition;
       Runner = new GraphRunner(definition, State, Executors, new NullServiceProvider(), Emitter, declarations);
     }
 
-    public TestRuntimeGraphDefinition Definition { get; }
+    public IRuntimeGraphDefinition Definition { get; }
     public InMemoryGraphState State { get; } = new();
     public NodeExecutorRegistry Executors { get; } = new();
     public RecordingEmitter Emitter { get; } = new();
