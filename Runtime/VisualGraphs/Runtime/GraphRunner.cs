@@ -309,6 +309,14 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
             }
           }
         }
+        catch (ArgumentException)
+        {
+          // Invalid node configuration is an authoring error, not an operational graph
+          // failure. In particular, ScopedKeyResolver guarantees malformed reserved
+          // keys fail loudly; swallowing them here turns a bad graph into a silent
+          // fallback and violates that contract.
+          throw;
+        }
         catch (Exception ex)
         {
           errorMessage = ex.Message;
