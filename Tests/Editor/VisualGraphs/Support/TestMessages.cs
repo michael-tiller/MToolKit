@@ -22,4 +22,20 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Support
   public sealed class DerivedTestMessage : TestMessageA
   {
   }
+
+  /// <summary>
+  ///   A named message mirroring the production <c>GenericGameEventMessage : IDomainMessage, Domain =&gt; EventName</c>
+  ///   pattern, used to characterize additive delivery with a named-event domain.
+  /// </summary>
+  public sealed class TestNamedMessage : IGameMessage, IDomainMessage
+  {
+    public string Name { get; }
+
+    public TestNamedMessage(string name)
+    {
+      Name = name;
+    }
+
+    string IDomainMessage.Domain => Name;
+  }
 }

@@ -9,12 +9,14 @@ using UnityEngine.TestTools;
 namespace MToolKit.Tests.Editor.VisualGraphs.Runtime
 {
   /// <summary>
-  ///   Characterization of <see cref="GraphEventRouter" />. The load-bearing pin is the WILDCARD
-  ///   SEMANTIC: routing tries the exact (type, domain) bucket first and only falls back to the empty-domain
-  ///   bucket when no exact bucket exists — so an empty-domain ("any") subscriber is SUPPRESSED whenever an
-  ///   exact-domain subscriber exists for that domain. Also pins exact-type-only matching (no inheritance),
-  ///   registration delivery, and pre-cancellation. Routing keys on the runtime message type and dispatches
-  ///   synchronously (fakes return UniTask.CompletedTask), so GetAwaiter().GetResult() observes real delivery.
+  ///   Characterization of <see cref="GraphEventRouter" />. The load-bearing pin is ADDITIVE DELIVERY:
+  ///   routing delivers to BOTH the exact (type, domain) bucket AND the empty-domain ("any") bucket, deduplicated
+  ///   by runner reference identity, dispatched in overall registration order — an empty-domain subscriber is
+  ///   NEVER suppressed by an exact-domain subscriber existing for that domain (this replaces the prior
+  ///   exact-ELSE-wildcard suppression semantic; see MToolKit CHANGELOG for the deliberate flip). Also pins
+  ///   exact-type-only matching (no inheritance), registration delivery, and pre-cancellation. Routing keys on the
+  ///   runtime message type and dispatches synchronously (fakes return UniTask.CompletedTask), so
+  ///   GetAwaiter().GetResult() observes real delivery.
   /// </summary>
   [TestFixture]
   public sealed class GraphEventRouterTests
@@ -62,7 +64,7 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Runtime
     }
 
     [Test]
-    public void Route_ExactMatch_SuppressesEmptyDomainSubscriber()
+    public void Route_ExactMatch_AlsoDeliversToEmptyDomainSubscriber()
     {
       var exact = RunnerWith("exact", typeof(TestMessageA), "Quest");
       var anyDomain = RunnerWith("any", typeof(TestMessageA), null);
@@ -72,8 +74,102 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Runtime
       Route(new TestMessageA(), "Quest");
 
       Assert.That(exact.HandleMessageAsyncCallCount, Is.EqualTo(1), "exact-domain subscriber receives it");
-      Assert.That(anyDomain.HandleMessageAsyncCallCount, Is.EqualTo(0),
-        "the empty-domain ('any') subscriber is SUPPRESSED because an exact (type, domain) bucket exists");
+      Assert.That(anyDomain.HandleMessageAsyncCallCount, Is.EqualTo(1),
+        "additive delivery: the empty-domain ('any') subscriber is NEVER suppressed by an exact-domain subscriber");
+    }
+
+    [Test]
+    public void Route_TwoGraphsDifferentEventNameDomains_EachFiresOnlyOnOwn()
+    {
+      var graphA = RunnerWith("graphA", typeof(TestNamedMessage), "a");
+      var graphB = RunnerWith("graphB", typeof(TestNamedMessage), "b");
+      router.RegisterRunner(graphA);
+      router.RegisterRunner(graphB);
+
+      Route(new TestNamedMessage("a"), "a");
+
+      Assert.That(graphA.HandleMessageAsyncCallCount, Is.EqualTo(1), "subscribed to event 'a', receives it");
+      Assert.That(graphB.HandleMessageAsyncCallCount, Is.EqualTo(0), "subscribed to event 'b', must not fire on 'a'");
+    }
+
+    [Test]
+    public void Route_ThreeOverlappingGraphs_Independent()
+    {
+      var graphA = RunnerWith("graphA", typeof(TestNamedMessage), "a");
+      var graphB = RunnerWith("graphB", typeof(TestNamedMessage), "b");
+      var graphUnfiltered = RunnerWith("graphUnfiltered", typeof(TestNamedMessage), null);
+      router.RegisterRunner(graphA);
+      router.RegisterRunner(graphB);
+      router.RegisterRunner(graphUnfiltered);
+
+      Route(new TestNamedMessage("a"), "a");
+
+      Assert.That(graphA.HandleMessageAsyncCallCount, Is.EqualTo(1), "exact event-name match fires");
+      Assert.That(graphB.HandleMessageAsyncCallCount, Is.EqualTo(0), "graph filtered to a different event name stays silent");
+      Assert.That(graphUnfiltered.HandleMessageAsyncCallCount, Is.EqualTo(1), "unfiltered graph receives all named events");
+    }
+
+    [Test]
+    public void Route_UnfilteredSubscriber_ReceivesAllNamedEvents()
+    {
+      var unfiltered = RunnerWith("any", typeof(TestNamedMessage), null);
+      router.RegisterRunner(unfiltered);
+
+      Route(new TestNamedMessage("a"), "a");
+      Route(new TestNamedMessage("b"), "b");
+
+      Assert.That(unfiltered.HandleMessageAsyncCallCount, Is.EqualTo(2),
+        "backward compat: a graph without an EventName filter still receives all events of the type");
+    }
+
+    [Test]
+    public void Route_FilterIsCaseSensitiveOrdinal()
+    {
+      var lower = RunnerWith("lower", typeof(TestNamedMessage), "a");
+      router.RegisterRunner(lower);
+
+      Route(new TestNamedMessage("A"), "A");
+
+      Assert.That(lower.HandleMessageAsyncCallCount, Is.EqualTo(0),
+        "domain/event-name matching is exact ordinal (case-sensitive): filter 'a' must not match domain 'A'");
+    }
+
+    [Test]
+    public void Route_SameRunnerEmptyAndFilteredSubs_DispatchedOnce()
+    {
+      var def = GraphDefBuilder.New().Id("g1")
+        .Subscribe(typeof(TestNamedMessage), "a")
+        .Subscribe(typeof(TestNamedMessage), null)
+        .Build();
+      var runner = new FakeGraphRunner("g1", def);
+      router.RegisterRunner(runner);
+
+      Route(new TestNamedMessage("a"), "a");
+
+      Assert.That(runner.HandleMessageAsyncCallCount, Is.EqualTo(1),
+        "a runner matching via multiple subscriptions (exact + wildcard) is dispatched exactly once, not twice");
+    }
+
+    [Test]
+    public void Route_AdditiveDelivery_PreservesRegistrationOrder()
+    {
+      var order = new System.Collections.Generic.List<string>();
+      var wildcard = RunnerWith("wildcard", typeof(TestMessageA), null);
+      var exact = RunnerWith("exact", typeof(TestMessageA), "Quest");
+      wildcard.OnHandled = () => order.Add("wildcard");
+      exact.OnHandled = () => order.Add("exact");
+
+      // Wildcard registered FIRST, exact SECOND — additive delivery must dispatch in overall
+      // registration order, not exact-bucket-then-wildcard-bucket concatenation.
+      router.RegisterRunner(wildcard);
+      router.RegisterRunner(exact);
+
+      Route(new TestMessageA(), "Quest");
+
+      Assert.That(order, Is.EqualTo(new[] { "wildcard", "exact" }),
+        "dispatch follows overall registration order, not bucket concatenation order");
+      Assert.That(wildcard.HandleMessageAsyncCallCount, Is.EqualTo(1));
+      Assert.That(exact.HandleMessageAsyncCallCount, Is.EqualTo(1));
     }
 
     [Test]
