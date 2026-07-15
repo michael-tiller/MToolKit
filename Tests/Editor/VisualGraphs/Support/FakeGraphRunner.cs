@@ -27,6 +27,9 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Support
     public List<(IGameMessage message, string domain)> Handled { get; } = new();
     public List<GraphStateSnapshot> Imported { get; } = new();
 
+    /// <summary>Invoked (if set) each time <see cref="HandleMessageAsync" /> is called — used to observe dispatch order across runners.</summary>
+    public Action OnHandled { get; set; }
+
     /// <summary>Snapshot returned by ExportState (defaults to an empty snapshot keyed to this graph id).</summary>
     public GraphStateSnapshot ExportSnapshot { get; set; }
 
@@ -54,6 +57,7 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Support
     {
       HandleMessageAsyncCallCount++;
       Handled.Add((message, domain));
+      OnHandled?.Invoke();
       return UniTask.CompletedTask;
     }
 

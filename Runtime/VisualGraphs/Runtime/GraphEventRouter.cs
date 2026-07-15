@@ -12,7 +12,9 @@ using Logger = Serilog.Core.Logger;
 namespace MToolKit.Runtime.VisualGraphs.Runtime
 {
   /// <summary>
-  ///   Routes MessagePipe messages to graph runners with O(1) indexed lookups by (type, domain).
+  ///   Routes MessagePipe messages to graph runners, indexed by (type, domain). Delivery is ADDITIVE:
+  ///   an exact-domain match and the empty-domain ("any") wildcard both deliver, deduplicated by runner
+  ///   reference identity and dispatched in overall registration order.
   /// </summary>
   public sealed class GraphEventRouter : IGraphEventRouter
   {
@@ -71,36 +73,43 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
 
       var messageType = message.GetType();
       var domainFilter = domain ?? string.Empty;
-      var key = (messageType, domainFilter);
 
       log.Verbose("Routing message '{MessageType}' (domain: '{Domain}') to graphs", messageType.Name, domainFilter);
 
-      var matchedGraphs = new List<IGraphRunner>();
-      var routingStrategy = "";
+      // Additive delivery: union the exact-domain bucket and the empty-domain ("any") wildcard bucket.
+      // Deduplicate by runner reference identity, dispatched in overall registration order (the order
+      // runners appear in `all`), NOT exact-bucket-then-wildcard-bucket concatenation.
+      var matchedSet = new HashSet<IGraphRunner>();
+      var exactMatched = false;
+      var wildcardMatched = false;
 
-      // Try exact domain match first
-      if (byTypeDomain.TryGetValue(key, out var list))
+      if (byTypeDomain.TryGetValue((messageType, domainFilter), out var exactList))
       {
-        matchedGraphs.AddRange(list);
-        routingStrategy = $"exact domain match ('{domainFilter}')";
-      }
-      else
-      {
-        // Try wildcard domain match (empty domain = match all)
-        key = (messageType, string.Empty);
-        if (byTypeDomain.TryGetValue(key, out list))
-        {
-          matchedGraphs.AddRange(list);
-          routingStrategy = "wildcard domain match (any domain)";
-        }
+        foreach (var runner in exactList)
+          matchedSet.Add(runner);
+        exactMatched = exactList.Count > 0;
       }
 
-      if (matchedGraphs.Count == 0)
+      if (domainFilter != string.Empty && byTypeDomain.TryGetValue((messageType, string.Empty), out var wildcardList))
+      {
+        foreach (var runner in wildcardList)
+          matchedSet.Add(runner);
+        wildcardMatched = wildcardList.Count > 0;
+      }
+
+      if (matchedSet.Count == 0)
       {
         log.Verbose("No graphs subscribed to message '{MessageType}' (domain: '{Domain}'). Available subscriptions: {Subscriptions}",
           messageType.Name, domainFilter, GetAvailableSubscriptionsForType(messageType));
         return;
       }
+
+      var matchedGraphs = all.Where(matchedSet.Contains).ToList();
+      var routingStrategy = exactMatched && wildcardMatched
+        ? $"additive: exact domain ('{domainFilter}') + wildcard (any domain)"
+        : exactMatched
+          ? $"exact domain match ('{domainFilter}')"
+          : "wildcard domain match (any domain)";
 
       log.Information("Routing message '{MessageType}' (domain: '{Domain}') to {GraphCount} graph(s) via {Strategy}: {GraphIds}",
         messageType.Name, domainFilter, matchedGraphs.Count, routingStrategy,

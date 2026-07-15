@@ -4,6 +4,23 @@ This document tracks completed phases and major milestones. See `PRODUCTION_ROAD
 
 ---
 
+## ⚠️ BREAKING: GraphEventRouter delivery is now ADDITIVE, not exact-ELSE-wildcard
+
+**`GraphEventRouter.RouteAsync`** previously suppressed an empty-domain ("any") subscriber whenever an
+exact-domain subscriber existed for the routed domain. This suppression is now removed: a routed message
+delivers to BOTH the exact-domain bucket AND the empty-domain wildcard bucket, deduplicated by runner
+reference identity, dispatched in overall registration order.
+
+**Why:** enables per-entity/per-event-name subscription filtering (`EventNameFilter` via
+`IDomainMessage.Domain`) without silently starving graphs that subscribe with no filter — a filtered
+graph and an unfiltered graph on the same message type must BOTH fire on a matching event.
+
+**Impact:** any code relying on an unfiltered subscriber being silenced by a more specific one will now
+see both fire. Shipped content was audited (no non-empty `DomainFilter` in any `.asset` at time of
+change) — this is a forward-looking behavior fix, not a regression against shipped graphs.
+
+---
+
 ## Phase 1.0: Core Architecture Fixes ✅ **COMPLETE**
 
 **Foundation is solid - ready for integration!**
