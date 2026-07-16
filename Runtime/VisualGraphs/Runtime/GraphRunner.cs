@@ -152,7 +152,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
         // Common entry node types: QuestOnEventNode, DialogueStartNode, EntryNodeBase
         var entryNodeCount = 0;
         foreach (var node in Definition.Nodes)
-          if (IsEntryNode(node.NodeType))
+          if (IsEntryNode(node.NodeType) && EntryNodeMatches(node, message, domain))
           {
             queue.Enqueue(node.NodeId);
             entryNodeCount++;
@@ -387,6 +387,31 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
              nodeType == "DialogueStartNode" ||
              nodeType == "EntryNodeBase" ||
              nodeType.EndsWith("EntryNode");
+    }
+
+    /// <summary>
+    ///   Gate an entry node on the message that triggered this dispatch. An entry node that declares a
+    ///   MessageType only starts execution for messages of that exact type, and one that declares a
+    ///   DomainFilter only starts for that exact domain. Without this, every entry node in a multi-trigger
+    ///   graph fires on ANY subscribed message — which is both wrong (trigger A's action chain runs for
+    ///   trigger B's event) and the ignition path for event-graph feedback loops. Entry nodes that declare
+    ///   neither (dialogue starts, legacy quest entries) keep the fire-on-dispatch behavior.
+    /// </summary>
+    private static bool EntryNodeMatches(DTOs.RuntimeNodeDefinition node, IGameMessage message, string domain)
+    {
+      if (node.Parameters == null) return true;
+
+      if (node.Parameters.TryGetValue("MessageType", out var typeParam) &&
+          typeParam is Core.Types.MessageTypeReference typeRef && typeRef.IsValid &&
+          typeRef.Type != message.GetType())
+        return false;
+
+      if (node.Parameters.TryGetValue("DomainFilter", out var filterParam) &&
+          filterParam is string filter && !string.IsNullOrEmpty(filter) &&
+          !string.Equals(filter, domain ?? string.Empty, StringComparison.Ordinal))
+        return false;
+
+      return true;
     }
   }
 }

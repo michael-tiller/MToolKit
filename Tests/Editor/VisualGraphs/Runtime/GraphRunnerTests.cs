@@ -129,6 +129,50 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Runtime
     }
 
     [Test]
+    public void HandleMessage_EntryNodeWithMessageType_FiresOnlyForThatType()
+    {
+      // Multi-trigger graph: each entry declares its message type. Before the entry gate, EVERY entry
+      // fired on ANY dispatched message — trigger B's action chain ran on trigger A's event, which is
+      // the ignition path of the magic_amulet_events feedback loop.
+      var pA = new MToolKit.Runtime.VisualGraphs.Runtime.DTOs.NodeParametersDictionary();
+      pA["MessageType"] = new MToolKit.Runtime.Core.Types.MessageTypeReference(typeof(TestMessageA));
+      var pB = new MToolKit.Runtime.VisualGraphs.Runtime.DTOs.NodeParametersDictionary();
+      pB["MessageType"] = new MToolKit.Runtime.Core.Types.MessageTypeReference(typeof(TestMessageB));
+
+      var h = new GraphRunnerHarness(GraphDefBuilder.New()
+        .Node("eA", "EventEntryNode", pA).Node("eB", "EventEntryNode", pB)
+        .Node("nA", "Act").Node("nB", "Act")
+        .Connect("eA", "nA").Connect("eB", "nB").Build());
+      var act = h.RegisterExecutor("Act");
+
+      h.Run(new TestMessageA());
+
+      Assert.That(act.ExecutedNodeIds, Is.EqualTo(new[] { "nA" }),
+        "only the entry node whose declared MessageType matches the dispatched message may fire");
+    }
+
+    [Test]
+    public void HandleMessage_EntryNodeWithDomainFilter_FiresOnlyForThatDomain()
+    {
+      var p = new MToolKit.Runtime.VisualGraphs.Runtime.DTOs.NodeParametersDictionary();
+      p["DomainFilter"] = "amulet_acquired";
+
+      var h = new GraphRunnerHarness(GraphDefBuilder.New()
+        .Node("e", "EventEntryNode", p)
+        .Node("n", "Act")
+        .Connect("e", "n").Build());
+      var act = h.RegisterExecutor("Act");
+
+      h.Run(new TestMessageA(), "some_other_event");
+      Assert.That(act.ExecutedNodeIds, Is.Empty,
+        "an entry node with a DomainFilter must not fire for a different domain/event name");
+
+      h.Run(new TestMessageA(), "amulet_acquired");
+      Assert.That(act.ExecutedNodeIds, Is.EqualTo(new[] { "n" }),
+        "the matching domain fires the gated entry node");
+    }
+
+    [Test]
     public void HandleMessage_FeedbackEdge_NodeExecutesOncePerDispatch()
     {
       // e -> a, then a enqueues b, b enqueues a (feedback). The per-dispatch guard runs 'a' only once.
