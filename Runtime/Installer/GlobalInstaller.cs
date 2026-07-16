@@ -28,6 +28,7 @@ using MToolKit.Runtime.Music;
 using MToolKit.Runtime.Navigation;
 using MToolKit.Runtime.Navigation.Events;
 using MToolKit.Runtime.Persistence;
+using MToolKit.Runtime.Persistence.Migration;
 using MToolKit.Runtime.Persistence.ES3Integration;
 using MToolKit.Runtime.Persistence.Interfaces;
 using MToolKit.Runtime.Persistence.Migration;
