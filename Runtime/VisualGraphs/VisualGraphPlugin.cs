@@ -194,6 +194,34 @@ namespace MToolKit.Runtime.VisualGraphs
       builder.Register<DialogueChoiceNodeExecutor>(Lifetime.Singleton)
         .As<IGraphNodeExecutor>();
 
+      // Core 9.4 node slice: math, logic, state-query, transform
+      builder.Register<Executors.Math.AddNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Math.MultiplyNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Math.ClampNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Math.LerpNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Logic.AndNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Logic.OrNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Logic.NotNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Logic.XorNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.State.GetVarNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.State.CheckWorldStateNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Transform.PositionNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Transform.RotationNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Transform.ScaleNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+
       // Build callback to register all executors in the registry
       builder.RegisterBuildCallback(container =>
       {

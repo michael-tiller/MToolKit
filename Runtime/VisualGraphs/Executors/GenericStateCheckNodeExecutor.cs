@@ -93,13 +93,13 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
 
           return comparisonOperator switch
           {
-            "Equals" => Math.Abs(actualNum - expectedNum) < 0.0001,
-            "NotEquals" => Math.Abs(actualNum - expectedNum) >= 0.0001,
+            "Equals" => System.Math.Abs(actualNum - expectedNum) < 0.0001,
+            "NotEquals" => System.Math.Abs(actualNum - expectedNum) >= 0.0001,
             "GreaterThan" => actualNum > expectedNum,
             "LessThan" => actualNum < expectedNum,
             "GreaterThanOrEqual" => actualNum >= expectedNum,
             "LessThanOrEqual" => actualNum <= expectedNum,
-            _ => Math.Abs(actualNum - expectedNum) < 0.0001
+            _ => System.Math.Abs(actualNum - expectedNum) < 0.0001
           };
         }
 
