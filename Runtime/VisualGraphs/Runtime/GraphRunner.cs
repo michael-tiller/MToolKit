@@ -28,19 +28,22 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
     private readonly NodeExecutorRegistry executors;
     private readonly IServiceProvider services;
     private readonly IGraphState state;
+    private readonly Variables.GraphVariableSet declarations;
 
     public GraphRunner(
       IRuntimeGraphDefinition definition,
       IGraphState state,
       NodeExecutorRegistry executors,
       IServiceProvider services,
-      IEventEmitter emitter)
+      IEventEmitter emitter,
+      Variables.GraphVariableSet declarations = null)
     {
       Definition = definition ?? throw new ArgumentNullException(nameof(definition));
       this.state = state ?? throw new ArgumentNullException(nameof(state));
       this.executors = executors ?? throw new ArgumentNullException(nameof(executors));
       this.services = services ?? throw new ArgumentNullException(nameof(services));
       this.emitter = emitter ?? throw new ArgumentNullException(nameof(emitter));
+      this.declarations = declarations; // optional — runners sharing one state must share ONE set (9.0.4)
     }
 
     #region IGraphRunner Members
@@ -149,7 +152,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
         // Common entry node types: QuestOnEventNode, DialogueStartNode, EntryNodeBase
         var entryNodeCount = 0;
         foreach (var node in Definition.Nodes)
-          if (IsEntryNode(node.NodeType))
+          if (IsEntryNode(node.NodeType) && EntryNodeMatches(node, message, domain))
           {
             queue.Enqueue(node.NodeId);
             entryNodeCount++;
@@ -306,6 +309,14 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
             }
           }
         }
+        catch (ArgumentException)
+        {
+          // Invalid node configuration is an authoring error, not an operational graph
+          // failure. In particular, ScopedKeyResolver guarantees malformed reserved
+          // keys fail loudly; swallowing them here turns a bad graph into a silent
+          // fallback and violates that contract.
+          throw;
+        }
         catch (Exception ex)
         {
           errorMessage = ex.Message;
@@ -363,10 +374,15 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
 
     public void ImportState(GraphStateSnapshot snapshot)
     {
-      if (snapshot == null || snapshot.GraphId != GraphId)
+      if (snapshot == null || snapshot.GraphId != GraphId || snapshot.Data == null)
         return;
 
-      foreach (var kv in snapshot.Data)
+      // 9.0.4 schema-change behavior #4: a saved value whose type no longer matches its declaration is
+      // discarded loudly and the declared default applies — sanitize a copy, never the caller's snapshot.
+      var data = new Dictionary<string, object>(snapshot.Data);
+      Persistence.GraphSnapshotSchemaSanitizer.SanitizeTypeMismatches(data, declarations, GraphId);
+
+      foreach (var kv in data)
         state.Set(kv.Key, kv.Value);
     }
 
@@ -379,6 +395,31 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
              nodeType == "DialogueStartNode" ||
              nodeType == "EntryNodeBase" ||
              nodeType.EndsWith("EntryNode");
+    }
+
+    /// <summary>
+    ///   Gate an entry node on the message that triggered this dispatch. An entry node that declares a
+    ///   MessageType only starts execution for messages of that exact type, and one that declares a
+    ///   DomainFilter only starts for that exact domain. Without this, every entry node in a multi-trigger
+    ///   graph fires on ANY subscribed message — which is both wrong (trigger A's action chain runs for
+    ///   trigger B's event) and the ignition path for event-graph feedback loops. Entry nodes that declare
+    ///   neither (dialogue starts, legacy quest entries) keep the fire-on-dispatch behavior.
+    /// </summary>
+    private static bool EntryNodeMatches(DTOs.RuntimeNodeDefinition node, IGameMessage message, string domain)
+    {
+      if (node.Parameters == null) return true;
+
+      if (node.Parameters.TryGetValue("MessageType", out var typeParam) &&
+          typeParam is Core.Types.MessageTypeReference typeRef && typeRef.IsValid &&
+          typeRef.Type != message.GetType())
+        return false;
+
+      if (node.Parameters.TryGetValue("DomainFilter", out var filterParam) &&
+          filterParam is string filter && !string.IsNullOrEmpty(filter) &&
+          !string.Equals(filter, domain ?? string.Empty, StringComparison.Ordinal))
+        return false;
+
+      return true;
     }
   }
 }

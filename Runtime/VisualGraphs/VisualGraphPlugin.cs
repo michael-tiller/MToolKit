@@ -114,6 +114,11 @@ namespace MToolKit.Runtime.VisualGraphs
       // Event emitter adapter (registered first, QuestManager will be injected later)
       builder.Register<IEventEmitter, VisualGraphEventEmitter>(Lifetime.Singleton);
 
+      // Runtime contexts + scoped key resolution (9.0.2a) — concrete types; the QuestManager refactor (9.0.2b)
+      // injects GraphContextRegistry directly. In-method order is irrelevant (VContainer resolves at Build).
+      builder.Register<Contexts.GraphContextRegistry>(Lifetime.Singleton);
+      builder.Register<Contexts.ScopedKeyResolver>(Lifetime.Singleton);
+
       // Save/load controller for graph state persistence
       // Note: Requires GraphEventRouter (registered above), IES3Service (from GlobalInstaller), and IQuestManager (registered above)
       // Registry is already registered above, so we can inject it directly
@@ -189,6 +194,34 @@ namespace MToolKit.Runtime.VisualGraphs
       builder.Register<DialogueChoiceNodeExecutor>(Lifetime.Singleton)
         .As<IGraphNodeExecutor>();
 
+      // Core 9.4 node slice: math, logic, state-query, transform
+      builder.Register<Executors.Math.AddNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Math.MultiplyNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Math.ClampNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Math.LerpNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Logic.AndNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Logic.OrNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Logic.NotNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Logic.XorNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.State.GetVarNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.State.CheckWorldStateNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Transform.PositionNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Transform.RotationNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+      builder.Register<Executors.Transform.ScaleNodeExecutor>(Lifetime.Singleton)
+        .As<IGraphNodeExecutor>();
+
       // Build callback to register all executors in the registry
       builder.RegisterBuildCallback(container =>
       {
@@ -199,6 +232,14 @@ namespace MToolKit.Runtime.VisualGraphs
         {
           registry.Register(executor);
         }
+
+        // Wire authored Player/World declared-variables onto their scope contexts (9.0.2a). Must precede the
+        // first GetOrCreate for each scope; the registry logs-and-ignores a late call, so this is safe here.
+        var contextRegistry = container.Resolve<Contexts.GraphContextRegistry>();
+        if (config != null && config.PlayerVariables != null)
+          contextRegistry.SetScopeDeclarations(Contexts.EGraphContextScope.Player, config.PlayerVariables);
+        if (config != null && config.WorldVariables != null)
+          contextRegistry.SetScopeDeclarations(Contexts.EGraphContextScope.World, config.WorldVariables);
       });
 
       // Register the plugin instance
@@ -419,52 +460,38 @@ namespace MToolKit.Runtime.VisualGraphs
     {
       try
       {
-        // Check if save data exists for graphs domain
-        // Use reflection to access private es3Service field
-        var es3ServiceField = saveController.GetType().GetField("es3Service",
-          BindingFlags.NonPublic | BindingFlags.Instance);
-
-        if (es3ServiceField != null)
+        // Single source of truth for "does the graphs domain have anything to restore" — includes the
+        // 9.0.4 Player/World scope keys, so a save carrying only scope state still triggers the late load.
+        if (saveController.HasSaveData())
         {
-          var es3Service = es3ServiceField.GetValue(saveController) as IES3Service;
+          log.ForGameObject(gameObject).Information("Save data exists for graphs domain - ensuring quest definitions are loaded before restoration");
 
-          if (es3Service != null)
+          // Always ensure quest definitions are loaded before restoring
+          // Even if LoadAllOnStartup is true, the save system might load before InitializeGraphsAsync completes
+          if (config != null && config.DefaultRegistry != null)
           {
-            var hasQuestData = es3Service.KeyExists("graphs_quest_manager_state");
-            var hasGraphData = es3Service.KeyExists("graphs_graph_states");
+            // Check if quest definitions are already loaded
+            var existingQuestDefs = GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
+            log.ForGameObject(gameObject).Information("Found {Count} quest definitions already loaded in registry", existingQuestDefs.Count);
 
-            if (hasQuestData || hasGraphData)
+            // Load quest definitions if not already loaded (or if LoadAllOnStartup is false)
+            if (existingQuestDefs.Count == 0 || !config.LoadAllOnStartup)
             {
-              log.ForGameObject(gameObject).Information("Save data exists for graphs domain - ensuring quest definitions are loaded before restoration");
-
-              // Always ensure quest definitions are loaded before restoring
-              // Even if LoadAllOnStartup is true, the save system might load before InitializeGraphsAsync completes
-              if (config != null && config.DefaultRegistry != null)
-              {
-                // Check if quest definitions are already loaded
-                var existingQuestDefs = GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
-                log.ForGameObject(gameObject).Information("Found {Count} quest definitions already loaded in registry", existingQuestDefs.Count);
-
-                // Load quest definitions if not already loaded (or if LoadAllOnStartup is false)
-                if (existingQuestDefs.Count == 0 || !config.LoadAllOnStartup)
-                {
-                  log.ForGameObject(gameObject).Information("Loading quest definitions from registry before restoration");
-                  await LoadQuestDefinitionsFromRegistryAsync(config.DefaultRegistry);
-                  var loadedQuestDefs = GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
-                  log.ForGameObject(gameObject).Information("Now have {Count} quest definitions loaded in registry", loadedQuestDefs.Count);
-                }
-              }
-
-              // Manually trigger load on the controller
-              log.ForGameObject(gameObject).Information("Calling LoadAsync on GraphStateSaveController to restore quest data");
-              await saveController.LoadAsync(default);
-              log.ForGameObject(gameObject).Information("Manually loaded quest data after late registration");
-            }
-            else
-            {
-              log.ForGameObject(gameObject).Verbose("No save data found for graphs domain - skipping manual load");
+              log.ForGameObject(gameObject).Information("Loading quest definitions from registry before restoration");
+              await LoadQuestDefinitionsFromRegistryAsync(config.DefaultRegistry);
+              var loadedQuestDefs = GraphDefinitionRegistry.GetAllQuestDefinitions().ToList();
+              log.ForGameObject(gameObject).Information("Now have {Count} quest definitions loaded in registry", loadedQuestDefs.Count);
             }
           }
+
+          // Manually trigger load on the controller
+          log.ForGameObject(gameObject).Information("Calling LoadAsync on GraphStateSaveController to restore quest data");
+          await saveController.LoadAsync(default);
+          log.ForGameObject(gameObject).Information("Manually loaded quest data after late registration");
+        }
+        else
+        {
+          log.ForGameObject(gameObject).Verbose("No save data found for graphs domain - skipping manual load");
         }
       }
       catch (Exception ex)

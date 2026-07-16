@@ -218,7 +218,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       }
       questDef.InitialVariables?.ApplyTo(state);
 
-      var runner = new GraphRunner(runtimeDef, state, executorRegistry, services, eventEmitter);
+      var runner = new GraphRunner(runtimeDef, state, executorRegistry, services, eventEmitter, graphAsset.DeclaredVariables);
       log.ForMethod().Verbose("Loaded quest graph '{QuestId}': {NodeCount} nodes, {SubscriptionCount} subscriptions",
         questDef.Guid, runtimeDef.Nodes.Count, runtimeDef.Subscriptions.Count);
 
@@ -307,7 +307,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
           conn.FromNodeId, fromType, conn.ToNodeId, toType, conn.PortName, toText);
       }
 
-      var runner = new GraphRunner(runtimeDef, state, executorRegistry, services, eventEmitter);
+      var runner = new GraphRunner(runtimeDef, state, executorRegistry, services, eventEmitter, graphAsset.DeclaredVariables);
       log.ForMethod().Verbose("Loaded dialogue graph '{DialogueId}': {NodeCount} nodes, {ConnectionCount} connections, {SubscriptionCount} subscriptions",
         dialogueDef.DialogueId, runtimeDef.Nodes.Count, runtimeDef.Connections.Count, runtimeDef.Subscriptions.Count);
 
@@ -337,7 +337,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
         globalVars?.ApplyTo(state);
       }
 
-      GraphRunner runner = new(runtimeDef, state, executorRegistry, services, eventEmitter);
+      GraphRunner runner = new(runtimeDef, state, executorRegistry, services, eventEmitter, graphAsset.DeclaredVariables);
       log.ForMethod().Information("Loaded event graph '{EventId}': {NodeCount} nodes, {SubscriptionCount} subscriptions",
         eventDef.EventId, runtimeDef.Nodes.Count, runtimeDef.Subscriptions.Count);
 

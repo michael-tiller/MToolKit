@@ -1,3 +1,4 @@
+using MToolKit.Runtime.VisualGraphs.Persistence;
 using MToolKit.Runtime.VisualGraphs.Runtime.State;
 using UnityEngine;
 using UnityEngine.Scripting;
@@ -22,7 +23,9 @@ namespace ES3Types
       GraphStateSnapshot casted = (GraphStateSnapshot)obj;
       writer.WriteProperty("GraphId", casted.GraphId, ES3Type_string.Instance);
       writer.WriteProperty("LastSequenceId", casted.LastSequenceId, ES3Type_long.Instance);
-      writer.WriteProperty("Data", casted.Data, ES3TypeMgr.GetOrCreateES3Type(typeof(Dictionary<string, object>)));
+      // 9.0.4: unserializable values fail loud (warn + skip) at save time, never silently drop on load.
+      writer.WriteProperty("Data", GraphSnapshotSchemaSanitizer.FilterUnserializable(casted.Data, casted.GraphId),
+        ES3TypeMgr.GetOrCreateES3Type(typeof(Dictionary<string, object>)));
     }
 
     public override object Read<T>(ES3Reader reader)

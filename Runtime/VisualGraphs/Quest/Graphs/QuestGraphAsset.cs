@@ -4,6 +4,7 @@ using System.Linq;
 using MToolKit.Runtime.Core.Types;
 using MToolKit.Runtime.VisualGraphs.Authoring;
 using MToolKit.Runtime.VisualGraphs.Quest.Nodes;
+using MToolKit.Runtime.VisualGraphs.Variables;
 using Sirenix.OdinInspector;
 using UnityEngine;
 using XNode;
@@ -29,6 +30,16 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Graphs
     [Range(64, 4096)]
     [InfoBox("Default: 1024. Increase for complex graphs, decrease for simple ones.")]
     public int MaxExecutionSteps = 1024;
+
+    /// <summary>
+    ///   Optional declared-variables block: validation/tooling metadata, NOT an init leg.
+    ///   Init precedence stays GlobalGraphVariables → definition InitialVariables → restored save state (wins);
+    ///   declared defaults reach runtime through typed-accessor fallback, not ApplyTo.
+    /// </summary>
+    [BoxGroup("Variables")]
+    [Tooltip("Optional declared-variable set for this graph. Used by export validation, the variable picker, " +
+             "and the text authoring importer. Undeclared keys remain legal at runtime.")]
+    public GraphVariableSet DeclaredVariables;
 
     [BoxGroup("Event Subscriptions")]
     [InfoBox("Graph will ONLY execute when these MessagePipe events are received.\n" +

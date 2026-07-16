@@ -12,7 +12,9 @@ using Logger = Serilog.Core.Logger;
 namespace MToolKit.Runtime.VisualGraphs.Runtime
 {
   /// <summary>
-  ///   Routes MessagePipe messages to graph runners with O(1) indexed lookups by (type, domain).
+  ///   Routes MessagePipe messages to graph runners, indexed by (type, domain). Delivery is ADDITIVE:
+  ///   an exact-domain match and the empty-domain ("any") wildcard both deliver, deduplicated by runner
+  ///   reference identity and dispatched in overall registration order.
   /// </summary>
   public sealed class GraphEventRouter : IGraphEventRouter
   {
@@ -20,8 +22,40 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
       Log.Logger.ForContext<GraphEventRouter>().ForFeature("VisualGraphs"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 
+    /// <summary>
+    ///   Maximum re-entrant routing depth. A graph that publishes an event it also subscribes to (directly or
+    ///   through a cycle of graphs) re-enters RouteAsync synchronously on the same call chain; without a budget
+    ///   this recurses until the process dies (stack overflow / OOM — no managed exception is ever logged).
+    ///   Legitimate event cascades are shallow; anything deeper than this is a feedback loop.
+    /// </summary>
+    public const int MaxRouteDepth = 16;
+
+    /// <summary>
+    ///   Dispatch-rate watchdog: max dispatches per runner within <see cref="RateWindowSeconds" />.
+    ///   The depth budget only catches loops that recurse on one call stack; a graph that republishes
+    ///   through a frame-deferred continuation re-enters at depth 0 every hop and livelocks the main
+    ///   thread instead (observed: magic_amulet_events, 10 MB/min log storm). No legitimate content
+    ///   graph dispatches anywhere near this often; on breach the runner is suspended for
+    ///   <see cref="RateSuspendSeconds" /> with one Error log.
+    /// </summary>
+    public const int MaxDispatchesPerWindow = 100;
+    public const float RateWindowSeconds = 1f;
+    public const float RateSuspendSeconds = 5f;
+
+    /// <summary>Clock for the rate watchdog (seconds, monotonic). Settable for tests; defaults to Unity realtime.</summary>
+    public Func<float> TimeProvider { get; set; } = () => UnityEngine.Time.realtimeSinceStartup;
+
+    private sealed class DispatchWindow
+    {
+      public float WindowStart;
+      public int Count;
+      public float SuspendedUntil;
+    }
+
     private readonly List<IGraphRunner> all = new();
     private readonly Dictionary<(Type messageType, string domain), List<IGraphRunner>> byTypeDomain = new();
+    private readonly Dictionary<IGraphRunner, DispatchWindow> dispatchWindows = new();
+    private int routeDepth;
 
     /// <summary>Register a graph runner and index its subscriptions</summary>
     public void RegisterRunner(IGraphRunner runner)
@@ -71,51 +105,111 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
 
       var messageType = message.GetType();
       var domainFilter = domain ?? string.Empty;
-      var key = (messageType, domainFilter);
+
+      if (routeDepth >= MaxRouteDepth)
+      {
+        log.Error("Event-graph feedback loop detected: routing depth reached {MaxRouteDepth} — dropping message '{MessageType}' (domain: '{Domain}'). A graph is publishing an event it also subscribes to (directly or via a graph cycle); fix the content graph's subscription/publish pair.",
+          MaxRouteDepth, messageType.Name, domainFilter);
+        return;
+      }
 
       log.Verbose("Routing message '{MessageType}' (domain: '{Domain}') to graphs", messageType.Name, domainFilter);
 
-      var matchedGraphs = new List<IGraphRunner>();
-      var routingStrategy = "";
+      // Additive delivery: union the exact-domain bucket and the empty-domain ("any") wildcard bucket.
+      // Deduplicate by runner reference identity, dispatched in overall registration order (the order
+      // runners appear in `all`), NOT exact-bucket-then-wildcard-bucket concatenation.
+      var matchedSet = new HashSet<IGraphRunner>();
+      var exactMatched = false;
+      var wildcardMatched = false;
 
-      // Try exact domain match first
-      if (byTypeDomain.TryGetValue(key, out var list))
+      if (byTypeDomain.TryGetValue((messageType, domainFilter), out var exactList))
       {
-        matchedGraphs.AddRange(list);
-        routingStrategy = $"exact domain match ('{domainFilter}')";
-      }
-      else
-      {
-        // Try wildcard domain match (empty domain = match all)
-        key = (messageType, string.Empty);
-        if (byTypeDomain.TryGetValue(key, out list))
-        {
-          matchedGraphs.AddRange(list);
-          routingStrategy = "wildcard domain match (any domain)";
-        }
+        foreach (var runner in exactList)
+          matchedSet.Add(runner);
+        exactMatched = exactList.Count > 0;
       }
 
-      if (matchedGraphs.Count == 0)
+      if (domainFilter != string.Empty && byTypeDomain.TryGetValue((messageType, string.Empty), out var wildcardList))
+      {
+        foreach (var runner in wildcardList)
+          matchedSet.Add(runner);
+        wildcardMatched = wildcardList.Count > 0;
+      }
+
+      if (matchedSet.Count == 0)
       {
         log.Verbose("No graphs subscribed to message '{MessageType}' (domain: '{Domain}'). Available subscriptions: {Subscriptions}",
           messageType.Name, domainFilter, GetAvailableSubscriptionsForType(messageType));
         return;
       }
 
+      var matchedGraphs = all.Where(matchedSet.Contains).ToList();
+      var routingStrategy = exactMatched && wildcardMatched
+        ? $"additive: exact domain ('{domainFilter}') + wildcard (any domain)"
+        : exactMatched
+          ? $"exact domain match ('{domainFilter}')"
+          : "wildcard domain match (any domain)";
+
       log.Information("Routing message '{MessageType}' (domain: '{Domain}') to {GraphCount} graph(s) via {Strategy}: {GraphIds}",
         messageType.Name, domainFilter, matchedGraphs.Count, routingStrategy,
         string.Join(", ", matchedGraphs.Select(r => r.GraphId)));
 
-      foreach (var runner in matchedGraphs)
+      routeDepth++;
+      try
       {
-        if (ct.IsCancellationRequested)
+        foreach (var runner in matchedGraphs)
         {
-          log.Verbose("Message routing cancelled for '{MessageType}'", messageType.Name);
-          break;
-        }
+          if (ct.IsCancellationRequested)
+          {
+            log.Verbose("Message routing cancelled for '{MessageType}'", messageType.Name);
+            break;
+          }
 
-        await runner.HandleMessageAsync(message, domain, ct);
+          if (!TryConsumeDispatchBudget(runner, messageType))
+            continue;
+
+          await runner.HandleMessageAsync(message, domain, ct);
+        }
       }
+      finally
+      {
+        routeDepth--;
+      }
+    }
+
+    /// <summary>
+    ///   Rate watchdog: returns false (dropping the dispatch) while a runner is suspended, and suspends
+    ///   it when it exceeds <see cref="MaxDispatchesPerWindow" /> dispatches inside one rate window.
+    /// </summary>
+    private bool TryConsumeDispatchBudget(IGraphRunner runner, Type messageType)
+    {
+      var now = TimeProvider();
+
+      if (!dispatchWindows.TryGetValue(runner, out var window))
+      {
+        window = new DispatchWindow { WindowStart = now };
+        dispatchWindows[runner] = window;
+      }
+
+      if (now < window.SuspendedUntil)
+        return false;
+
+      if (now - window.WindowStart >= RateWindowSeconds)
+      {
+        window.WindowStart = now;
+        window.Count = 0;
+      }
+
+      window.Count++;
+      if (window.Count > MaxDispatchesPerWindow)
+      {
+        window.SuspendedUntil = now + RateSuspendSeconds;
+        log.Error("Event-graph feedback loop detected: graph '{GraphId}' exceeded {MaxDispatches} dispatches in {Window}s (last message: '{MessageType}') — suspending its event delivery for {Suspend}s. A graph is republishing an event it also subscribes to (directly or via a graph cycle); fix the content graph's subscription/publish pair.",
+          runner.GraphId, MaxDispatchesPerWindow, RateWindowSeconds, messageType.Name, RateSuspendSeconds);
+        return false;
+      }
+
+      return true;
     }
 
     private string GetAvailableSubscriptionsForType(Type messageType)
@@ -152,6 +246,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
     {
       all.Clear();
       byTypeDomain.Clear();
+      dispatchWindows.Clear();
     }
   }
 }

@@ -31,6 +31,7 @@ using MToolKit.Runtime.Persistence;
 using MToolKit.Runtime.Persistence.Migration;
 using MToolKit.Runtime.Persistence.ES3Integration;
 using MToolKit.Runtime.Persistence.Interfaces;
+using MToolKit.Runtime.Persistence.Migration;
 using MToolKit.Runtime.Settings;
 using MToolKit.Runtime.Settings.Ini;
 using Serilog;
@@ -271,6 +272,8 @@ namespace MToolKit.Runtime.Installer
 
       // Register SaveDomainControllerRegistry globally
       builder.Register<SaveDomainControllerRegistry>(Lifetime.Singleton);
+
+      // NOTE: IThemeService (CurrentTheme) is intentionally NOT registered here.
 
       // Register PluginRegistry globally so it's available in all scenes
       builder.Register<PluginRegistry>(Lifetime.Singleton);

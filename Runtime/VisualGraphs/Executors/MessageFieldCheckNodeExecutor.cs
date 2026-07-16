@@ -124,7 +124,7 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
         {
           var expectedFloat = Convert.ToDouble(expectedValue);
           var actualFloat = Convert.ToDouble(actualValue);
-          return Math.Abs(actualFloat - expectedFloat) < 0.0001;
+          return System.Math.Abs(actualFloat - expectedFloat) < 0.0001;
         }
 
         if (actualType == typeof(bool))

@@ -1,39 +1,43 @@
 using System;
 using System.Collections.Generic;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
+using Serilog;
 using Sirenix.OdinInspector;
 using UnityEngine;
+using ILogger = Serilog.ILogger;
+using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.VisualGraphs.Variables
 {
   /// <summary>
-  ///   Scriptable object containing a set of graph variables.
-  ///   Can be used for global variables or per-definition initial variables.
+  ///   Scriptable object containing a set of graph variable declarations.
+  ///   Can be used for global variables, per-definition initial variables, or as a graph asset's
+  ///   declared-variables block (export validation + authoring tooling).
   /// </summary>
   [CreateAssetMenu(menuName = "MToolKit/Visual Graphs/Variable Set", fileName = "GraphVariables", order = 200)]
   public sealed class GraphVariableSet : ScriptableObject
   {
-    public enum EGraphVariableType
-    {
-      String = 0,
-      Int = 1,
-      Float = 2,
-      Bool = 3
-    }
+    private static readonly Lazy<ILogger> logLazy = new(() =>
+      Log.Logger.ForContext<GraphVariableSet>().ForFeature("VisualGraphs.State"));
+
+    private static ILogger log => logLazy.Value ?? Logger.None;
 
     [ListDrawerSettings(ShowFoldout = true, DraggableItems = true)]
-    public List<GraphVariableEntry> entries = new();
+    public List<GraphVariableDeclaration> entries = new();
 
     /// <summary>
-    ///   Apply these variables to a graph state.
+    ///   Apply the declared defaults of these variables to a graph state.
+    ///   Entries that are null, have empty keys, or carry an out-of-range serialized type are
+    ///   skipped (with a warning for the latter) — this runs during graph init and must not
+    ///   crash on corrupt authoring data; export validation is where such data fails loud.
     /// </summary>
     public void ApplyTo(IGraphState state)
     {
-      if (state == null) return;
+      if (state == null || entries == null) return;
 
       foreach (var entry in entries)
       {
-        if (string.IsNullOrEmpty(entry.key)) continue;
+        if (entry == null || string.IsNullOrEmpty(entry.key)) continue;
 
         switch (entry.type)
         {
@@ -49,40 +53,38 @@ namespace MToolKit.Runtime.VisualGraphs.Variables
           case EGraphVariableType.Bool:
             state.Set(entry.key, entry.boolValue);
             break;
+          case EGraphVariableType.Vector3:
+            state.Set(entry.key, entry.vector3Value);
+            break;
+          case EGraphVariableType.Vector2:
+            state.Set(entry.key, entry.vector2Value);
+            break;
+          case EGraphVariableType.Color:
+            state.Set(entry.key, entry.colorValue);
+            break;
+          default:
+            log.Warning("Skipping variable '{Key}' with unsupported serialized type value {TypeValue}",
+              entry.key, (int)entry.type);
+            break;
         }
       }
     }
 
-    [Serializable]
-    public sealed class GraphVariableEntry
+    /// <summary>
+    ///   Find the declaration for a key. Exact ordinal match, no trimming; null when absent.
+    ///   First match wins — duplicate keys are rejected by export validation for declared graphs.
+    /// </summary>
+    public GraphVariableDeclaration Find(string key)
     {
-      [HorizontalGroup("Entry", Width = 200)]
-      [LabelWidth(30)]
-      public string key = "variableName";
+      if (string.IsNullOrEmpty(key) || entries == null) return null;
 
-      [HorizontalGroup("Entry", Width = 100)]
-      [LabelWidth(30)]
-      public EGraphVariableType type = EGraphVariableType.Int;
+      foreach (var entry in entries)
+      {
+        if (entry == null || string.IsNullOrEmpty(entry.key)) continue;
+        if (string.Equals(entry.key, key, StringComparison.Ordinal)) return entry;
+      }
 
-      [HorizontalGroup("Entry")]
-      [ShowIf("@type == GraphVariableType.String")]
-      [LabelText("Value")]
-      public string stringValue = "";
-
-      [HorizontalGroup("Entry")]
-      [ShowIf("@type == GraphVariableType.Int")]
-      [LabelText("Value")]
-      public int intValue;
-
-      [HorizontalGroup("Entry")]
-      [ShowIf("@type == GraphVariableType.Float")]
-      [LabelText("Value")]
-      public float floatValue;
-
-      [HorizontalGroup("Entry")]
-      [ShowIf("@type == GraphVariableType.Bool")]
-      [LabelText("Value")]
-      public bool boolValue;
+      return null;
     }
   }
 }

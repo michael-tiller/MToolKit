@@ -39,6 +39,13 @@ namespace MToolKit.Runtime.Navigation.Services
     public async UniTask<T> PushAsync<T>(ECanvasType canvasType, T prefab, CancellationToken token = default)
       where T : View
     {
+      // A pushed view can only render if its canvas GameObject is active. Some canvases
+      // (e.g. the Overlay canvas) sit dormant during gameplay and must wake when a modal
+      // is pushed onto them. Activation only — never deactivate here (other canvas types
+      // share this path and may be expected to stay active when their stack is empty).
+      var canvasGo = canvases[canvasType]?.gameObject;
+      if (canvasGo != null && !canvasGo.activeSelf) canvasGo.SetActive(true);
+
       // Hide the old top (if any)
       if (stacks[canvasType].Count > 0)
       {

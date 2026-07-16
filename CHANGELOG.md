@@ -8,6 +8,24 @@ Releases are cut as annotated git tags and follow strict SemVer 2.0.0. Version
 numbers are orthogonal to product milestones — a major bump signals an API break,
 not a roadmap milestone.
 
+## [Unreleased]
+
+### Added
+
+- `GraphEventRouter` feedback-loop guards. (1) A synchronous routing depth budget (`MaxRouteDepth`, 16): a graph that publishes an event it also subscribes to re-enters `RouteAsync` on the same call chain and previously recursed until the process died (stack overflow / OOM, no managed exception logged). Routing now drops the message with an Error log at the budget and unwinds via `finally`. (2) A per-runner dispatch-rate watchdog (`MaxDispatchesPerWindow` 100/s): a frame-deferred republish loop re-enters at depth 0 every hop and livelocks the main thread instead of overflowing — the watchdog suspends delivery to a runner exceeding the budget for `RateSuspendSeconds` (5s) with one Error log. `TimeProvider` is injectable for deterministic tests. Both shapes observed live from one wildcard content graph: first a hard editor crash (1,139 synchronous iterations), then a livelock (10 MB/min log storm) once the depth guard stopped the crash.
+
+- Runtime theme system (`MToolKit.Theme`). `CurrentTheme` singleton broadcasts the active `Theme` over R3 (`OnThemeUpdated` value stream + `OnThemeChanged` old/new pair) plus a serialized `UnityEvent<Theme, Theme>` for Inspector listeners. A generic `ThemePreset<TAsset>` base binds a themed ScriptableObject to a target component and follows theme changes — resolving the same-Id asset from each new theme, falling back to the wired anchor, with an `overrideTheme` emergency hatch (Odin warning). Concrete presets: `SwatchPreset` (`Graphic` colour), `TypesetPreset` (TMP font / size / style / spacing + optional override material for outlines), `SpacingPreset` (`HorizontalOrVerticalLayoutGroup` padding / gap). `SwatchRegistry` / `TypesetStyleRegistry` / `SpacingRegistry` resolve assets by name-Id; `Theme` aggregates them. Enables light/dark and localization-font theming.
+
+### Changed
+
+- `SubviewButton.targetSubview` is no longer `[Required]`, and `OnClickSetSubview` null-guards a missing target — it logs a warning (Serilog) and returns instead of throwing, so a tab whose subview isn't wired degrades gracefully rather than NRE-ing.
+
+### Fixed
+
+- `GraphRunner.HandleMessageAsync` now gates entry nodes on the triggering message: an entry node whose `Parameters` declare a `MessageType` only starts for messages of that exact type, and one declaring a `DomainFilter` only starts for that exact domain. Previously EVERY entry node in a multi-trigger graph fired on ANY subscribed message — trigger A's action chain ran for trigger B's event, which is both wrong and the ignition path for event-graph feedback loops. Entry nodes declaring neither (dialogue starts, legacy quest entries) keep the fire-on-dispatch behavior.
+
+- `NavigationService.PushAsync` now activates the target canvas GameObject before pushing a view. Canvases that sit dormant during gameplay (e.g. the Overlay canvas used for modals) previously stayed inactive, so a modal pushed onto them never rendered. Activation only — never deactivates here, since other canvas types share this path and may be expected to stay active when their stack is empty.
+
 ## [1.0.0] - 2026-05-28
 
 First release cut as an annotated git tag and the switchover to strict SemVer 2.0.0.

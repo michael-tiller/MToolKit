@@ -63,6 +63,7 @@ namespace MToolKit.Runtime.Persistence
       IsAutoSaveRunning = new ReactiveProperty<bool>(false);
       IsAutoSaveExecuting = new ReactiveProperty<bool>(false);
       IsSaveBlocked = new ReactiveProperty<bool>(false);
+      RestoreInProgress = new ReactiveProperty<bool>(false);
 
       log.ForMethod().Verbose("SaveSystemCoordinator created with auto-save enabled: {0}", saveConfig.EnableAutoSave);
     }
@@ -83,6 +84,18 @@ namespace MToolKit.Runtime.Persistence
     ///   do NOT recreate it). Blocks BOTH local and global save paths uniformly (Phase F boundary F2).
     /// </summary>
     public ReactiveProperty<bool> IsSaveBlocked { get; }
+
+    /// <summary>
+    ///   True while a session restore is in progress, spanning a WIDER window than
+    ///   <see cref="IsLoading"/>: opened by the startup orchestrator the moment it commits to the
+    ///   LOAD path — BEFORE world generation streams its initial chunks — and closed after
+    ///   <see cref="LoadAsync"/> completes. <see cref="IsLoading"/> only covers the
+    ///   <see cref="LoadAsync"/> call itself, which runs AFTER world-gen, so content generators
+    ///   that react to chunk streaming (e.g. surface scatter) must gate on THIS flag to avoid
+    ///   replaying generation on top of restored save data. Driven externally by the orchestrator;
+    ///   this coordinator only holds it.
+    /// </summary>
+    public ReactiveProperty<bool> RestoreInProgress { get; }
 
 
     /// <summary>
@@ -155,6 +168,7 @@ namespace MToolKit.Runtime.Persistence
       IsSaving?.Dispose();
       IsLoading?.Dispose();
       IsSaveBlocked?.Dispose();
+      RestoreInProgress?.Dispose();
       LastSaveTime?.Dispose();
       LastLoadTime?.Dispose();
       IsAutoSaveRunning?.Dispose();
@@ -457,6 +471,23 @@ namespace MToolKit.Runtime.Persistence
       }
     }
 
+        /// <summary>When true, the auto-save loop and scene-change auto-save are suspended (dev/test hook for save-migration smokes that stamp the on-disk save and reload it). Not persisted; runtime-only.</summary>
+        private bool autoSaveSuspended;
+
+        /// <summary>
+        ///   Suspends or resumes auto-save without mutating <c>saveConfig.EnableAutoSave</c>. A save-migration
+        ///   smoke uses this to stamp a controller's on-disk schema version and reload it without the auto-save
+        ///   loop (or a scene-change auto-save) re-stamping over it back to current via <c>PrepareForSave</c>.
+        /// </summary>
+        /// <param name="suspended">True to suspend auto-save; false to resume (when <c>EnableAutoSave</c>).</param>
+        public void SetAutoSaveSuspended(bool suspended)
+        {
+            autoSaveSuspended = suspended;
+            if (suspended) StopAutoSave();
+            else if (saveConfig.EnableAutoSave && !IsAutoSaveRunning.Value) StartAutoSave();
+            log.ForMethod().Information("Auto-save {0}", suspended ? "SUSPENDED (dev/test hook)" : "resumed");
+        }
+
         /// <summary>
         ///   Starts the auto-save system using UniTask
         /// </summary>
@@ -503,8 +534,8 @@ namespace MToolKit.Runtime.Persistence
           // Wait for the configured interval
           await UniTask.Delay(TimeSpan.FromSeconds(saveConfig.AutoSaveIntervalSeconds), cancellationToken: ct);
 
-          // Skip auto-save if we're already saving or loading, or if the save block is set (F2).
-          if (IsSaving.Value || IsLoading.Value || IsSaveBlocked.Value)
+          // Skip auto-save if suspended (dev/test hook), already saving or loading, or the save block is set (F2).
+          if (autoSaveSuspended || IsSaving.Value || IsLoading.Value || IsSaveBlocked.Value)
           {
             log.ForMethod().Verbose("Skipping auto-save - save/load in progress or save blocked");
             continue;
@@ -559,6 +590,11 @@ namespace MToolKit.Runtime.Persistence
         /// </summary>
         public async UniTask TriggerAutoSaveAsync(CancellationToken ct = default)
     {
+      if (autoSaveSuspended)
+      {
+        log.ForMethod().Debug("Auto-save suspended (dev/test hook), skipping manual trigger");
+        return;
+      }
       if (!saveConfig.EnableAutoSave)
       {
         log.ForMethod().Debug("Auto-save is disabled, skipping manual trigger");

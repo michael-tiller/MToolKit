@@ -6,6 +6,7 @@ using Cysharp.Threading.Tasks;
 using MessagePipe;
 using MToolKit.Runtime.MessageBus;
 using MToolKit.Runtime.VisualGraphs.Config;
+using MToolKit.Runtime.VisualGraphs.Contexts;
 using MToolKit.Runtime.VisualGraphs.Export;
 using MToolKit.Runtime.VisualGraphs.Quest.Definitions;
 using MToolKit.Runtime.VisualGraphs.Quest.Graphs;
@@ -14,6 +15,7 @@ using MToolKit.Runtime.VisualGraphs.Runtime;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime.State;
+using MToolKit.Runtime.VisualGraphs.Variables;
 using R3;
 using Serilog;
 using Sirenix.OdinInspector;
@@ -44,6 +46,18 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
     private readonly IPublisher<QuestAbandonedMessage> questAbandonedPublisher;
     private readonly IPublisher<QuestClaimedMessage> questClaimedPublisher;
     private readonly IPublisher<CampaignCompletedMessage> campaignCompletedPublisher;
+    private readonly GraphContextRegistry contextRegistry;
+
+    // Graph contexts this manager attached (9.0.2b): one Graph-scoped context per live quest GraphState,
+    // ownerId = the verbatim questGuid (the id ScopedKeyResolver parses from `quest:<id>.key`). Tracked so
+    // Dispose can tear down exactly the contexts it created in the shared registry.
+    private readonly HashSet<string> attachedContextGuids = new();
+
+    // Per-quest aggregate declaration sets (9.0.4): quest-level + all objective graphs share ONE GraphState,
+    // so they must sanitize imports and resolve scoped reads against ONE schema — otherwise restore order
+    // decides whether a type-changed key's stale value survives. Runtime-created ScriptableObjects; destroyed
+    // with the context they back.
+    private readonly Dictionary<string, GraphVariableSet> questDeclarationAggregates = new();
 
     // Quest lifecycle tracking
 
@@ -82,7 +96,8 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
         IPublisher<QuestCompletedMessage> questCompletedPublisher,
         IPublisher<QuestAbandonedMessage> questAbandonedPublisher,
         IPublisher<QuestClaimedMessage> questClaimedPublisher,
-        IPublisher<CampaignCompletedMessage> campaignCompletedPublisher)
+        IPublisher<CampaignCompletedMessage> campaignCompletedPublisher,
+        GraphContextRegistry contextRegistry)
     {
       this.eventRouter = eventRouter ?? throw new ArgumentNullException(nameof(eventRouter));
       this.executorRegistry = executorRegistry ?? throw new ArgumentNullException(nameof(executorRegistry));
@@ -93,6 +108,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       this.questAbandonedPublisher = questAbandonedPublisher ?? throw new ArgumentNullException(nameof(questAbandonedPublisher));
       this.questClaimedPublisher = questClaimedPublisher ?? throw new ArgumentNullException(nameof(questClaimedPublisher));
       this.campaignCompletedPublisher = campaignCompletedPublisher ?? throw new ArgumentNullException(nameof(campaignCompletedPublisher));
+      this.contextRegistry = contextRegistry ?? throw new ArgumentNullException(nameof(contextRegistry));
 
       // Subscribe to quest progress updates (lazy - will retry if broker not ready)
       EnsureProgressSubscription();
@@ -107,6 +123,15 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       }
       subscriptions?.Clear();
       subscriptions = null;
+
+      // Tear down exactly the Graph contexts this manager attached to the shared registry (9.0.2b).
+      foreach (var questGuid in attachedContextGuids.ToList())
+        contextRegistry?.Remove(questGuid);
+      attachedContextGuids.Clear();
+
+      // Destroy the runtime-created aggregate declaration sets (9.0.4).
+      foreach (var questGuid in questDeclarationAggregates.Keys.ToList())
+        DestroyQuestAggregate(questGuid);
     }
 
     private void EnsureProgressSubscription()
@@ -228,6 +253,93 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       log.ForMethod().Information("Quest: Subscribed to {Count} message type(s)", subscriptions.Count);
     }
 
+    // ==================== GRAPH CONTEXTS (9.0.2b) ====================
+
+    /// <summary>
+    ///   Attach (or re-attach) the quest's Graph context around its LIVE GraphState. Context lifetime tracks
+    ///   the live state: a cached QuestRuntimeState reused on restart/restore gets its context re-created
+    ///   around the cached state (Remove-then-GetOrCreate — the registry throws on a same-owner different-state
+    ///   GetOrCreate by design). An empty guid attaches nothing (the registry would throw; pre-context behavior
+    ///   for such quests is preserved).
+    /// </summary>
+    private IGraphContext AttachQuestContext(string questGuid, IGraphState graphState, GraphVariableSet declarations = null)
+    {
+      if (string.IsNullOrWhiteSpace(questGuid) || graphState == null) return null;
+
+      contextRegistry.Remove(questGuid);
+      var context = contextRegistry.GetOrCreate(EGraphContextScope.Graph, questGuid, graphState, declarations);
+      attachedContextGuids.Add(questGuid);
+      return context;
+    }
+
+    /// <summary>
+    ///   Tear down the quest's Graph context. Called on abandon, claim, restore-clear, and Dispose —
+    ///   deliberately NOT on CompleteQuest, where the quest stays in completedUnclaimedQuests with its
+    ///   GraphState still public and save-relevant.
+    /// </summary>
+    private void RemoveQuestContext(string questGuid)
+    {
+      if (string.IsNullOrWhiteSpace(questGuid)) return;
+      contextRegistry.Remove(questGuid);
+      attachedContextGuids.Remove(questGuid);
+      DestroyQuestAggregate(questGuid);
+    }
+
+    /// <summary>
+    ///   One schema for everything sharing the quest's GraphState (9.0.4): quest-level graph declarations
+    ///   first, then each objective graph's, objectives in index order. Hygiene mirrors the sanitizer —
+    ///   null/empty-key/out-of-range entries are skipped, never amplified into restore/read behavior.
+    ///   Duplicate keys of the same type dedupe silently; a conflicting re-declaration warns and the first
+    ///   wins. Cached per quest; reuse on re-attach.
+    /// </summary>
+    private GraphVariableSet GetOrCreateQuestAggregate(string questGuid, QuestDefinition quest)
+    {
+      if (questDeclarationAggregates.TryGetValue(questGuid, out var cached) && cached != null)
+        return cached;
+
+      var aggregate = ScriptableObject.CreateInstance<GraphVariableSet>();
+      aggregate.name = $"QuestDeclarationAggregate_{questGuid}";
+      var byKey = new Dictionary<string, GraphVariableDeclaration>();
+
+      void Merge(GraphVariableSet source)
+      {
+        if (source?.entries == null) return;
+        foreach (var entry in source.entries)
+        {
+          if (entry == null || string.IsNullOrEmpty(entry.key)) continue;
+          if (!Enum.IsDefined(typeof(EGraphVariableType), entry.type)) continue;
+
+          if (byKey.TryGetValue(entry.key, out var existing))
+          {
+            if (existing.type != entry.type)
+              log.ForMethod().Warning("Quest: Conflicting declaration for '{Key}' across quest '{QuestGuid}' graphs ({FirstType} vs {SecondType}); first declaration wins",
+                entry.key, questGuid, existing.type, entry.type);
+            continue;
+          }
+
+          byKey[entry.key] = entry;
+          aggregate.entries.Add(entry);
+        }
+      }
+
+      Merge(quest.GraphAsset != null ? quest.GraphAsset.DeclaredVariables : null);
+      if (quest.Objectives != null)
+        foreach (var objective in quest.Objectives)
+          Merge(objective?.ObjectiveGraph != null ? objective.ObjectiveGraph.DeclaredVariables : null);
+
+      questDeclarationAggregates[questGuid] = aggregate;
+      return aggregate;
+    }
+
+    private void DestroyQuestAggregate(string questGuid)
+    {
+      if (!questDeclarationAggregates.Remove(questGuid, out var aggregate) || aggregate == null) return;
+      // Runtime-created ScriptableObject: Destroy is delayed/ineffective outside PlayMode (EditMode tests),
+      // so pick the immediate path there — same convention as the test harness's UnityObjectCleanup.
+      if (Application.isPlaying) UnityEngine.Object.Destroy(aggregate);
+      else UnityEngine.Object.DestroyImmediate(aggregate);
+    }
+
     // ==================== LIFECYCLE ====================
 
     public async UniTask<bool> StartQuestAsync(QuestDefinition quest, CancellationToken ct = default)
@@ -265,11 +377,6 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       // Create runtime state
       var graphState = new InMemoryGraphState();
 
-      // Store quest context in graph state for executors to access
-      graphState.Set("__quest_guid", questGuid);
-      graphState.Set("__quest_definition", quest);
-      log.ForMethod().Debug("Quest: Stored quest context in graph state (quest_guid: {QuestGuid})", questGuid);
-
       // Get or create quest state and mark as started
       var questState = GetOrCreateQuestState(questGuid, quest);
       if (questState.GraphState == null)
@@ -279,17 +386,27 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       }
       else
       {
-        // Update existing state
+        // Update existing state (the fresh graphState above is discarded; the cached state is reused)
         questState.MarkStarted(DateTime.UtcNow);
         questState.SetDefinition(quest);
       }
+
+      // ONE schema for everything sharing this quest's GraphState (9.0.4): context scoped reads and every
+      // runner import sanitize against the same aggregate, so restore order can't decide outcomes.
+      var declarations = GetOrCreateQuestAggregate(questGuid, quest);
+
+      // Attach the Graph context around the FINAL retained state (never the temporary one), then stamp the
+      // quest identity keys executors read — through the context API (9.0.2b).
+      var context = AttachQuestContext(questGuid, questState.GraphState, declarations);
+      context?.SetQuestIdentity(questGuid, quest);
+      log.ForMethod().Debug("Quest: Stored quest context in graph state (quest_guid: {QuestGuid})", questGuid);
 
       activeQuests[questGuid] = questState;
       questStates[questGuid] = questState; // Keep in questStates for tracking
 
       // Load objective graphs
       log.ForMethod().Information("Quest: Loading {ObjectiveCount} objective graphs for quest '{QuestName}'", quest.Objectives.Count, quest.DisplayName);
-      await LoadObjectiveGraphsAsync(quest, questState, ct);
+      await LoadObjectiveGraphsAsync(quest, questState, declarations, ct);
 
       // Optionally load quest-level graph if it exists
       if (quest.GraphAsset != null)
@@ -298,7 +415,9 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
         {
           log.ForMethod().Debug("Quest: Loading quest-level graph for '{QuestName}'", quest.DisplayName);
           var runnerId = $"quest_{questGuid}";
-          var runner = await LoadGraphAsync(quest.GraphAsset, runnerId, graphState, ct);
+          // The RETAINED state, not the local temporary: when a cached QuestRuntimeState is reused the local
+          // graphState is discarded, and this runner must share the state the context + objectives use (9.0.4).
+          var runner = await LoadGraphAsync(quest.GraphAsset, runnerId, questState.GraphState, declarations, ct);
           loadedRunners[runnerId] = runner;
           eventRouter.RegisterRunner(runner);
           questState.LoadedGraphInstanceIds.Add(runnerId);
@@ -375,6 +494,9 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       completedUnclaimedQuests.Remove(questGuid);
       claimedQuestGuids.Add(questGuid);
 
+      // The quest's GraphState leaves the save-relevant lists here — its Graph context goes with it.
+      RemoveQuestContext(questGuid);
+
       // Emit message (THIS is when game should grant rewards!)
       questClaimedPublisher.Publish(new QuestClaimedMessage(
           questGuid,
@@ -416,6 +538,10 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
 
       // Remove from active (does NOT add to completed)
       activeQuests.Remove(questGuid);
+
+      // Abandon drops the live quest — its Graph context goes with it (a restart re-attaches around the
+      // cached GraphState that questStates still holds).
+      RemoveQuestContext(questGuid);
 
       // Emit message
       questAbandonedPublisher.Publish(new QuestAbandonedMessage(
@@ -551,14 +677,17 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
         return;
       }
 
-      // Clear current state
+      // Clear current state (restore-clear: each dropped quest's Graph context goes with it; the restore
+      // paths below re-attach contexts around the restored states)
       foreach (var runtimeState in activeQuests.Values)
       {
         UnloadQuestGraphs(runtimeState);
+        RemoveQuestContext(runtimeState.QuestGuid);
       }
       foreach (var runtimeState in completedUnclaimedQuests.Values)
       {
         UnloadQuestGraphs(runtimeState);
+        RemoveQuestContext(runtimeState.QuestGuid);
       }
       activeQuests.Clear();
       completedUnclaimedQuests.Clear();
@@ -709,8 +838,6 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
 
       // Create runtime state with the saved StartedAt time
       var graphState = new InMemoryGraphState();
-      graphState.Set("__quest_guid", questGuid);
-      graphState.Set("__quest_definition", quest);
 
       var runtimeState = new QuestRuntimeState(
           questGuid,
@@ -719,10 +846,19 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
           startedAt
       );
 
+      // Same shared aggregate schema as the StartQuestAsync path (9.0.4) — this restore path bypasses
+      // StartQuestAsync, so it must build/attach the aggregate itself.
+      var declarations = GetOrCreateQuestAggregate(questGuid, quest);
+
+      // Attach the Graph context and stamp the identity keys through it (9.0.2b) — restore-direct quests
+      // get the same context treatment as started quests.
+      var context = AttachQuestContext(questGuid, runtimeState.GraphState, declarations);
+      context?.SetQuestIdentity(questGuid, quest);
+
       // Load objective graphs (but don't publish QuestStartedMessage)
       // We need to load graphs so that graph state can be restored
       log.ForMethod().Information("Quest: Loading {ObjectiveCount} objective graphs for restored completed quest '{QuestName}'", quest.Objectives.Count, quest.DisplayName);
-      await LoadObjectiveGraphsAsync(quest, runtimeState, ct);
+      await LoadObjectiveGraphsAsync(quest, runtimeState, declarations, ct);
 
       // Optionally load quest-level graph if it exists
       if (quest.GraphAsset != null)
@@ -731,7 +867,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
         {
           log.ForMethod().Debug("Quest: Loading quest-level graph for restored completed quest '{QuestName}'", quest.DisplayName);
           var runnerId = $"quest_{questGuid}";
-          var runner = await LoadGraphAsync(quest.GraphAsset, runnerId, graphState, ct);
+          var runner = await LoadGraphAsync(quest.GraphAsset, runnerId, runtimeState.GraphState, declarations, ct);
           loadedRunners[runnerId] = runner;
           eventRouter.RegisterRunner(runner);
           runtimeState.LoadedGraphInstanceIds.Add(runnerId);
@@ -750,7 +886,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       log.ForMethod().Information("Quest: Successfully restored completed quest '{QuestName}' ({QuestGuid}) directly to completed state", quest.DisplayName, questGuid);
     }
 
-    private async UniTask LoadObjectiveGraphsAsync(QuestDefinition quest, QuestRuntimeState runtimeState, CancellationToken ct)
+    private async UniTask LoadObjectiveGraphsAsync(QuestDefinition quest, QuestRuntimeState runtimeState, GraphVariableSet declarations, CancellationToken ct)
     {
       if (quest.Objectives == null || quest.Objectives.Count == 0)
       {
@@ -782,7 +918,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
           var runnerId = $"objective_{objective.Guid}";
           log.ForMethod().Debug("Quest: Loading objective graph '{ObjectiveName}' (runner: {RunnerId})", objective.DisplayName, runnerId);
 
-          var runner = await LoadGraphAsync(objective.ObjectiveGraph, runnerId, runtimeState.GraphState, ct);
+          var runner = await LoadGraphAsync(objective.ObjectiveGraph, runnerId, runtimeState.GraphState, declarations, ct);
           loadedRunners[runnerId] = runner;
           eventRouter.RegisterRunner(runner);
           runtimeState.LoadedGraphInstanceIds.Add(runnerId);
@@ -825,6 +961,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
         QuestGraphAsset graphAsset,
         string runnerId,
         IGraphState graphState,
+        GraphVariableSet declarations,
         CancellationToken ct)
     {
       await UniTask.WaitForEndOfFrame(ct);
@@ -847,8 +984,9 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
         log.ForMethod().Information("Quest: Creating GraphRunner for '{GraphName}' (runnerId: {RunnerId}, nodes: {NodeCount})",
           graphAsset.name, runnerId, runtimeDef.Nodes.Count);
 
-        // Create and return the runner
-        var runner = new GraphRunner(runtimeDef, graphState, executorRegistry, services, eventEmitter);
+        // Create and return the runner — declarations are the quest's SHARED aggregate, not this asset's own
+        // set, because every runner over this state must sanitize against one schema (9.0.4).
+        var runner = new GraphRunner(runtimeDef, graphState, executorRegistry, services, eventEmitter, declarations);
 
         log.ForMethod().Information("Quest: Successfully loaded graph '{GraphName}' (runnerId: {RunnerId})", graphAsset.name, runnerId);
         return runner;
@@ -1088,9 +1226,13 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       // Update runtime state if quest is active
       if (activeQuests.TryGetValue(message.QuestGuid, out questState))
       {
-        // Store progress in graph state for querying
-        var progressKey = $"__objective_{message.ObjectiveGuid}_progress";
-        questState.GraphState.Set(progressKey, message.Current);
+        // Store the progress MIRROR (__objective_{guid}_progress) for querying — through the quest's Graph
+        // context (9.0.2b). NOT the executor-owned objective_{guid} key. Raw-state fallback preserves the
+        // pre-context behavior for any active quest without an attached context.
+        if (contextRegistry.TryGet(EGraphContextScope.Graph, message.QuestGuid, out var questContext))
+          questContext.SetObjectiveProgressMirror(message.ObjectiveGuid, message.Current);
+        else
+          questState.GraphState.Set($"__objective_{message.ObjectiveGuid}_progress", message.Current);
         log.ForMethod().Information("Quest: Updated progress in graph state for objective {ObjectiveGuid}", message.ObjectiveGuid);
       }
     }
