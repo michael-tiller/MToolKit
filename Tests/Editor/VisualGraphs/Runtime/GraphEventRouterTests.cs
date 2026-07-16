@@ -263,6 +263,103 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Runtime
     }
 
     [Test]
+    public void Route_SelfRetriggeringGraph_CappedAtMaxRouteDepth()
+    {
+      // Reproduces the editor-killing feedback loop: a wildcard graph whose execution publishes the very
+      // event type it subscribes to re-enters RouteAsync synchronously on the same call chain. Without the
+      // hop budget this recurses until stack overflow; with it, routing must stop at MaxRouteDepth and drop.
+      var runner = RunnerWith("feedback", typeof(TestMessageA), null);
+      router.RegisterRunner(runner);
+      runner.OnHandled = () => Route(new TestMessageA(), "Quest");
+
+      Route(new TestMessageA(), "Quest");
+
+      Assert.That(runner.HandleMessageAsyncCallCount, Is.EqualTo(GraphEventRouter.MaxRouteDepth),
+        "a self-retriggering graph is dispatched once per depth level and then dropped at the budget, not recursed unbounded");
+    }
+
+    [Test]
+    public void Route_DepthBudget_RestoredAfterLoopDropped()
+    {
+      // The budget must be a per-chain depth counter, not a cumulative kill switch: after a feedback loop
+      // is dropped, subsequent independent routes must still deliver.
+      var runner = RunnerWith("feedback", typeof(TestMessageA), null);
+      router.RegisterRunner(runner);
+      runner.OnHandled = () => Route(new TestMessageA(), "Quest");
+
+      Route(new TestMessageA(), "Quest");
+      var callsAfterLoop = runner.HandleMessageAsyncCallCount;
+
+      runner.OnHandled = null;
+      Route(new TestMessageA(), "Quest");
+
+      Assert.That(runner.HandleMessageAsyncCallCount, Is.EqualTo(callsAfterLoop + 1),
+        "depth unwinds via finally, so a fresh route after a dropped loop delivers normally");
+    }
+
+    [Test]
+    public void Route_DispatchRateBreach_SuspendsRunner_ThenResumesAfterCooldown()
+    {
+      // The depth budget only catches loops on one call stack; a frame-deferred republish re-enters at
+      // depth 0 every hop and livelocks instead. The rate watchdog is the backstop for that shape: a
+      // runner dispatched more than MaxDispatchesPerWindow times inside one window is suspended.
+      var fakeTime = 0f;
+      router.TimeProvider = () => fakeTime;
+      var runner = RunnerWith("hot", typeof(TestMessageA), "Quest");
+      router.RegisterRunner(runner);
+
+      for (var i = 0; i < GraphEventRouter.MaxDispatchesPerWindow + 20; i++)
+        Route(new TestMessageA(), "Quest");
+
+      Assert.That(runner.HandleMessageAsyncCallCount, Is.EqualTo(GraphEventRouter.MaxDispatchesPerWindow),
+        "dispatches beyond the per-window budget are dropped, not delivered");
+
+      fakeTime += GraphEventRouter.RateSuspendSeconds + 0.1f;
+      Route(new TestMessageA(), "Quest");
+
+      Assert.That(runner.HandleMessageAsyncCallCount, Is.EqualTo(GraphEventRouter.MaxDispatchesPerWindow + 1),
+        "after the suspension cooldown the runner receives events again");
+    }
+
+    [Test]
+    public void Route_BudgetRate_AcrossSeparateWindows_NeverSuspends()
+    {
+      var fakeTime = 0f;
+      router.TimeProvider = () => fakeTime;
+      var runner = RunnerWith("steady", typeof(TestMessageA), "Quest");
+      router.RegisterRunner(runner);
+
+      for (var round = 0; round < 3; round++)
+      {
+        for (var i = 0; i < GraphEventRouter.MaxDispatchesPerWindow; i++)
+          Route(new TestMessageA(), "Quest");
+        fakeTime += GraphEventRouter.RateWindowSeconds;
+      }
+
+      Assert.That(runner.HandleMessageAsyncCallCount, Is.EqualTo(GraphEventRouter.MaxDispatchesPerWindow * 3),
+        "a graph at the budget boundary across separate windows is never suspended — the watchdog only trips on a genuine burst");
+    }
+
+    [Test]
+    public void Route_SuspendedRunner_DoesNotBlockOtherRunners()
+    {
+      var fakeTime = 0f;
+      router.TimeProvider = () => fakeTime;
+      var hot = RunnerWith("hot", typeof(TestMessageA), "Quest");
+      var calm = RunnerWith("calm", typeof(TestMessageB), "Quest");
+      router.RegisterRunner(hot);
+      router.RegisterRunner(calm);
+
+      for (var i = 0; i < GraphEventRouter.MaxDispatchesPerWindow + 5; i++)
+        Route(new TestMessageA(), "Quest");
+      Route(new TestMessageB(), "Quest");
+
+      Assert.That(hot.HandleMessageAsyncCallCount, Is.EqualTo(GraphEventRouter.MaxDispatchesPerWindow));
+      Assert.That(calm.HandleMessageAsyncCallCount, Is.EqualTo(1),
+        "suspension is per-runner — an unrelated graph keeps receiving events");
+    }
+
+    [Test]
     public void GetRunners_ReturnsAll_AndClearEmpties()
     {
       var r1 = RunnerWith("g1", typeof(TestMessageA), "Quest");

@@ -22,8 +22,40 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
       Log.Logger.ForContext<GraphEventRouter>().ForFeature("VisualGraphs"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 
+    /// <summary>
+    ///   Maximum re-entrant routing depth. A graph that publishes an event it also subscribes to (directly or
+    ///   through a cycle of graphs) re-enters RouteAsync synchronously on the same call chain; without a budget
+    ///   this recurses until the process dies (stack overflow / OOM — no managed exception is ever logged).
+    ///   Legitimate event cascades are shallow; anything deeper than this is a feedback loop.
+    /// </summary>
+    public const int MaxRouteDepth = 16;
+
+    /// <summary>
+    ///   Dispatch-rate watchdog: max dispatches per runner within <see cref="RateWindowSeconds" />.
+    ///   The depth budget only catches loops that recurse on one call stack; a graph that republishes
+    ///   through a frame-deferred continuation re-enters at depth 0 every hop and livelocks the main
+    ///   thread instead (observed: magic_amulet_events, 10 MB/min log storm). No legitimate content
+    ///   graph dispatches anywhere near this often; on breach the runner is suspended for
+    ///   <see cref="RateSuspendSeconds" /> with one Error log.
+    /// </summary>
+    public const int MaxDispatchesPerWindow = 100;
+    public const float RateWindowSeconds = 1f;
+    public const float RateSuspendSeconds = 5f;
+
+    /// <summary>Clock for the rate watchdog (seconds, monotonic). Settable for tests; defaults to Unity realtime.</summary>
+    public Func<float> TimeProvider { get; set; } = () => UnityEngine.Time.realtimeSinceStartup;
+
+    private sealed class DispatchWindow
+    {
+      public float WindowStart;
+      public int Count;
+      public float SuspendedUntil;
+    }
+
     private readonly List<IGraphRunner> all = new();
     private readonly Dictionary<(Type messageType, string domain), List<IGraphRunner>> byTypeDomain = new();
+    private readonly Dictionary<IGraphRunner, DispatchWindow> dispatchWindows = new();
+    private int routeDepth;
 
     /// <summary>Register a graph runner and index its subscriptions</summary>
     public void RegisterRunner(IGraphRunner runner)
@@ -74,6 +106,13 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
       var messageType = message.GetType();
       var domainFilter = domain ?? string.Empty;
 
+      if (routeDepth >= MaxRouteDepth)
+      {
+        log.Error("Event-graph feedback loop detected: routing depth reached {MaxRouteDepth} — dropping message '{MessageType}' (domain: '{Domain}'). A graph is publishing an event it also subscribes to (directly or via a graph cycle); fix the content graph's subscription/publish pair.",
+          MaxRouteDepth, messageType.Name, domainFilter);
+        return;
+      }
+
       log.Verbose("Routing message '{MessageType}' (domain: '{Domain}') to graphs", messageType.Name, domainFilter);
 
       // Additive delivery: union the exact-domain bucket and the empty-domain ("any") wildcard bucket.
@@ -115,16 +154,62 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
         messageType.Name, domainFilter, matchedGraphs.Count, routingStrategy,
         string.Join(", ", matchedGraphs.Select(r => r.GraphId)));
 
-      foreach (var runner in matchedGraphs)
+      routeDepth++;
+      try
       {
-        if (ct.IsCancellationRequested)
+        foreach (var runner in matchedGraphs)
         {
-          log.Verbose("Message routing cancelled for '{MessageType}'", messageType.Name);
-          break;
-        }
+          if (ct.IsCancellationRequested)
+          {
+            log.Verbose("Message routing cancelled for '{MessageType}'", messageType.Name);
+            break;
+          }
 
-        await runner.HandleMessageAsync(message, domain, ct);
+          if (!TryConsumeDispatchBudget(runner, messageType))
+            continue;
+
+          await runner.HandleMessageAsync(message, domain, ct);
+        }
       }
+      finally
+      {
+        routeDepth--;
+      }
+    }
+
+    /// <summary>
+    ///   Rate watchdog: returns false (dropping the dispatch) while a runner is suspended, and suspends
+    ///   it when it exceeds <see cref="MaxDispatchesPerWindow" /> dispatches inside one rate window.
+    /// </summary>
+    private bool TryConsumeDispatchBudget(IGraphRunner runner, Type messageType)
+    {
+      var now = TimeProvider();
+
+      if (!dispatchWindows.TryGetValue(runner, out var window))
+      {
+        window = new DispatchWindow { WindowStart = now };
+        dispatchWindows[runner] = window;
+      }
+
+      if (now < window.SuspendedUntil)
+        return false;
+
+      if (now - window.WindowStart >= RateWindowSeconds)
+      {
+        window.WindowStart = now;
+        window.Count = 0;
+      }
+
+      window.Count++;
+      if (window.Count > MaxDispatchesPerWindow)
+      {
+        window.SuspendedUntil = now + RateSuspendSeconds;
+        log.Error("Event-graph feedback loop detected: graph '{GraphId}' exceeded {MaxDispatches} dispatches in {Window}s (last message: '{MessageType}') — suspending its event delivery for {Suspend}s. A graph is republishing an event it also subscribes to (directly or via a graph cycle); fix the content graph's subscription/publish pair.",
+          runner.GraphId, MaxDispatchesPerWindow, RateWindowSeconds, messageType.Name, RateSuspendSeconds);
+        return false;
+      }
+
+      return true;
     }
 
     private string GetAvailableSubscriptionsForType(Type messageType)
@@ -161,6 +246,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
     {
       all.Clear();
       byTypeDomain.Clear();
+      dispatchWindows.Clear();
     }
   }
 }
