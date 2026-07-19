@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- `IGraphicsSettings.DisableCrt` / `IGraphicsSettings.DisableBloom` — two effect-agnostic `ReactiveSetting<bool>` graphics settings (default `false` = effect on), surfaced as bound toggles via `GraphicsSettingsInitializer` and persisted through the INI plumbing (`SettingsSystem` load/save + `IniService` populate-defaults). The settings are deliberately effect-agnostic: MToolKit only stores/persists the flags; the consuming project subscribes to the reactive value and performs the actual render-pipeline toggle. Additive — the only implementer is MToolKit's own `GraphicsSettingsModule`, updated here, so no external caller changes.
+
 - `Swatch` — implicit conversion operators to `Color` and `Gradient`, so a swatch feeds a Color/Gradient API directly (e.g. `image.color = swatch`) without a preset or manual unwrap. A Color-typed swatch projects to its flat color (or a flat two-stop gradient); a Gradient-typed swatch samples at t=0 for Color and returns its gradient; a null swatch yields white. Purely additive — no caller changes required.
 
 - `IIniService.Initialization` and `ISettingsSystem.Initialization` — `UniTask` members exposing when the INI / settings load has completed, so consumers can await one shared load. Additive: these are DI service contracts consumed rather than externally implemented (the only implementers are MToolKit's own `SettingsSystem` / `IniService` plus test doubles, all updated here), so this is a minor addition, not an API break.

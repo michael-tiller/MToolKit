@@ -35,6 +35,14 @@ namespace MToolKit.Runtime.Settings.Graphics
     [Required]
     private BoolBoundToggle vsyncToggle;
 
+    [SerializeField]
+    [Required]
+    private BoolBoundToggle disableCrtToggle;
+
+    [SerializeField]
+    [Required]
+    private BoolBoundToggle disableBloomToggle;
+
     [Inject]
     private ISettingsSystem settingsController;
 
@@ -52,6 +60,18 @@ namespace MToolKit.Runtime.Settings.Graphics
 
       fullscreenToggle.Bind(settingsController.GraphicsSettings.Fullscreen);
       vsyncToggle.Bind(settingsController.GraphicsSettings.VerticalSync);
+
+      // [Required] is Odin editor-time only; guard the runtime path so an unwired toggle
+      // degrades gracefully instead of throwing an NPE that aborts ConfigureAsync mid-method.
+      if (disableCrtToggle != null)
+        disableCrtToggle.Bind(settingsController.GraphicsSettings.DisableCrt);
+      else
+        log.ForGameObject(gameObject).ForMethod().Warning("disableCrtToggle is not wired; Disable CRT Effect toggle will not bind");
+
+      if (disableBloomToggle != null)
+        disableBloomToggle.Bind(settingsController.GraphicsSettings.DisableBloom);
+      else
+        log.ForGameObject(gameObject).ForMethod().Warning("disableBloomToggle is not wired; Disable Bloom toggle will not bind");
 
       fullscreenToggle.Value = Screen.fullScreen;
       vsyncToggle.Value = QualitySettings.vSyncCount > 0;
