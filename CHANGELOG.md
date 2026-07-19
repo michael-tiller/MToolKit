@@ -12,15 +12,41 @@ not a roadmap milestone.
 
 ### Added
 
+- `Swatch` — implicit conversion operators to `Color` and `Gradient`, so a swatch feeds a Color/Gradient API directly (e.g. `image.color = swatch`) without a preset or manual unwrap. A Color-typed swatch projects to its flat color (or a flat two-stop gradient); a Gradient-typed swatch samples at t=0 for Color and returns its gradient; a null swatch yields white. Purely additive — no caller changes required.
+
+- `IIniService.Initialization` and `ISettingsSystem.Initialization` — `UniTask` members exposing when the INI / settings load has completed, so consumers can await one shared load. Additive: these are DI service contracts consumed rather than externally implemented (the only implementers are MToolKit's own `SettingsSystem` / `IniService` plus test doubles, all updated here), so this is a minor addition, not an API break.
+
+- `AudioPanelComponent` / `AudioScrollbarComponent` — MonoBehaviours that play UI audio cues (panel open/close, scrollbar movement) through `IAudioService`.
+
+- `ThemePreset.SetStart(asset)` — swaps the wired themed asset at runtime and re-applies, so the new asset becomes the resolve key for future theme changes (active-state feedback, e.g. button tint swaps).
+
+- EditMode + PlayMode test suites: `AudioServiceInitializationTests`, `IniSettingsInitializationTests`, `AudioPanelComponentTests`, `AudioScrollbarComponentTests`, `GlobalMusicManagerTests`.
+
 - `GraphEventRouter` feedback-loop guards. (1) A synchronous routing depth budget (`MaxRouteDepth`, 16): a graph that publishes an event it also subscribes to re-enters `RouteAsync` on the same call chain and previously recursed until the process died (stack overflow / OOM, no managed exception logged). Routing now drops the message with an Error log at the budget and unwinds via `finally`. (2) A per-runner dispatch-rate watchdog (`MaxDispatchesPerWindow` 100/s): a frame-deferred republish loop re-enters at depth 0 every hop and livelocks the main thread instead of overflowing — the watchdog suspends delivery to a runner exceeding the budget for `RateSuspendSeconds` (5s) with one Error log. `TimeProvider` is injectable for deterministic tests. Both shapes observed live from one wildcard content graph: first a hard editor crash (1,139 synchronous iterations), then a livelock (10 MB/min log storm) once the depth guard stopped the crash.
 
 - Runtime theme system (`MToolKit.Theme`). `CurrentTheme` singleton broadcasts the active `Theme` over R3 (`OnThemeUpdated` value stream + `OnThemeChanged` old/new pair) plus a serialized `UnityEvent<Theme, Theme>` for Inspector listeners. A generic `ThemePreset<TAsset>` base binds a themed ScriptableObject to a target component and follows theme changes — resolving the same-Id asset from each new theme, falling back to the wired anchor, with an `overrideTheme` emergency hatch (Odin warning). Concrete presets: `SwatchPreset` (`Graphic` colour), `TypesetPreset` (TMP font / size / style / spacing + optional override material for outlines), `SpacingPreset` (`HorizontalOrVerticalLayoutGroup` padding / gap). `SwatchRegistry` / `TypesetStyleRegistry` / `SpacingRegistry` resolve assets by name-Id; `Theme` aggregates them. Enables light/dark and localization-font theming.
 
 ### Changed
 
+- `IniService.LoadAsync` is now a poll-based single-flight (lock + completion flag): the first caller runs the physical load, concurrent callers await a `UniTask.WaitUntil` on a completion flag, and the load error (if any) is rethrown to every caller. Replaces the `LoadCoreAsync().Preserve()` + `AttachExternalCancellation` sharing, which threw `InvalidOperationException: "Already continuation registered, can not await twice"` under concurrent awaiters (`UniTaskCompletionSource`/`AsyncLazy`/`Preserve` are all single-continuation while pending).
+
+- `AudioService` init hardened: `InitializeAsync` is a single-flight that awaits `settingsSystem.Initialization` before building the one-shot pool, wrapped in try/catch so a *faulted* settings init logs a warning and continues instead of leaving the pool unbuilt; `LoadAudioSourcePrefabAsync` / `InitializePool` / `SetMixerVolume` are now `protected virtual` (test seams).
+
+- `SettingsSystem` implements `IDisposable` (disposal guard); `InitializeIniIntegrationAsync` is an awaited `UniTask` (was fire-and-forget `UniTaskVoid`), preserved into the new `Initialization` property.
+
+- `GlobalMusicManager` awaits settings initialization before playing default music, and its crossfade cancellation uses a generation counter to avoid stale-fade races.
+
+- `GlobalMusicManager` drives music loudness reactively from `MasterVolume × MusicVolume` (R3 subscription) at the `AudioSource` as the single authority — replaces a once-computed `playbackTargetVolume` snapshot and the mixer `MusicVolume` param (which the Music group was observed not to honor at runtime). The crossfade reads the live target so a mid-fade change is applied.
+
 - `SubviewButton.targetSubview` is no longer `[Required]`, and `OnClickSetSubview` null-guards a missing target — it logs a warning (Serilog) and returns instead of throwing, so a tab whose subview isn't wired degrades gracefully rather than NRE-ing.
 
 ### Fixed
+
+- Boot-time "await twice" fault in the shared INI load faulted `SettingsSystem.Initialization` — a persistent bootstrap singleton, so the fault was cached for the whole session — and, because `AudioService` now awaits it before building its pool while `AudioPlugin` fire-and-forgets init, it silently killed ALL audio. Fixed by the poll-based single-flight above.
+
+- `AudioService.PlayOneShotAsync` NRE (`audioSourcePool` null) when a one-shot fired before init completed or after dispose — now guarded to skip the sound.
+
+- Music mute/volume race — setting Music to 0 only intermittently silenced playback because volume was captured at imperative snapshot moments and split between the `AudioSource` and the (runtime-unreliable) mixer param. The reactive source-volume authority makes `Music = 0` deterministically silent.
 
 - `GraphRunner.HandleMessageAsync` now gates entry nodes on the triggering message: an entry node whose `Parameters` declare a `MessageType` only starts for messages of that exact type, and one declaring a `DomainFilter` only starts for that exact domain. Previously EVERY entry node in a multi-trigger graph fired on ANY subscribed message — trigger A's action chain ran for trigger B's event, which is both wrong and the ignition path for event-graph feedback loops. Entry nodes declaring neither (dialogue starts, legacy quest entries) keep the fire-on-dispatch behavior.
 

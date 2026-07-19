@@ -45,6 +45,10 @@ namespace MToolKit.Runtime.Audio
     private AudioSource cachedAudioSourcePrefab;
     private bool isInitialized;
     private bool isPrefabLoaded;
+    private readonly object initializationLock = new();
+    private UniTask? initializationTask;
+    private readonly CancellationTokenSource lifetimeCts = new();
+    private bool isDisposed;
 
     public AudioService(Transform audioRoot, AudioConfig config, ISettingsSystem settingsSystem, IRuntimeAssetService assetService)
     {
@@ -97,6 +101,10 @@ namespace MToolKit.Runtime.Audio
       CancellationToken ct = default)
     {
       if (clip == null) return;
+
+      // Audio not yet initialized (pool built last, after settings load) or already disposed:
+      // skip the one-shot rather than throw. Callers fire from UI events at arbitrary times.
+      if (audioSourcePool == null) return;
 
       AudioSource audioSource = audioSourcePool.Get();
       try
@@ -154,6 +162,9 @@ namespace MToolKit.Runtime.Audio
 
     public void Dispose()
     {
+      if (isDisposed) return;
+      isDisposed = true;
+      lifetimeCts.Cancel();
       subscriptions?.Dispose();
 
       // Stop all sounds before disposing the pool
@@ -164,27 +175,51 @@ namespace MToolKit.Runtime.Audio
       audioSourcePool = null;
 
       isInitialized = false;
+      lifetimeCts.Dispose();
     }
 
     #endregion
 
-    public async UniTask InitializeAsync(ISettingsSystem settingsSystem, CancellationToken ct = default)
+    public UniTask InitializeAsync(ISettingsSystem settingsSystem, CancellationToken ct = default)
+    {
+      if (isDisposed)
+        throw new ObjectDisposedException(nameof(AudioService));
+
+      UniTask sharedInitialization;
+      lock (initializationLock)
+      {
+        initializationTask ??= InitializeCoreAsync(settingsSystem, lifetimeCts.Token).Preserve();
+        sharedInitialization = initializationTask.Value;
+      }
+
+      return sharedInitialization.AttachExternalCancellation(ct);
+    }
+
+    private async UniTask InitializeCoreAsync(ISettingsSystem settingsSystem, CancellationToken ct)
     {
       if (isInitialized)
-      {
-        log.ForMethod().Warning("AudioService already initialized, skipping");
         return;
-      }
 
       log.ForMethod().Verbose("Initializing AudioService with settings integration");
 
-      // Load the AudioSource prefab from Addressables if not already loaded
-      await LoadAudioSourcePrefabAsync(ct);
+      // Mixer state only depends on final settings, not the one-shot source pool.
+      // Resilience: a faulted settings init must never mute the game. Await it for correct mixer
+      // values, but if it faults (settings is a persistent singleton — a boot fault poisons it for
+      // the whole session), log and continue so the pool still builds and one-shots still play.
+      if (settingsSystem != null)
+      {
+        try
+        {
+          await settingsSystem.Initialization.AttachExternalCancellation(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+          log.ForMethod().Warning(ex, "Settings initialization faulted; continuing audio init with current mixer values");
+        }
+      }
 
-      // Initialize the pool now that we have the prefab
-      InitializePool();
+      ct.ThrowIfCancellationRequested();
 
-      // Subscribe to volume changes
       if (settingsSystem?.AudioSettings != null)
       {
         log.ForMethod().Verbose("AudioSettings available, subscribing to volume changes");
@@ -195,11 +230,19 @@ namespace MToolKit.Runtime.Audio
         log.ForMethod().Warning("AudioSettings is NULL - cannot subscribe to volume changes");
       }
 
+      // Load the AudioSource prefab from Addressables if not already loaded
+      await LoadAudioSourcePrefabAsync(ct);
+
+      ct.ThrowIfCancellationRequested();
+
+      // Initialize the pool now that we have the prefab
+      InitializePool();
+
       isInitialized = true;
       log.ForMethod().Verbose("AudioService initialized successfully");
     }
 
-    private async UniTask LoadAudioSourcePrefabAsync(CancellationToken ct = default)
+    protected virtual async UniTask LoadAudioSourcePrefabAsync(CancellationToken ct = default)
     {
       // Early check without lock for performance
       if (isPrefabLoaded && cachedAudioSourcePrefab != null)
@@ -392,7 +435,7 @@ namespace MToolKit.Runtime.Audio
         cachedAudioSourcePrefab.gameObject.SetActive(false);
     }
 
-    private void InitializePool()
+    protected virtual void InitializePool()
     {
       if (audioSourcePool != null)
       {
@@ -493,7 +536,7 @@ namespace MToolKit.Runtime.Audio
       SetMixerVolume("InterfaceVolume", settingsSystem.AudioSettings.InterfaceVolume.Value);
     }
 
-    private void SetMixerVolume(string parameterName, float volume)
+    protected virtual void SetMixerVolume(string parameterName, float volume)
     {
       // Convert linear volume (0-1) to decibels (-80 to 0)
       float dbVolume = volume > 0 ? Mathf.Log10(volume) * 20f : -80f;

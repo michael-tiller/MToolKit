@@ -2,9 +2,13 @@ using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Utilities;
+using MToolKit.Runtime.Installer;
+using MToolKit.Runtime.Settings.Interfaces;
+using R3;
 using Serilog;
 using UnityEngine;
 using UnityEngine.Audio;
+using VContainer;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
 
@@ -50,6 +54,10 @@ namespace MToolKit.Runtime.Music
     private CancellationTokenSource currentCrossfadeCts;
     private AudioSource currentSource;
     private AudioSource nextSource;
+    private ISettingsSystem settingsSystem;
+    private long crossfadeGeneration;
+    private float playbackTargetVolume = 1f;
+    private readonly CompositeDisposable subscriptions = new();
 
     [SerializeField]
     private AudioClip defaultMusicClip;
@@ -87,12 +95,15 @@ namespace MToolKit.Runtime.Music
       nextSource = audioSource2;
     }
 
+    [Inject]
+    public void Construct(ISettingsSystem settings) => settingsSystem = settings;
+
     private void Start()
     {
       if (defaultMusicClip != null)
       {
         log.ForMethod().ForMethod().Verbose("Playing default music clip: {clipName}", defaultMusicClip.name);
-        PlayMusic(defaultMusicClip);
+        StartDefaultMusicAsync(defaultMusicClip).Forget();
       }
       else
       {
@@ -100,12 +111,57 @@ namespace MToolKit.Runtime.Music
       }
     }
 
+    private async UniTask StartDefaultMusicAsync(AudioClip clip)
+    {
+      long startupGeneration = crossfadeGeneration;
+      ISettingsSystem settings = settingsSystem;
+      if (settings == null && GlobalInstaller.Instance != null && GlobalInstaller.Instance.Container != null)
+        GlobalInstaller.Instance.Container.TryResolve<ISettingsSystem>(out settings);
+
+      if (settings == null)
+      {
+        log.ForMethod().Warning("Settings are unavailable; default music startup is deferred");
+        return;
+      }
+
+      await settings.Initialization;
+      if (startupGeneration != crossfadeGeneration) return;
+      BindReactiveVolume(settings);
+      if (startupGeneration != crossfadeGeneration) return;
+      await PlayMusicAsync(clip, 2f);
+    }
+
+    // Bind music loudness reactively to Master × Music volume, applied at the AudioSource — the single
+    // authority. Replaces a once-computed snapshot that raced the ~2s crossfade, plus reliance on the mixer
+    // "MusicVolume" param (AudioService drives it, but the Music group was observed not to attenuate at
+    // runtime — set to -80 dB while music kept playing). Source volume is deterministic: 0 => silent.
+    private void BindReactiveVolume(ISettingsSystem settings)
+    {
+      var audioSettings = settings?.AudioSettings;
+      if (audioSettings == null)
+        return;
+
+      void Apply()
+      {
+        playbackTargetVolume = audioSettings.MasterVolume.Value * audioSettings.MusicVolume.Value;
+        // Drive the live source at once; during a crossfade its loop reads playbackTargetVolume itself,
+        // so leave it alone there to avoid fighting the fade.
+        if (currentCrossfadeCts == null && currentSource != null && currentSource.isPlaying)
+          currentSource.volume = playbackTargetVolume;
+      }
+
+      subscriptions.Add(audioSettings.MasterVolume.Property.Subscribe(_ => Apply()));
+      subscriptions.Add(audioSettings.MusicVolume.Property.Subscribe(_ => Apply()));
+      Apply();
+    }
+
     protected override void OnDestroy()
     {
       // Cancel any ongoing crossfade
       currentCrossfadeCts?.Cancel();
-      currentCrossfadeCts?.Dispose();
       currentCrossfadeCts = null;
+      crossfadeGeneration++;
+      subscriptions.Dispose();
 
       base.OnDestroy();
     }
@@ -173,24 +229,23 @@ namespace MToolKit.Runtime.Music
         return;
       }
 
-      // Cancel any ongoing crossfade
-      if (currentCrossfadeCts != null)
-      {
-        currentCrossfadeCts.Cancel();
-        currentCrossfadeCts.Dispose();
-      }
-
-      // Create new cancellation token source
-      currentCrossfadeCts = new CancellationTokenSource();
-      CancellationToken ct = currentCrossfadeCts.Token;
+      currentCrossfadeCts?.Cancel();
+      var operationCts = new CancellationTokenSource();
+      currentCrossfadeCts = operationCts;
+      long generation = ++crossfadeGeneration;
+      CancellationToken ct = operationCts.Token;
 
       // If nothing is playing, just play the new clip
       if (!currentSource.isPlaying && !nextSource.isPlaying)
       {
         currentSource.clip = audioClip;
-        currentSource.volume = 1f;
+        currentSource.volume = playbackTargetVolume;
         currentSource.Play();
-        currentCrossfadeCts = null;
+        if (generation == crossfadeGeneration)
+          nextSource.volume = 0f;
+        if (ReferenceEquals(currentCrossfadeCts, operationCts))
+          currentCrossfadeCts = null;
+        operationCts.Dispose();
         return;
       }
 
@@ -199,6 +254,7 @@ namespace MToolKit.Runtime.Music
       AudioSource inactiveSource = activeSource == currentSource ? nextSource : currentSource;
 
       // Setup the new clip on the inactive source
+      inactiveSource.Stop();
       inactiveSource.clip = audioClip;
       inactiveSource.volume = 0f;
       inactiveSource.Play();
@@ -208,8 +264,11 @@ namespace MToolKit.Runtime.Music
         // Start crossfade
         await CrossfadeAsync(activeSource, inactiveSource, duration, ct);
 
-        // Swap references for next time
-        (currentSource, nextSource) = (nextSource, currentSource);
+        if (generation == crossfadeGeneration)
+        {
+          currentSource = inactiveSource;
+          nextSource = activeSource;
+        }
       }
       catch (OperationCanceledException)
       {
@@ -217,8 +276,9 @@ namespace MToolKit.Runtime.Music
       }
       finally
       {
-        currentCrossfadeCts?.Dispose();
-        currentCrossfadeCts = null;
+        if (ReferenceEquals(currentCrossfadeCts, operationCts))
+          currentCrossfadeCts = null;
+        operationCts.Dispose();
       }
     }
 
@@ -226,7 +286,6 @@ namespace MToolKit.Runtime.Music
     {
       float elapsed = 0f;
       float fadeOutStartVolume = fadeOut.volume;
-      float fadeInTargetVolume = 1f;
 
       while (elapsed < duration && !ct.IsCancellationRequested)
       {
@@ -234,7 +293,8 @@ namespace MToolKit.Runtime.Music
         float t = elapsed / duration;
 
         fadeOut.volume = Mathf.Lerp(fadeOutStartVolume, 0f, t);
-        fadeIn.volume = Mathf.Lerp(0f, fadeInTargetVolume, t);
+        // Read playbackTargetVolume live so a volume change mid-fade is honored (reactive authority).
+        fadeIn.volume = Mathf.Lerp(0f, playbackTargetVolume, t);
 
         await UniTask.DelayFrame(1, cancellationToken: ct);
       }
@@ -243,7 +303,7 @@ namespace MToolKit.Runtime.Music
       if (!ct.IsCancellationRequested)
       {
         fadeOut.volume = 0f;
-        fadeIn.volume = fadeInTargetVolume;
+        fadeIn.volume = playbackTargetVolume;
         fadeOut.Stop();
       }
     }
@@ -276,14 +336,17 @@ namespace MToolKit.Runtime.Music
       if (currentCrossfadeCts != null)
       {
         currentCrossfadeCts.Cancel();
-        currentCrossfadeCts.Dispose();
         currentCrossfadeCts = null;
       }
+
+      crossfadeGeneration++;
 
       if (currentSource.isPlaying)
         currentSource.Stop();
       if (nextSource.isPlaying)
         nextSource.Stop();
+      currentSource.volume = 0f;
+      nextSource.volume = 0f;
 
       log.Information("Music stopped");
     }
@@ -291,6 +354,19 @@ namespace MToolKit.Runtime.Music
     private bool isPlayingInternal => currentSource.isPlaying || nextSource.isPlaying;
 
     private bool isPausedInternal => (currentSource.time > 0f && !currentSource.isPlaying) || (nextSource.time > 0f && !nextSource.isPlaying);
+
+    // Narrow deterministic seams for package PlayMode regression tests.
+    public void InitializeForTests(AudioSource first, AudioSource second, ISettingsSystem settings)
+    {
+      audioSource1 = first;
+      audioSource2 = second;
+      currentSource = first;
+      nextSource = second;
+      settingsSystem = settings;
+    }
+
+    public UniTask StartDefaultMusicAsyncForTests(AudioClip clip) => StartDefaultMusicAsync(clip);
+    public UniTask PlayMusicAsyncForTests(AudioClip clip, float duration) => PlayMusicAsync(clip, duration);
 
     #endregion
   }

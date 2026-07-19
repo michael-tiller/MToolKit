@@ -12,6 +12,9 @@ namespace MToolKit.Runtime.Settings.Ini
   /// </summary>
   public interface IIniService
   {
+    /// <summary>Completes when the INI file has finished its single, shared load.</summary>
+    UniTask Initialization { get; }
+
     /// <summary>
     ///   Reactive property indicating if a save operation is in progress.
     /// </summary>

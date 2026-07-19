@@ -3,6 +3,7 @@ using MToolKit.Runtime.Settings.Game;
 using MToolKit.Runtime.Settings.Graphics;
 using MToolKit.Runtime.Settings.Input;
 using R3;
+using Cysharp.Threading.Tasks;
 
 namespace MToolKit.Runtime.Settings.Interfaces
 {
@@ -11,6 +12,9 @@ namespace MToolKit.Runtime.Settings.Interfaces
   /// </summary>
   public interface ISettingsSystem
   {
+    /// <summary>Completes after persisted settings have been loaded and applied.</summary>
+    UniTask Initialization { get; }
+
     /// <summary>
     ///   Reference to the audio settings module.
     /// </summary>
