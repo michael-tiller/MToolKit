@@ -15,23 +15,23 @@ using Logger = Serilog.Core.Logger;
 namespace MToolKit.Runtime.Components
 {
   [RequireComponent(typeof(Button))]
-  public class AudioButtonComponent : MonoBehaviour, ISelectHandler, IDeselectHandler
+  public class AudioButtonComponent : MonoBehaviour, ISelectHandler, IDeselectHandler, IPointerEnterHandler, IPointerExitHandler
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<AudioButtonComponent>().ForFeature("Components"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 
     [BoxGroup("Audio Clips")]
     [SerializeField]
-    [Required]
-    [ValidateInput("@clickAudioClips != null && clickAudioClips.Count > 0", "At least one click audio clip is required")]
     private List<AudioClip> clickAudioClips = new();
 
     [BoxGroup("Audio Clips")]
     [SerializeField]
-    [Required]
-    [ValidateInput("@selectAudioClips != null && selectAudioClips.Count > 0", "At least one select audio clip is required")]
     private List<AudioClip> selectAudioClips = new();
 
+    [BoxGroup("Audio Clips")]
+    [SerializeField]
+    private List<AudioClip> hoverAudioClips = new();
+    
     [BoxGroup("Audio Settings")]
     [SerializeField]
     [Range(0f, 1f)]
@@ -46,6 +46,12 @@ namespace MToolKit.Runtime.Components
 
     [BoxGroup("Audio Settings")]
     [SerializeField]
+    [Range(0f, 1f)]
+    [Tooltip("Volume multiplier for hover sounds")]
+    private float hoverVolume = 0.8f;
+    
+    [BoxGroup("Audio Settings")]
+    [SerializeField]
     [Range(0.5f, 2f)]
     [Tooltip("Pitch variation for click sounds")]
     private float clickPitch = 1f;
@@ -56,6 +62,12 @@ namespace MToolKit.Runtime.Components
     [Tooltip("Pitch variation for select sounds")]
     private float selectPitch = 1f;
 
+    [BoxGroup("Audio Settings")]
+    [SerializeField]
+    [Range(0.5f, 2f)]
+    [Tooltip("Pitch variation for hover sounds")]
+    private float hoverPitch = 1f;
+    
     [BoxGroup("Cooldown Settings")]
     [SerializeField]
     [MinValue(0f)]
@@ -68,6 +80,12 @@ namespace MToolKit.Runtime.Components
     [Tooltip("Minimum time between select sounds to prevent spam")]
     private float selectCooldown = 0.05f;
 
+    [BoxGroup("Cooldown Settings")]
+    [SerializeField]
+    [MinValue(0f)]
+    [Tooltip("Minimum time between hover sounds to prevent spam")]
+    private float hoverCooldown = 0.05f;
+    
     [SerializeField]
     [Required]
     private Button button;
@@ -76,6 +94,7 @@ namespace MToolKit.Runtime.Components
 
     private float lastClickTime;
     private float lastSelectTime;
+    private float lastHoverTime;
 
     private void Reset()
     {
@@ -148,6 +167,38 @@ namespace MToolKit.Runtime.Components
       }
     }
 
+    public void OnHover(BaseEventData eventData)
+    {
+      if (audioService == null)
+      {
+        log.ForMethod().Verbose("AudioService is null on {0}, cannot play hover sound", gameObject.name);
+        return;
+      }
+
+      if (Time.time - lastHoverTime < hoverCooldown)
+      {
+        log.ForMethod().Debug("Hover sound skipped due to cooldown on {0}", gameObject.name);
+        return;
+      }
+
+      if (hoverAudioClips == null || hoverAudioClips.Count == 0)
+      {
+        log.ForMethod().Warning("No hover audio clips assigned to {0}", gameObject.name);
+        return;
+      }
+
+      try
+      {
+        audioService.PlayOneShot(hoverAudioClips, volume: hoverVolume, pitch: hoverPitch, audioType: EAudioTypes.Interface);
+        lastHoverTime = Time.time;
+        log.ForMethod().Verbose("Hover sound played on {0}", gameObject.name);
+      }
+      catch (Exception ex)
+      {
+        log.ForMethod().Error(ex, "Failed to play hover sound on {0}", gameObject.name);
+      }
+    }
+    
     private void TryResolveAudioService()
     {
       try
@@ -218,6 +269,26 @@ namespace MToolKit.Runtime.Components
         OnSelect(null);
       else
         log.ForMethod().Warning("Cannot test select sound - not in play mode or no clips assigned");
+    }
+
+    [Button("Test Hover Sound")]
+    [PropertyOrder(102)]
+    private void TestHoverSound()
+    {
+      if (Application.isPlaying && hoverAudioClips is {Count: > 0 })
+        OnHover(null);
+      else
+        log.ForMethod().Warning("Cannot test hover sound - not in play mode or no clips assigned");
+    }
+
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+      OnHover(eventData);
+    }
+
+    public void OnPointerExit(PointerEventData eventData)
+    {
+      // Hover sound plays on enter only — no sound on exit.
     }
   }
 }
