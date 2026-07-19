@@ -90,5 +90,19 @@ namespace MToolKit.Theme
     {
       if (Current != null) Apply(Current);
     }
+
+    /// <summary>
+    /// Swap the wired asset at runtime and re-apply. The new asset becomes the resolve key
+    /// for future theme changes. Use for active-state feedback (e.g. button tint swaps).
+    /// </summary>
+    public void SetStart(TAsset asset)
+    {
+      start = asset;
+      cached = null;
+      if (CurrentTheme.HasInstance)
+        ApplyTheme(CurrentTheme.Instance.Current);
+      else
+        ApplyCurrent();
+    }
   }
 }

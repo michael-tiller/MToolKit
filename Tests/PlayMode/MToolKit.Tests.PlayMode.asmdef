@@ -1,0 +1,24 @@
+{
+  "name": "MToolKit.Tests.PlayMode",
+  "rootNamespace": "MToolKit.Tests.PlayMode",
+  "references": [
+    "UnityEngine.TestRunner",
+    "MToolKit.Runtime",
+    "UniTask"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll",
+    "Serilog.dll",
+    "R3.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

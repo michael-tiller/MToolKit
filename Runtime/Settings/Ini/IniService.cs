@@ -29,6 +29,10 @@ namespace MToolKit.Runtime.Settings.Ini
     private readonly SemaphoreSlim fileAccessSemaphore;
     private readonly Dictionary<string, Dictionary<string, string>> sections;
     private readonly Dictionary<string, string> allValuesFlat;
+    private readonly object loadLock = new();
+    private bool loadStarted;
+    private volatile bool loadCompleted;
+    private Exception loadError;
 
     private volatile bool isDisposed;
     private string filePath;
@@ -64,15 +68,6 @@ namespace MToolKit.Runtime.Settings.Ini
         IsSaving?.Dispose();
         IsLoading?.Dispose();
 
-        try
-        {
-          fileAccessSemaphore?.Dispose();
-        }
-        catch (ObjectDisposedException)
-        {
-          // Already disposed, ignore
-        }
-
         log.ForMethod().Debug("IniService disposed");
       }
       catch (Exception ex)
@@ -89,48 +84,54 @@ namespace MToolKit.Runtime.Settings.Ini
     public ReactiveProperty<bool> IsLoading { get; } = new(false);
 
     public IReadOnlyDictionary<string, string> AllValues => allValuesFlat;
+    public UniTask Initialization => LoadAsync();
 
     public async UniTask LoadAsync(CancellationToken ct = default)
     {
       if (isDisposed)
         throw new ObjectDisposedException(nameof(IniService));
 
-      if (IsLoading.Value)
+      // Single-flight: the first caller runs the physical load; concurrent callers poll the
+      // completion flag. Deliberately NOT a shared Preserve()/UniTaskCompletionSource — both are
+      // single-continuation and throw "await twice" when a second caller awaits the in-flight load,
+      // which is exactly what silently faulted SettingsSystem.Initialization and killed all audio.
+      bool runLoad;
+      lock (loadLock)
       {
-        log.ForMethod().Warning("Load operation already in progress");
-        return;
+        runLoad = !loadStarted;
+        loadStarted = true;
       }
+
+      if (runLoad)
+      {
+        try { await LoadCoreAsync(); }
+        catch (Exception ex) { loadError = ex; }
+        finally { loadCompleted = true; }
+      }
+      else
+      {
+        await UniTask.WaitUntil(() => loadCompleted, cancellationToken: ct);
+      }
+
+      if (loadError != null)
+        throw loadError;
+    }
+
+    private async UniTask LoadCoreAsync()
+    {
 
       try
       {
         IsLoading.Value = true;
 
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct, disposalCts.Token);
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(disposalCts.Token);
         timeoutCts.CancelAfter(TimeSpan.FromSeconds(30));
 
         await fileAccessSemaphore.WaitAsync(timeoutCts.Token);
 
         try
         {
-          await UniTask.RunOnThreadPool(() =>
-          {
-            if (isDisposed)
-              return;
-
-            // Clear existing data
-            sections.Clear();
-            allValuesFlat.Clear();
-
-            // Check if file exists
-            if (!File.Exists(filePath))
-            {
-              log.ForMethod().Information("INI file does not exist at {0}, creating default", filePath);
-              CreateDefaultIniFile();
-            }
-
-            // Read the file
-            ReadIniFile();
-          }, cancellationToken: timeoutCts.Token);
+          await LoadFromDiskAsync(timeoutCts.Token);
 
           log.ForMethod().Verbose("INI file loaded successfully - File: {0}, Sections: {1}, Total Keys: {2}",
             filePath, sections.Count, allValuesFlat.Count);
@@ -150,9 +151,8 @@ namespace MToolKit.Runtime.Settings.Ini
           }
         }
       }
-      catch (OperationCanceledException) when (ct.IsCancellationRequested)
+      catch (OperationCanceledException) when (isDisposed)
       {
-        log.ForMethod().Warning("Load operation was cancelled");
         throw;
       }
       catch (OperationCanceledException)
@@ -172,6 +172,27 @@ namespace MToolKit.Runtime.Settings.Ini
           IsLoading.Value = false;
         }
       }
+    }
+
+    /// <summary>Performs the physical read. Virtual to permit deterministic I/O tests.</summary>
+    protected virtual UniTask LoadFromDiskAsync(CancellationToken ct)
+    {
+      return UniTask.RunOnThreadPool(() =>
+      {
+        if (isDisposed)
+          return;
+
+        sections.Clear();
+        allValuesFlat.Clear();
+
+        if (!File.Exists(filePath))
+        {
+          log.ForMethod().Information("INI file does not exist at {0}, creating default", filePath);
+          CreateDefaultIniFile();
+        }
+
+        ReadIniFile();
+      }, cancellationToken: ct);
     }
 
     public async UniTask SaveAsync(CancellationToken ct = default)

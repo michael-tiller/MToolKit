@@ -25,23 +25,21 @@ namespace MToolKit.Runtime.Settings
   ///   Central controller for settings management with reactive state.
   /// </summary>
   [Serializable]
-  public class SettingsSystem : ISettingsSystem
+  public class SettingsSystem : ISettingsSystem, IDisposable
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<SettingsSystem>().ForFeature("Settings"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 
     private readonly IIniService iniService;
+    private bool isDisposed;
 
     public SettingsSystem(InputRebinderService inputRebinderService, IIniService iniService = null)
     {
       this.iniService = iniService;
       InitializeModules(inputRebinderService);
-      
-      // Initialize INI integration asynchronously
-      if (iniService != null)
-      {
-        InitializeIniIntegrationAsync().Forget();
-      }
+      Initialization = iniService != null
+        ? InitializeIniIntegrationAsync().Preserve()
+        : UniTask.CompletedTask;
     }
 
 
@@ -85,6 +83,7 @@ namespace MToolKit.Runtime.Settings
     public GameSettingsModule GameSettings { get; private set; }
     public InputSettingsModule InputSettings { get; private set; }
     public ReactiveProperty<bool> IsDirty { get; } = new();
+    public UniTask Initialization { get; }
 
     public void Apply(bool autoFinish = true, bool gotoMenu = true)
     {
@@ -228,16 +227,15 @@ namespace MToolKit.Runtime.Settings
       log.ForMethod().Warning("No navigation method available - cannot return to main menu");
     }
 
-    private async UniTaskVoid InitializeIniIntegrationAsync()
+    private async UniTask InitializeIniIntegrationAsync()
     {
       try
       {
-        // Wait a frame to ensure INI service has loaded
-        await UniTask.Yield();
-        
         // Populate defaults if INI file is empty or missing keys
         if (iniService != null)
         {
+          await iniService.LoadAsync();
+          if (isDisposed) return;
           iniService.PopulateDefaultsFromSettingsSystem(this);
           
           // Load values from INI to override defaults
@@ -249,6 +247,7 @@ namespace MToolKit.Runtime.Settings
       catch (Exception ex)
       {
         log.ForMethod().Error(ex, "Failed to initialize INI integration: {Message}", ex.Message);
+        throw;
       }
     }
 
@@ -359,6 +358,8 @@ namespace MToolKit.Runtime.Settings
 
     public void Dispose()
     {
+      if (isDisposed) return;
+      isDisposed = true;
       log.ForMethod().Information("Disposing SettingsSystem");
       ShutdownModules();
       IsDirty.Dispose();
