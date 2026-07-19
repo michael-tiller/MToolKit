@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- `Swatch` — implicit conversion operators to `Color` and `Gradient`, so a swatch feeds a Color/Gradient API directly (e.g. `image.color = swatch`) without a preset or manual unwrap. A Color-typed swatch projects to its flat color (or a flat two-stop gradient); a Gradient-typed swatch samples at t=0 for Color and returns its gradient; a null swatch yields white. Purely additive — no caller changes required.
+
 - `IIniService.Initialization` and `ISettingsSystem.Initialization` — `UniTask` members exposing when the INI / settings load has completed, so consumers can await one shared load. Additive: these are DI service contracts consumed rather than externally implemented (the only implementers are MToolKit's own `SettingsSystem` / `IniService` plus test doubles, all updated here), so this is a minor addition, not an API break.
 
 - `AudioPanelComponent` / `AudioScrollbarComponent` — MonoBehaviours that play UI audio cues (panel open/close, scrollbar movement) through `IAudioService`.
