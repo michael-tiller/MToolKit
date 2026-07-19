@@ -4,6 +4,7 @@ using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Utilities;
 using MToolKit.Runtime.Installer;
 using MToolKit.Runtime.Settings.Interfaces;
+using R3;
 using Serilog;
 using UnityEngine;
 using UnityEngine.Audio;
@@ -56,6 +57,7 @@ namespace MToolKit.Runtime.Music
     private ISettingsSystem settingsSystem;
     private long crossfadeGeneration;
     private float playbackTargetVolume = 1f;
+    private readonly CompositeDisposable subscriptions = new();
 
     [SerializeField]
     private AudioClip defaultMusicClip;
@@ -124,30 +126,34 @@ namespace MToolKit.Runtime.Music
 
       await settings.Initialization;
       if (startupGeneration != crossfadeGeneration) return;
-      ApplyLoadedMixerSettings(settings);
+      BindReactiveVolume(settings);
       if (startupGeneration != crossfadeGeneration) return;
       await PlayMusicAsync(clip, 2f);
     }
 
-    private void ApplyLoadedMixerSettings(ISettingsSystem settings)
+    // Bind music loudness reactively to Master × Music volume, applied at the AudioSource — the single
+    // authority. Replaces a once-computed snapshot that raced the ~2s crossfade, plus reliance on the mixer
+    // "MusicVolume" param (AudioService drives it, but the Music group was observed not to attenuate at
+    // runtime — set to -80 dB while music kept playing). Source volume is deterministic: 0 => silent.
+    private void BindReactiveVolume(ISettingsSystem settings)
     {
-      AudioMixer mixer = musicMixerGroup?.audioMixer;
-      if (settings?.AudioSettings == null)
+      var audioSettings = settings?.AudioSettings;
+      if (audioSettings == null)
         return;
 
-      playbackTargetVolume = settings.AudioSettings.MasterVolume.Value *
-                             settings.AudioSettings.MusicVolume.Value;
-      if (mixer == null)
-        return;
+      void Apply()
+      {
+        playbackTargetVolume = audioSettings.MasterVolume.Value * audioSettings.MusicVolume.Value;
+        // Drive the live source at once; during a crossfade its loop reads playbackTargetVolume itself,
+        // so leave it alone there to avoid fighting the fade.
+        if (currentCrossfadeCts == null && currentSource != null && currentSource.isPlaying)
+          currentSource.volume = playbackTargetVolume;
+      }
 
-      bool masterApplied = SetMixerVolume(mixer, "MasterVolume", settings.AudioSettings.MasterVolume.Value);
-      bool musicApplied = SetMixerVolume(mixer, "MusicVolume", settings.AudioSettings.MusicVolume.Value);
-      if (masterApplied && musicApplied)
-        playbackTargetVolume = 1f;
+      subscriptions.Add(audioSettings.MasterVolume.Property.Subscribe(_ => Apply()));
+      subscriptions.Add(audioSettings.MusicVolume.Property.Subscribe(_ => Apply()));
+      Apply();
     }
-
-    private static bool SetMixerVolume(AudioMixer mixer, string parameter, float volume) =>
-      mixer.SetFloat(parameter, volume > 0f ? Mathf.Log10(volume) * 20f : -80f);
 
     protected override void OnDestroy()
     {
@@ -155,6 +161,7 @@ namespace MToolKit.Runtime.Music
       currentCrossfadeCts?.Cancel();
       currentCrossfadeCts = null;
       crossfadeGeneration++;
+      subscriptions.Dispose();
 
       base.OnDestroy();
     }
@@ -279,7 +286,6 @@ namespace MToolKit.Runtime.Music
     {
       float elapsed = 0f;
       float fadeOutStartVolume = fadeOut.volume;
-      float fadeInTargetVolume = playbackTargetVolume;
 
       while (elapsed < duration && !ct.IsCancellationRequested)
       {
@@ -287,7 +293,8 @@ namespace MToolKit.Runtime.Music
         float t = elapsed / duration;
 
         fadeOut.volume = Mathf.Lerp(fadeOutStartVolume, 0f, t);
-        fadeIn.volume = Mathf.Lerp(0f, fadeInTargetVolume, t);
+        // Read playbackTargetVolume live so a volume change mid-fade is honored (reactive authority).
+        fadeIn.volume = Mathf.Lerp(0f, playbackTargetVolume, t);
 
         await UniTask.DelayFrame(1, cancellationToken: ct);
       }
@@ -296,7 +303,7 @@ namespace MToolKit.Runtime.Music
       if (!ct.IsCancellationRequested)
       {
         fadeOut.volume = 0f;
-        fadeIn.volume = fadeInTargetVolume;
+        fadeIn.volume = playbackTargetVolume;
         fadeOut.Stop();
       }
     }

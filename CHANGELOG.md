@@ -34,6 +34,8 @@ not a roadmap milestone.
 
 - `GlobalMusicManager` awaits settings initialization before playing default music, and its crossfade cancellation uses a generation counter to avoid stale-fade races.
 
+- `GlobalMusicManager` drives music loudness reactively from `MasterVolume × MusicVolume` (R3 subscription) at the `AudioSource` as the single authority — replaces a once-computed `playbackTargetVolume` snapshot and the mixer `MusicVolume` param (which the Music group was observed not to honor at runtime). The crossfade reads the live target so a mid-fade change is applied.
+
 - `SubviewButton.targetSubview` is no longer `[Required]`, and `OnClickSetSubview` null-guards a missing target — it logs a warning (Serilog) and returns instead of throwing, so a tab whose subview isn't wired degrades gracefully rather than NRE-ing.
 
 ### Fixed
@@ -41,6 +43,8 @@ not a roadmap milestone.
 - Boot-time "await twice" fault in the shared INI load faulted `SettingsSystem.Initialization` — a persistent bootstrap singleton, so the fault was cached for the whole session — and, because `AudioService` now awaits it before building its pool while `AudioPlugin` fire-and-forgets init, it silently killed ALL audio. Fixed by the poll-based single-flight above.
 
 - `AudioService.PlayOneShotAsync` NRE (`audioSourcePool` null) when a one-shot fired before init completed or after dispose — now guarded to skip the sound.
+
+- Music mute/volume race — setting Music to 0 only intermittently silenced playback because volume was captured at imperative snapshot moments and split between the `AudioSource` and the (runtime-unreliable) mixer param. The reactive source-volume authority makes `Music = 0` deterministically silent.
 
 - `GraphRunner.HandleMessageAsync` now gates entry nodes on the triggering message: an entry node whose `Parameters` declare a `MessageType` only starts for messages of that exact type, and one declaring a `DomainFilter` only starts for that exact domain. Previously EVERY entry node in a multi-trigger graph fired on ANY subscribed message — trigger A's action chain ran for trigger B's event, which is both wrong and the ignition path for event-graph feedback loops. Entry nodes declaring neither (dialogue starts, legacy quest entries) keep the fire-on-dispatch behavior.
 
