@@ -48,6 +48,8 @@ namespace MToolKit.Runtime.Settings.Graphics
       QualityIndex = new ReactiveSetting<int>(0, "Quality", settingsController);
       Fullscreen = new ReactiveSetting<bool>(true, "Fullscreen", settingsController);
       VerticalSync = new ReactiveSetting<bool>(true, "Vertical Sync", settingsController);
+      DisableCrt = new ReactiveSetting<bool>(false, "Disable CRT Effect", settingsController);
+      DisableBloom = new ReactiveSetting<bool>(false, "Disable Bloom", settingsController);
     }
 
     [ShowInInspector]
@@ -98,6 +100,8 @@ namespace MToolKit.Runtime.Settings.Graphics
     public ReactiveSetting<int> QualityIndex { get; }
     public ReactiveSetting<bool> Fullscreen { get; }
     public ReactiveSetting<bool> VerticalSync { get; }
+    public ReactiveSetting<bool> DisableCrt { get; }
+    public ReactiveSetting<bool> DisableBloom { get; }
 
     public void OnShutdown()
     {
@@ -105,6 +109,8 @@ namespace MToolKit.Runtime.Settings.Graphics
       QualityIndex.Dispose();
       Fullscreen.Dispose();
       VerticalSync.Dispose();
+      DisableCrt.Dispose();
+      DisableBloom.Dispose();
     }
 
     public void Apply()
@@ -129,6 +135,13 @@ namespace MToolKit.Runtime.Settings.Graphics
         UpdateVerticalSync(VerticalSync.Value);
         VerticalSync.OnApply();
       }
+
+      // No engine side-effect here — GraphicsEffectsController owns the URP toggle.
+      if (DisableCrt.IsDirty)
+        DisableCrt.OnApply();
+
+      if (DisableBloom.IsDirty)
+        DisableBloom.OnApply();
     }
 
     public void RevertToDefaultSettings()
@@ -153,6 +166,9 @@ namespace MToolKit.Runtime.Settings.Graphics
         VerticalSync.OnRevertToDefault();
         UpdateVerticalSync(VerticalSync.Value);
       }
+
+      if (!DisableCrt.IsDefault) DisableCrt.OnRevertToDefault();
+      if (!DisableBloom.IsDefault) DisableBloom.OnRevertToDefault();
     }
 
     public void Cancel()
@@ -161,6 +177,8 @@ namespace MToolKit.Runtime.Settings.Graphics
       QualityIndex.OnCancel();
       Fullscreen.OnCancel();
       VerticalSync.OnCancel();
+      DisableCrt.OnCancel();
+      DisableBloom.OnCancel();
     }
   }
 }

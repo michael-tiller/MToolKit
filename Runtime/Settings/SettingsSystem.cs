@@ -271,6 +271,10 @@ namespace MToolKit.Runtime.Settings
             GraphicsSettings.Fullscreen.Value = iniService.GetValue<bool>("Graphics", "Fullscreen", GraphicsSettings.Fullscreen.Default);
           if (iniService.KeyExists("Graphics", "VerticalSync"))
             GraphicsSettings.VerticalSync.Value = iniService.GetValue<bool>("Graphics", "VerticalSync", GraphicsSettings.VerticalSync.Default);
+          if (iniService.KeyExists("Graphics", "DisableCrt"))
+            GraphicsSettings.DisableCrt.Value = iniService.GetValue<bool>("Graphics", "DisableCrt", GraphicsSettings.DisableCrt.Default);
+          if (iniService.KeyExists("Graphics", "DisableBloom"))
+            GraphicsSettings.DisableBloom.Value = iniService.GetValue<bool>("Graphics", "DisableBloom", GraphicsSettings.DisableBloom.Default);
         }
 
         // Audio settings
@@ -328,6 +332,8 @@ namespace MToolKit.Runtime.Settings
           iniService.SetValue("Graphics", "Quality", GraphicsSettings.QualityIndex.Value);
           iniService.SetValue("Graphics", "Fullscreen", GraphicsSettings.Fullscreen.Value);
           iniService.SetValue("Graphics", "VerticalSync", GraphicsSettings.VerticalSync.Value);
+          iniService.SetValue("Graphics", "DisableCrt", GraphicsSettings.DisableCrt.Value);
+          iniService.SetValue("Graphics", "DisableBloom", GraphicsSettings.DisableBloom.Value);
         }
 
         // Audio settings

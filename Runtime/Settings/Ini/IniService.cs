@@ -441,6 +441,16 @@ namespace MToolKit.Runtime.Settings.Ini
             SetValue("Graphics", "VerticalSync", settingsSystem.GraphicsSettings.VerticalSync.Default);
             anyValuesAdded = true;
           }
+          if (!KeyExists("Graphics", "DisableCrt"))
+          {
+            SetValue("Graphics", "DisableCrt", settingsSystem.GraphicsSettings.DisableCrt.Default);
+            anyValuesAdded = true;
+          }
+          if (!KeyExists("Graphics", "DisableBloom"))
+          {
+            SetValue("Graphics", "DisableBloom", settingsSystem.GraphicsSettings.DisableBloom.Default);
+            anyValuesAdded = true;
+          }
         }
 
         // Audio settings - only set if key doesn't exist

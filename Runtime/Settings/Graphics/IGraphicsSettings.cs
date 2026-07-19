@@ -8,5 +8,7 @@ namespace MToolKit.Runtime.Settings.Graphics
     ReactiveSetting<int> QualityIndex { get; }
     ReactiveSetting<bool> Fullscreen { get; }
     ReactiveSetting<bool> VerticalSync { get; }
+    ReactiveSetting<bool> DisableCrt { get; }
+    ReactiveSetting<bool> DisableBloom { get; }
   }
 }
