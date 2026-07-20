@@ -28,6 +28,15 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     [field: SerializeField]
     public int WorldSeed { get; set; }
 
+    /// <summary>
+    ///   Opaque JSON blob for game-specific world-creation settings (difficulty, advanced worldgen
+    ///   tunables, etc.). MToolKit does not interpret this — it is the game layer's payload,
+    ///   carried alongside the profile the same way WorldSeed is. Defaults to empty so legacy
+    ///   profiles (predating this field) deserialize as "no settings" rather than null.
+    /// </summary>
+    [field: SerializeField]
+    public string WorldSettingsJson { get; set; } = string.Empty;
+
     public ProfileMetaData()
     {
       ProfileName = "Player_" + Guid.NewGuid().ToString("N")[..8];
@@ -36,10 +45,11 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       SaveFormatVersion = "1.0.0";
       SaveCounter = 0;
       WorldSeed = 0;
+      WorldSettingsJson = string.Empty;
     }
 
     // Parameterized constructor for easier initialization
-    public ProfileMetaData(string profileName = "Player", string lastSaveTime = "Never", string saveFormatVersion = "1.0.0", int saveCounter = 0, DateTime createdTime = default, int worldSeed = 0)
+    public ProfileMetaData(string profileName = "Player", string lastSaveTime = "Never", string saveFormatVersion = "1.0.0", int saveCounter = 0, DateTime createdTime = default, int worldSeed = 0, string worldSettingsJson = "")
     {
       ProfileName = profileName;
       LastSaveTime = lastSaveTime;
@@ -47,6 +57,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       SaveCounter = saveCounter;
       CreatedTimeString = createdTime != default ? createdTime.ToString("yyyy-MM-dd HH:mm:ss") : DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
       WorldSeed = worldSeed;
+      WorldSettingsJson = worldSettingsJson ?? string.Empty;
     }
 
     // Computed properties for DateTime access

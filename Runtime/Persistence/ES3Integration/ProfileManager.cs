@@ -29,6 +29,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     private readonly string profilesDirectory;
     private volatile bool isDisposed;
     private int pendingWorldSeed;
+    private string pendingWorldSettingsJson;
     private IDisposable currentProfileSubscription;
 
     public ProfileManager(IES3Service es3Service, ES3SaveConfig config)
@@ -363,13 +364,15 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         if (existingMetadata != null)
         {
           int worldSeed = pendingWorldSeed != 0 ? pendingWorldSeed : existingMetadata.WorldSeed;
+          string worldSettingsJson = pendingWorldSettingsJson ?? existingMetadata.WorldSettingsJson;
           ProfileMetaData updatedMetadata = new(
             existingMetadata.ProfileName,
             DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
             config.SaveFormatVersion,
             existingMetadata.SaveCounter + 1,
             existingMetadata.CreatedTime,
-            worldSeed
+            worldSeed,
+            worldSettingsJson
             );
 
           // Save ProfileMetadata object only (no individual fields to avoid duplication)
@@ -609,6 +612,26 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
 
       log.ForMethod().Debug("Set world seed: {Seed}", seed);
+    }
+
+    /// <summary>
+    ///   Set the opaque game-specific world-creation settings JSON for the pending/current profile.
+    ///   Mirrors <see cref="SetWorldSeed"/>: recorded as a pending write merged in at the next
+    ///   SaveProfile, and also pushed onto the live CurrentProfileMetadata immediately so
+    ///   consumers reading it before the next save (e.g. a scene-load hydrator) see the new value.
+    /// </summary>
+    public void SetWorldSettingsJson(string json)
+    {
+      pendingWorldSettingsJson = json ?? string.Empty;
+
+      ProfileMetaData current = CurrentProfileMetadata.Value;
+      if (current != null)
+      {
+        current.WorldSettingsJson = pendingWorldSettingsJson;
+        CurrentProfileMetadata.OnNext(current);
+      }
+
+      log.ForMethod().Debug("Set world settings json ({Length} chars)", pendingWorldSettingsJson.Length);
     }
 
     public void RepairAllProfileMetadata()

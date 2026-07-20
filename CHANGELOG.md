@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- `ProfileMetaData.WorldSettingsJson` — an opaque per-profile string blob for consuming projects to persist their own world/game-creation settings model, threaded through the constructor and `SaveProfile`'s pending-merge exactly like the existing `WorldSeed` field. `IProfileManager.SetWorldSettingsJson(string)` mirrors `SetWorldSeed`'s pending-field + live-metadata-update pattern. MToolKit does not interpret the JSON — it's opaque storage, same contract as the rest of `ProfileMetaData`. Legacy profiles without the field deserialize to an empty string (best-effort persistence).
+
 - `IGraphicsSettings.DisableCrt` / `IGraphicsSettings.DisableBloom` — two effect-agnostic `ReactiveSetting<bool>` graphics settings (default `false` = effect on), surfaced as bound toggles via `GraphicsSettingsInitializer` and persisted through the INI plumbing (`SettingsSystem` load/save + `IniService` populate-defaults). The settings are deliberately effect-agnostic: MToolKit only stores/persists the flags; the consuming project subscribes to the reactive value and performs the actual render-pipeline toggle. Additive — the only implementer is MToolKit's own `GraphicsSettingsModule`, updated here, so no external caller changes.
 
 - `Swatch` — implicit conversion operators to `Color` and `Gradient`, so a swatch feeds a Color/Gradient API directly (e.g. `image.color = swatch`) without a preset or manual unwrap. A Color-typed swatch projects to its flat color (or a flat two-stop gradient); a Gradient-typed swatch samples at t=0 for Color and returns its gradient; a null swatch yields white. Purely additive — no caller changes required.

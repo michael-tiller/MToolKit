@@ -24,6 +24,7 @@ namespace MToolKit.Runtime.Persistence.Interfaces
     ProfileMetaData GetProfileMetaData(string profileName, CancellationToken ct = default);
     List<ProfileMetaData> GetAllProfileMetadata(CancellationToken ct = default);
     void SetWorldSeed(int seed);
+    void SetWorldSettingsJson(string json);
     UniTask<string> GetMostRecentProfileAsync(CancellationToken ct = default);
     bool ProfileExists(string profileName);
     string GetProfileFilePath(string profileName);
