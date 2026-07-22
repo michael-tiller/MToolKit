@@ -37,9 +37,41 @@ namespace MToolKit.Runtime.Settings
     {
       this.iniService = iniService;
       InitializeModules(inputRebinderService);
-      Initialization = iniService != null
-        ? InitializeIniIntegrationAsync().Preserve()
-        : UniTask.CompletedTask;
+      if (iniService != null)
+        RunInitializationAsync().Forget();
+      else
+        initializationCompleted = true;
+    }
+
+    private bool initializationCompleted;
+    private Exception initializationFault;
+
+    private async UniTaskVoid RunInitializationAsync()
+    {
+      try
+      {
+        await InitializeIniIntegrationAsync();
+      }
+      catch (Exception ex)
+      {
+        initializationFault = ex;
+        log.ForMethod().Error("Settings initialization faulted: {0}", ex.Message);
+      }
+      finally
+      {
+        initializationCompleted = true;
+      }
+    }
+
+    // Each caller gets its own WaitUntil poll: UniTask continuations are single-flight, so a shared
+    // Initialization task (even Preserve()'d) throws "await twice" when two consumers await it while
+    // still pending. Same pattern as IniService.LoadAsync.
+    private async UniTask WaitForInitializationAsync()
+    {
+      if (!initializationCompleted)
+        await UniTask.WaitUntil(() => initializationCompleted);
+      if (initializationFault != null)
+        throw new InvalidOperationException("Settings initialization faulted", initializationFault);
     }
 
 
@@ -83,7 +115,7 @@ namespace MToolKit.Runtime.Settings
     public GameSettingsModule GameSettings { get; private set; }
     public InputSettingsModule InputSettings { get; private set; }
     public ReactiveProperty<bool> IsDirty { get; } = new();
-    public UniTask Initialization { get; }
+    public UniTask Initialization => WaitForInitializationAsync();
 
     public void Apply(bool autoFinish = true, bool gotoMenu = true)
     {
@@ -131,7 +163,7 @@ namespace MToolKit.Runtime.Settings
       
       SetDirty(false);
 
-      if (gotoMenu) GoToMainMenu();
+      //if (gotoMenu) GoToMainMenu();
     }
 
     public void DefaultSettings()
@@ -152,7 +184,7 @@ namespace MToolKit.Runtime.Settings
       GameSettings?.Cancel();
       InputSettings?.Cancel();
       SetDirty(false);
-      GoToMainMenu();
+      //GoToMainMenu();
     }
 
     public void SetDirty(bool isDirty)

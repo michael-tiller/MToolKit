@@ -8,6 +8,7 @@ namespace MToolKit.Runtime.Navigation.Enums
     Main = 1,
     Overlay = 2,
     Alert = 3,
-    Critical = 4
+    Critical = 4,
+    Popup = 5
   }
 }

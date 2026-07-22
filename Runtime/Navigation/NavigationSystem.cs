@@ -500,7 +500,7 @@ namespace MToolKit.Runtime.Navigation
       async UniTask CancelAsync()
       {
         log.ForGameObject(gameObject).ForMethod(nameof(CancelAsync)).Debug("Cancelled quit request.");
-        await PopAsync(ECanvasType.Overlay, token);
+        await PopAsync(ECanvasType.Popup, token);
       }
 
       await CreateModalView<ModalView>(
@@ -862,10 +862,13 @@ namespace MToolKit.Runtime.Navigation
       EModalButtonType type3 = EModalButtonType.None,
       string text3 = null,
       UnityAction action3 = null,
-      Action<T> postInit = null)
+      Action<T> postInit = null,
+      ECanvasType canvasType = ECanvasType.None)
       where T : ModalView
     {
-      ECanvasType canvasType = ECanvasType.Overlay;
+      if (canvasType == ECanvasType.None)
+        canvasType = ECanvasType.Popup;
+
       CanvasConfig canvasConfig = GetCanvasConfig(canvasType);
       if (canvasConfig == null)
       {
@@ -936,9 +939,11 @@ namespace MToolKit.Runtime.Navigation
       UnityAction action2 = null,
       EModalButtonType type3 = EModalButtonType.None,
       string text3 = null,
-      UnityAction action3 = null)
+      UnityAction action3 = null,
+      ECanvasType canvasType = ECanvasType.None)
     {
-      ECanvasType canvasType = ECanvasType.Overlay;
+      if (canvasType == ECanvasType.None)
+        canvasType = ECanvasType.Popup;
       CanvasConfig canvasConfig = GetCanvasConfig(canvasType);
       if (canvasConfig == null)
       {

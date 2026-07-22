@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using MToolKit.Runtime.Navigation.Enums;
 using MToolKit.Runtime.Navigation.Events;
 using MToolKit.Runtime.Navigation.Views;
 using MToolKit.Runtime.Settings.Enums;
@@ -31,7 +32,8 @@ namespace MToolKit.Runtime.Navigation.Interfaces
       EModalButtonType type3 = EModalButtonType.None,
       string text3 = null,
       UnityAction action3 = null,
-      Action<T> postInit = null)
+      Action<T> postInit = null,
+      ECanvasType canvasType = ECanvasType.None)
       where T : ModalView;
 
     UniTask CreateTimedModalView(
@@ -49,7 +51,8 @@ namespace MToolKit.Runtime.Navigation.Interfaces
       UnityAction action2 = null,
       EModalButtonType type3 = EModalButtonType.None,
       string text3 = null,
-      UnityAction action3 = null);
+      UnityAction action3 = null,
+      ECanvasType canvasType = ECanvasType.None);
 
     public void OnInterstitialAlertRequest(InterstitialAlertRequestMessage msg, CancellationToken token);
   }

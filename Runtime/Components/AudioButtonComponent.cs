@@ -183,7 +183,7 @@ namespace MToolKit.Runtime.Components
 
       if (hoverAudioClips == null || hoverAudioClips.Count == 0)
       {
-        log.ForMethod().Warning("No hover audio clips assigned to {0}", gameObject.name);
+//        log.ForMethod().Warning("No hover audio clips assigned to {0}", gameObject.name);
         return;
       }
 
