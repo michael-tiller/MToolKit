@@ -556,6 +556,7 @@ namespace MToolKit.Runtime.Installer
       builder.RegisterMessageBroker<BackRequestMessage>(options);
       builder.RegisterMessageBroker<QuitRequestMessage>(options);
       builder.RegisterMessageBroker<NavigationRequestMessage>(options);
+      builder.RegisterMessageBroker<ReturnToNavMenuRequestMessage>(options);
       builder.RegisterMessageBroker<ClearRequestMessage>(options);
       builder.RegisterMessageBroker<ErrorRequestMessage>(options);
       builder.RegisterMessageBroker<InterstitialAlertRequestMessage>(options);

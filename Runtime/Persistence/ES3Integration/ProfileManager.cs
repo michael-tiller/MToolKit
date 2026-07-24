@@ -241,6 +241,82 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     }
 
     /// <summary>
+    ///   Clones an existing profile's save file to a new profile name ("Save As").
+    ///   Copies the source .es3 wholesale (preserving world seed, settings, and any
+    ///   generation-time-only keys), then rewrites the embedded ProfileMetadata.ProfileName
+    ///   to the new name. Returns the actual (uniquified) new profile name.
+    /// </summary>
+    public (bool success, string actualProfileName) CloneProfile(string sourceProfileName, string newProfileName, CancellationToken ct = default)
+    {
+      if (isDisposed)
+        throw new ObjectDisposedException(nameof(ProfileManager));
+
+      if (string.IsNullOrEmpty(newProfileName))
+      {
+        log.ForMethod().Error("Cannot clone profile to null or empty name");
+        return (false, string.Empty);
+      }
+
+      if (!ProfileExists(sourceProfileName))
+      {
+        log.ForMethod().Error("Cannot clone: source profile {0} does not exist", sourceProfileName);
+        return (false, string.Empty);
+      }
+
+      string actualProfileName = GenerateUniqueProfileName(newProfileName);
+
+      if (actualProfileName != newProfileName)
+        log.ForMethod().Information("Profile name '{0}' already exists, using unique name: '{1}'", newProfileName, actualProfileName);
+
+      try
+      {
+        string sourcePath = GetProfileFilePath(sourceProfileName);
+        string targetPath = GetProfileFilePath(actualProfileName);
+
+        File.Copy(sourcePath, targetPath);
+
+        ES3Settings es3Settings = new(targetPath)
+        {
+          compressionType = config.CompressSaveData ? ES3.CompressionType.Gzip : ES3.CompressionType.None,
+          encryptionType = config.EncryptSaveData ? ES3.EncryptionType.AES : ES3.EncryptionType.None,
+          encryptionPassword = config.EncryptionKey
+        };
+
+        // Rewrite the embedded metadata so the clone identifies as the new profile,
+        // preserving every other field (seed, settings, counters, created time).
+        ProfileMetaData sourceMetadata = ES3.Load<ProfileMetaData>("ProfileMetadata", es3Settings);
+        if (sourceMetadata != null)
+        {
+          ProfileMetaData clonedMetadata = new(
+            actualProfileName,
+            sourceMetadata.LastSaveTime,
+            sourceMetadata.SaveFormatVersion,
+            sourceMetadata.SaveCounter,
+            sourceMetadata.CreatedTime,
+            sourceMetadata.WorldSeed,
+            sourceMetadata.WorldSettingsJson);
+
+          ES3.Save("ProfileMetadata", clonedMetadata, es3Settings);
+        }
+        else
+        {
+          log.ForMethod().Warning("Cloned profile {0} has no ProfileMetadata to rewrite", actualProfileName);
+        }
+
+        log.ForMethod().Information("Cloned profile {0} -> {1} at {2}", sourceProfileName, actualProfileName, targetPath);
+
+        RefreshAvailableProfiles();
+
+        return (true, actualProfileName);
+      }
+      catch (Exception ex)
+      {
+        log.ForMethod().Error(ex, "Failed to clone profile {0} to {1}: {Message}", sourceProfileName, actualProfileName, ex.Message);
+        return (false, string.Empty);
+      }
+    }
+
+    /// <summary>
     ///   Deletes a profile and its save file
     /// </summary>
     public bool DeleteProfile(string profileName, CancellationToken ct = default)

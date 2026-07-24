@@ -13,6 +13,7 @@ using MToolKit.Runtime.Navigation.Enums;
 using MToolKit.Runtime.Navigation.Events;
 using MToolKit.Runtime.Navigation.Interfaces;
 using MToolKit.Runtime.Navigation.Views;
+using MToolKit.Runtime.Core.Singletons;
 using MToolKit.Runtime.Settings.Enums;
 using R3;
 using Serilog;
@@ -564,6 +565,7 @@ namespace MToolKit.Runtime.Navigation
         // Add all subscriptions to disposables
         GlobalAsyncMessageBroker.GetSubscriber<QuitRequestMessage>()?.Subscribe(_ => HandleQuitRequest(token).Forget()),
         GlobalAsyncMessageBroker.GetSubscriber<NavigationRequestMessage>()?.Subscribe(msg => OnNavigationRequest(msg, token)),
+        GlobalAsyncMessageBroker.GetSubscriber<ReturnToNavMenuRequestMessage>()?.Subscribe(_ => OnReturnToNavMenuRequest(token)),
         GlobalAsyncMessageBroker.GetSubscriber<BackRequestMessage>()?.Subscribe(msg => OnBackRequest(msg, token)),
         GlobalAsyncMessageBroker.GetSubscriber<ClearRequestMessage>()?.Subscribe(msg => OnClearRequest(msg, token)),
         GlobalAsyncMessageBroker.GetSubscriber<InterstitialAlertRequestMessage>()?.Subscribe(msg => OnInterstitialAlertRequest(msg, token))
@@ -697,6 +699,54 @@ namespace MToolKit.Runtime.Navigation
       {
         log.ForGameObject(gameObject).ForMethod().Error("OnNavigationRequest received exception: {0}", ex.Message);
       }
+    }
+
+    /// <summary>
+    ///   Handles <see cref="ReturnToNavMenuRequestMessage" />: loads the configured menu scene in
+    ///   Single mode, which unloads the game scene so a later game load starts from a clean slate.
+    ///   Publishers must complete any pre-departure work (auto-save) before publishing.
+    /// </summary>
+    private void OnReturnToNavMenuRequest(CancellationToken token)
+    {
+      var menuSceneRef = GlobalConstantsHelper.Instance?.GlobalConstantsConfig?.MenuSceneReference;
+      if (menuSceneRef == null || !menuSceneRef.RuntimeKeyIsValid())
+      {
+        log.ForGameObject(gameObject).ForMethod().Error(
+          "ReturnToNavMenu requested but MenuSceneReference is missing or invalid in GlobalConstantsConfig");
+        return;
+      }
+
+      log.ForGameObject(gameObject).ForMethod().Information("Returning to nav menu scene");
+      UniTask.Void(async () =>
+      {
+        try
+        {
+          // Single mode (Addressables default): unloads the game scene for idempotent reloads.
+          // Deliberately NOT cancelled by the subscription token — the game scope tears down
+          // during this very transition and would cancel the await mid-load.
+          var handle = menuSceneRef.LoadSceneAsync();
+          await handle.ToUniTask();
+
+          if (handle.Status != UnityEngine.ResourceManagement.AsyncOperations.AsyncOperationStatus.Succeeded)
+          {
+            log.ForMethod().Error("Menu scene load failed: {Guid}", menuSceneRef.AssetGUID);
+            return;
+          }
+
+          if (this == null || gameObject == null)
+            return;
+
+          // Reactivate the persistent navigation UI for the menu: drop whatever view was on the
+          // Main stack when gameplay started, then let validation re-show each canvas's configured
+          // initial view (Main's initial view is the main menu).
+          await ClearStackAsync(ECanvasType.Main, CancellationToken.None);
+          await ValidateViewsAsync();
+        }
+        catch (Exception ex)
+        {
+          log.ForMethod().Error(ex, "ReturnToNavMenu scene load threw: {Message}", ex.Message);
+        }
+      });
     }
 
     private void OnBackRequest(BackRequestMessage msg, CancellationToken token)

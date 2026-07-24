@@ -36,6 +36,13 @@ namespace MToolKit.Runtime.Navigation.Interfaces
       ECanvasType canvasType = ECanvasType.None)
       where T : ModalView;
 
+    /// <summary>
+    /// Pop the top view off the given canvas stack. Modal dismissal must go through the SAME
+    /// service that pushed the modal — scene scopes may register a no-op INavigationService,
+    /// so callers that only hold IModalService use this instead.
+    /// </summary>
+    UniTask PopAsync(ECanvasType canvasType, CancellationToken token);
+
     UniTask CreateTimedModalView(
       CancellationToken token,
       string modalName,

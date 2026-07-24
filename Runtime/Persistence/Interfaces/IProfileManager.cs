@@ -17,6 +17,7 @@ namespace MToolKit.Runtime.Persistence.Interfaces
 
     bool CreateProfile(string profileName, CancellationToken ct = default);
     (bool success, string actualProfileName) CreateProfileWithName(string profileName, CancellationToken ct = default);
+    (bool success, string actualProfileName) CloneProfile(string sourceProfileName, string newProfileName, CancellationToken ct = default);
     string GenerateUniqueProfileName(string baseName);
     bool DeleteProfile(string profileName, CancellationToken ct = default);
     UniTask<bool> LoadProfileAsync(string profileName, CancellationToken ct = default);
