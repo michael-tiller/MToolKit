@@ -79,6 +79,11 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
         return;
       }
 
+      // The asset reference can only resolve to the shared TEMPLATE objective; a per-instance
+      // quest clone keys its progress under a suffixed GUID. Remap before touching state, or the
+      // clone reads a key its own graph never writes. No-op for uncloned quests.
+      objectiveGuid = QuestObjectiveGuidResolver.Resolve(state, objectiveGuid);
+
       // Check objective progress
       var key = $"objective_{objectiveGuid}";
       QuestObjectiveProgress progress = null;
