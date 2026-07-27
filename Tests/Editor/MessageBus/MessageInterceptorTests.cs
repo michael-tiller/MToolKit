@@ -195,7 +195,7 @@ namespace MToolKit.Tests.Editor.MessageBus
     {
       var reports = new List<string>();
       var ran = new List<string>();
-      using IDisposable scope = InterceptorFailureReporter.OverrideScope((owner, _, _) => reports.Add(owner));
+      using IDisposable scope = InterceptorFailureReporter.OverrideScope((owner, t, e) => reports.Add(owner));
 
       int delivered = 0;
       OnGame<CancellableCommand>(_ => delivered++);
@@ -280,7 +280,7 @@ namespace MToolKit.Tests.Editor.MessageBus
     public void AThrowingPreOp_DoesNotBreakTheChain_AndIsReportedWithItsOwner()
     {
       var reports = new List<(string Owner, Type Type)>();
-      using IDisposable scope = InterceptorFailureReporter.OverrideScope((owner, type, _) => reports.Add((owner, type)));
+      using IDisposable scope = InterceptorFailureReporter.OverrideScope((owner, type, e) => reports.Add((owner, type)));
 
       bool laterRan = false;
       int delivered = 0;
@@ -302,7 +302,7 @@ namespace MToolKit.Tests.Editor.MessageBus
     public void AThrowingOpWithNoOwner_ReportsTheUnknownFallback()
     {
       var owners = new List<string>();
-      using IDisposable scope = InterceptorFailureReporter.OverrideScope((owner, _, _) => owners.Add(owner));
+      using IDisposable scope = InterceptorFailureReporter.OverrideScope((owner, t, e) => owners.Add(owner));
 
       Track(GameMessageBroker.InterceptPre<PlainNotification>(_ => throw new InvalidOperationException("boom")));
 
@@ -317,7 +317,7 @@ namespace MToolKit.Tests.Editor.MessageBus
       // Type suppression at the catch site: reporting an ErrorRequestMessage failure BY publishing an
       // ErrorRequestMessage is the direct recursion cycle.
       int reportCount = 0;
-      using IDisposable scope = InterceptorFailureReporter.OverrideScope((_, _, _) => reportCount++);
+      using IDisposable scope = InterceptorFailureReporter.OverrideScope((o, t, e) => reportCount++);
 
       Track(GlobalAsyncMessageBroker.InterceptPre<ErrorRequestMessage>(_ => throw new InvalidOperationException("boom")));
 
@@ -328,7 +328,7 @@ namespace MToolKit.Tests.Editor.MessageBus
     [Test]
     public void AThrowingReporterOverride_DoesNotBreakTheChain()
     {
-      using IDisposable scope = InterceptorFailureReporter.OverrideScope((_, _, _) => throw new InvalidOperationException("reporter blew up"));
+      using IDisposable scope = InterceptorFailureReporter.OverrideScope((o, t, e) => throw new InvalidOperationException("reporter blew up"));
 
       bool laterRan = false;
       int delivered = 0;
@@ -461,7 +461,7 @@ namespace MToolKit.Tests.Editor.MessageBus
     [Test]
     public void AfterAThrowingPreOp_TheGuardIsCleared_AndLaterPublishesAreStillIntercepted()
     {
-      using IDisposable scope = InterceptorFailureReporter.OverrideScope((_, _, _) => { });
+      using IDisposable scope = InterceptorFailureReporter.OverrideScope((o, t, e) => { });
 
       int runs = 0;
       Track(GameMessageBroker.InterceptPre<PlainNotification>(_ =>
@@ -556,22 +556,22 @@ namespace MToolKit.Tests.Editor.MessageBus
     [Test]
     public void OverrideScope_RejectsOverlappingScopes()
     {
-      using IDisposable first = InterceptorFailureReporter.OverrideScope((_, _, _) => { });
+      using IDisposable first = InterceptorFailureReporter.OverrideScope((o, t, e) => { });
 
-      Assert.Throws<InvalidOperationException>(() => InterceptorFailureReporter.OverrideScope((_, _, _) => { }));
+      Assert.Throws<InvalidOperationException>(() => InterceptorFailureReporter.OverrideScope((o, t, e) => { }));
     }
 
     [Test]
     public void OverrideScope_DisposeIsIdempotent()
     {
-      IDisposable scope = InterceptorFailureReporter.OverrideScope((_, _, _) => { });
+      IDisposable scope = InterceptorFailureReporter.OverrideScope((o, t, e) => { });
       scope.Dispose();
 
       Assert.DoesNotThrow(() => scope.Dispose());
       // Proven released: a fresh scope can be acquired.
       Assert.DoesNotThrow(() =>
       {
-        using IDisposable next = InterceptorFailureReporter.OverrideScope((_, _, _) => { });
+        using IDisposable next = InterceptorFailureReporter.OverrideScope((o, t, e) => { });
       });
     }
 
