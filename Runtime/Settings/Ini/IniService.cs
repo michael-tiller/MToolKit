@@ -108,7 +108,7 @@ namespace MToolKit.Runtime.Settings.Ini
         catch (Exception ex) { loadError = ex; }
         finally { loadCompleted = true; }
       }
-      else
+      else if (!loadCompleted)
       {
         await UniTask.WaitUntil(() => loadCompleted, cancellationToken: ct);
       }

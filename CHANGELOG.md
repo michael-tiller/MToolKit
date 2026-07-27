@@ -46,6 +46,10 @@ not a roadmap milestone.
 
 ### Fixed
 
+- `GameLoader` scene loading probed the key with `Addressables.LoadResourceLocationsAsync` before calling `LoadSceneAsync`. A manifest scene with no location made Addressables raise `InvalidKeyException` through its own delayed-action pump, which reaches the Unity console as an unhandled *error log* some frames later — during an EditMode run that log lands in whichever unrelated test is executing and fails it (observed poisoning `ES3SaveableTests` from `GameLoaderTests`). The probe returns an empty result instead of logging, so a missing scene now yields one deliberate warning and the same graceful skip.
+
+- `IniService.LoadAsync` always routed non-first callers through `UniTask.WaitUntil`, even when the load had already finished, so `Initialization.Status` read `Pending` for a completed load until the next player-loop tick. Added the already-completed fast path; late callers now return synchronously.
+
 - Boot-time "await twice" fault in the shared INI load faulted `SettingsSystem.Initialization` — a persistent bootstrap singleton, so the fault was cached for the whole session — and, because `AudioService` now awaits it before building its pool while `AudioPlugin` fire-and-forgets init, it silently killed ALL audio. Fixed by the poll-based single-flight above.
 
 - `AudioService.PlayOneShotAsync` NRE (`audioSourcePool` null) when a one-shot fired before init completed or after dispose — now guarded to skip the sound.

@@ -110,7 +110,6 @@ namespace MToolKit.Tests.Editor.Runtime.Settings
     {
       private readonly float persistedMusicVolume;
       private readonly UniTaskCompletionSource completion = new();
-      private UniTask initialization;
       private bool loadStarted;
       private bool loaded;
 
@@ -128,18 +127,26 @@ namespace MToolKit.Tests.Editor.Runtime.Settings
       public ReactiveProperty<bool> IsLoading { get; } = new(false);
       public IReadOnlyDictionary<string, string> AllValues { get; } =
         new Dictionary<string, string>();
-      public UniTask Initialization => initialization;
+      public UniTask Initialization => WaitForLoadAsync(default);
 
+      // Mirrors IniService's single-flight contract: the first caller runs the load, later callers
+      // poll. Handing every caller the same UniTask throws "already continuation registered".
       public UniTask LoadAsync(CancellationToken ct = default)
       {
         LoadCallCount++;
         if (!loadStarted)
         {
           loadStarted = true;
-          initialization = CompleteLoadAsync(ct);
+          CompleteLoadAsync(ct).Forget();
         }
 
-        return initialization;
+        return WaitForLoadAsync(ct);
+      }
+
+      private async UniTask WaitForLoadAsync(CancellationToken ct)
+      {
+        if (!loaded)
+          await UniTask.WaitUntil(() => loaded, cancellationToken: ct);
       }
 
       public void CompleteLoad() => completion.TrySetResult();

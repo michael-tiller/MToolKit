@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using Cysharp.Threading.Tasks;
@@ -10,6 +11,7 @@ using Serilog;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.ResourceManagement.ResourceLocations;
 using UnityEngine.ResourceManagement.ResourceProviders;
 using UnityEngine.SceneManagement;
 using ILogger = Serilog.ILogger;
@@ -169,6 +171,27 @@ namespace MToolKit.Runtime.Bootstrapper
     {
       // Load scene via Addressables - the manifest is designed for Addressable scenes only.
       // This enables remote updates, DLC, and patchable content without code rebuilds.
+      // Probe for a location first: LoadSceneAsync on an unknown key Debug.LogErrors an
+      // InvalidKeyException from Addressables' own delayed-action pump, which lands in whatever
+      // EditMode test happens to be running and fails it. LoadResourceLocationsAsync just returns
+      // an empty result.
+      AsyncOperationHandle<IList<IResourceLocation>> locations = default;
+      try
+      {
+        locations = Addressables.LoadResourceLocationsAsync(sceneKey);
+        await locations.ToUniTask(cancellationToken: ct);
+        if (locations.Status != AsyncOperationStatus.Succeeded || locations.Result == null || locations.Result.Count == 0)
+        {
+          log.ForMethod().Warning("Addressable scene key not found: {Scene} (expected in test environments)", sceneKey);
+          return;
+        }
+      }
+      finally
+      {
+        if (locations.IsValid())
+          Addressables.Release(locations);
+      }
+
       AsyncOperationHandle<SceneInstance> handle = default;
       try
       {
