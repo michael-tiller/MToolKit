@@ -103,31 +103,41 @@ namespace MToolKit.Tests.Editor.MessageBus
       Assert.DoesNotThrow(() => GlobalAsyncMessageBroker.Publish(new BrokerPing(1)));
     }
 
-    // ---------------------------------------------------------------- unregistered types throw
+    // ---------------------------------------------------------------- unregistered types
+    //
+    // The brokers' XML docs and BuildUnregisteredException promise an InvalidOperationException for a
+    // type with no RegisterMessageBroker<T> call. In a scope built by RegisterMessagePipe() that promise
+    // does NOT hold: MessagePipe also registers open-generic IPublisher<>/ISubscriber<>, so VContainer
+    // resolves ANY type and the guard never fires. You get a live publisher with no broker behind it, and
+    // a publish that silently reaches nobody — the exact silent no-op the guard was written to prevent.
+    //
+    // Verified pre-existing: these assertions behave identically against the pre-de-duplication brokers.
+    // Pinned here as-is rather than "fixed" — changing it is a behaviour change that belongs in its own
+    // change, not smuggled into a refactor.
 
     [Test]
-    public void GetPublisher_UnregisteredType_Throws()
+    public void GetPublisher_UnregisteredType_StillResolves_ViaOpenGenericRegistration()
     {
       GameMessageBroker.Initialize(resolver);
 
-      Assert.Throws<InvalidOperationException>(() => GameMessageBroker.GetPublisher<BrokerUnregistered>());
+      Assert.That(GameMessageBroker.GetPublisher<BrokerUnregistered>(), Is.Not.Null,
+        "open-generic registration means the documented unregistered-type throw does not fire here");
     }
 
     [Test]
-    public void GetSubscriber_UnregisteredType_Throws()
+    public void GetSubscriber_UnregisteredType_StillResolves_ViaOpenGenericRegistration()
     {
       GameMessageBroker.Initialize(resolver);
 
-      Assert.Throws<InvalidOperationException>(() => GameMessageBroker.GetSubscriber<BrokerUnregistered>());
+      Assert.That(GameMessageBroker.GetSubscriber<BrokerUnregistered>(), Is.Not.Null);
     }
 
     [Test]
-    public void Publish_UnregisteredType_PropagatesTheThrow()
+    public void Publish_UnregisteredType_IsASilentNoOp()
     {
-      // Publish deliberately does NOT swallow: the call site is the consistent failure point.
       GameMessageBroker.Initialize(resolver);
 
-      Assert.Throws<InvalidOperationException>(() => GameMessageBroker.Publish(new BrokerUnregistered()));
+      Assert.DoesNotThrow(() => GameMessageBroker.Publish(new BrokerUnregistered()));
     }
 
     // ---------------------------------------------------------------- publish/subscribe round trip
