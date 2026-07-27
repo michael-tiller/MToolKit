@@ -52,6 +52,10 @@ using UnityEngine.InputSystem;
 #endif
 
 [assembly: InternalsVisibleTo("Assembly-CSharp._MTools.Tests")]
+// MessageBus interceptor fixtures reach InterceptorFailureReporter.OverrideScope (the test-only capture
+// seam) and Registration.Seq. Making those public instead would let shipped code silence player-facing
+// errors, which is what the #if UNITY_INCLUDE_TESTS guard exists to prevent.
+[assembly: InternalsVisibleTo("MToolKit.Tests.Editor")]
 
 namespace MToolKit.Runtime.Installer
 {

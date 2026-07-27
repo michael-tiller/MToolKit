@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MessagePipe;
@@ -62,10 +63,39 @@ namespace MToolKit.Runtime.MessageBus
     public static bool IsAvailable() => MessageBrokerCore<GameScope>.IsAvailable();
 
     /// <summary>
+    ///   Register a pre-interceptor: runs before <paramref name="op" />'s message type reaches the bus, and
+    ///   may veto it by calling <c>Cancel</c> on a message implementing <c>ICancellableMessage</c>.
+    ///   Dispose the returned token to unregister.
+    ///
+    ///   <para><paramref name="owner" /> is opaque attribution used only when the op throws — MTK never
+    ///   interprets it. <paramref name="op" /> MUST be synchronous; an <c>async void</c> lambda is
+    ///   unsupported, because the reentrancy guard tracks physical threads and such an op can resume on
+    ///   another thread after the guard is gone.</para>
+    /// </summary>
+    public static IDisposable InterceptPre<T>(Action<T> op, HandlerPriority priority = HandlerPriority.Normal, string owner = null) =>
+      MessageBrokerCore<GameScope>.InterceptPre(op, priority, owner);
+
+    /// <summary>
+    ///   Register a post-interceptor: runs after all subscribers, and after a cancellation. It can observe
+    ///   cancellation — and nothing else; it receives only the message, so it cannot see whether a subscriber
+    ///   threw. Same synchronous-op requirement as <see cref="InterceptPre{T}" />.
+    /// </summary>
+    public static IDisposable InterceptPost<T>(Action<T> op, HandlerPriority priority = HandlerPriority.Normal, string owner = null) =>
+      MessageBrokerCore<GameScope>.InterceptPost(op, priority, owner);
+
+    /// <summary>
     ///   Reset the game broker (useful for testing or scene transitions).
-    ///   Drops the resolver and cancels pending requests.
+    ///   Drops the resolver and cancels pending requests. Deliberately does NOT touch interceptor
+    ///   registrations — see <see cref="ResetInterceptors" />.
     /// </summary>
     public static void Reset() => MessageBrokerCore<GameScope>.Reset();
+
+    /// <summary>
+    ///   Dispose and clear every interceptor registration on this scope, without tearing down the broker.
+    ///   Separate from <see cref="Reset" /> so a future scene-transition Reset cannot silently destroy
+    ///   registrations belonging to callers that have no idea interceptors exist.
+    /// </summary>
+    public static void ResetInterceptors() => MessageBrokerCore<GameScope>.ResetInterceptors();
 
 #if UNITY_EDITOR
     /// <summary>

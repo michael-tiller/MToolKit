@@ -37,6 +37,16 @@ namespace MToolKit.Runtime.MessageBus
     private static IObjectResolver resolver;
     private static bool isInitialized;
 
+    /// <summary>Per-scope interceptor storage — this is what keeps game and global registrations apart.</summary>
+    private static readonly InterceptorRegistry interceptors = new();
+
+    /// <summary>
+    ///   Message types whose interception pipeline is already on this thread's stack. Declared bare and
+    ///   created lazily per access: a [ThreadStatic] field initializer runs ONLY on the thread that runs the
+    ///   type initializer — every other thread would see null.
+    /// </summary>
+    [ThreadStatic] private static HashSet<Type> inFlight;
+
     // Dictionary to store pending async requests with their expected response types
     // Using ConcurrentQueue to maintain FIFO order for proper request/response matching
     private static readonly ConcurrentDictionary<Type, ConcurrentQueue<(string RequestId, TaskCompletionSource<object> Tcs)>> pendingRequestsByType = new();
@@ -129,16 +139,65 @@ namespace MToolKit.Runtime.MessageBus
       return new InvalidOperationException(message, inner);
     }
 
+    internal static IDisposable InterceptPre<T>(Action<T> op, HandlerPriority priority, string owner) =>
+      interceptors.AddPre(op, priority, owner);
+
+    internal static IDisposable InterceptPost<T>(Action<T> op, HandlerPriority priority, string owner) =>
+      interceptors.AddPost(op, priority, owner);
+
+    internal static void ResetInterceptors() => interceptors.Reset();
+
     internal static void Publish<T>(T message)
     {
       // Check if broker is available before attempting to publish.
       // This prevents error logs during shutdown or before initialization.
+      // An unavailable broker bypasses the pipeline entirely — no pre ops, no subscribers, no post ops.
       if (!IsAvailable())
       {
         log.ForMethod().Verbose("Skipping publish of {0} - broker not available (likely during shutdown or before initialization)", typeof(T).Name);
         return;
       }
 
+      inFlight ??= new HashSet<Type>();
+      if (!inFlight.Add(typeof(T)))
+      {
+        // Already inside this type's pipeline on this thread. The nested message is a real publish and IS
+        // delivered to subscribers, but no interceptor runs for it — otherwise an op that publishes its own
+        // message type recurses without bound.
+        PublishCore(message);
+        return;
+      }
+
+      try
+      {
+        if (!interceptors.RunPre(message))
+        {
+          interceptors.RunPost(message);
+          return;
+        }
+
+        // finally, not sequential: post ops must run even when a subscriber throws or publisher resolution
+        // fails, or the teardown guarantee is a lie. The subscriber's exception still reaches the caller,
+        // after post ops have run.
+        try
+        {
+          PublishCore(message);
+        }
+        finally
+        {
+          interceptors.RunPost(message);
+        }
+      }
+      finally
+      {
+        // Without this, one throwing op leaves typeof(T) stuck in the set and permanently disables
+        // interception for that type on this thread.
+        inFlight.Remove(typeof(T));
+      }
+    }
+
+    private static void PublishCore<T>(T message)
+    {
       // GetPublisher throws InvalidOperationException for unregistered types — let it propagate so the
       // call site is the consistent failure point rather than a silent no-op.
       IPublisher<T> publisher = GetPublisher<T>();
