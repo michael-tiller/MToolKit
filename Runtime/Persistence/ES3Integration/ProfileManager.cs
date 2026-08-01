@@ -175,7 +175,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     /// <summary>
     ///   Creates a new profile with initial metadata and returns the actual profile name used
     /// </summary>
-    public (bool success, string actualProfileName) CreateProfileWithName(string profileName, CancellationToken ct = default)
+    public ProfileNameResult CreateProfileWithName(string profileName, CancellationToken ct = default)
     {
       if (isDisposed)
         throw new ObjectDisposedException(nameof(ProfileManager));
@@ -183,7 +183,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       if (string.IsNullOrEmpty(profileName))
       {
         log.ForMethod().Error("Cannot create profile with null or empty name");
-        return (false, string.Empty);
+        return new ProfileNameResult(false, string.Empty);
       }
 
       // Generate a unique name if the requested name already exists
@@ -222,12 +222,12 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         // Refresh available profiles
         RefreshAvailableProfiles();
 
-        return (true, actualProfileName);
+        return new ProfileNameResult(true, actualProfileName);
       }
       catch (Exception ex)
       {
         log.ForMethod().Error(ex, "Failed to create profile {0}: {Message}", actualProfileName, ex.Message);
-        return (false, string.Empty);
+        return new ProfileNameResult(false, string.Empty);
       }
     }
 
@@ -246,7 +246,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     ///   generation-time-only keys), then rewrites the embedded ProfileMetadata.ProfileName
     ///   to the new name. Returns the actual (uniquified) new profile name.
     /// </summary>
-    public (bool success, string actualProfileName) CloneProfile(string sourceProfileName, string newProfileName, CancellationToken ct = default)
+    public ProfileNameResult CloneProfile(string sourceProfileName, string newProfileName, CancellationToken ct = default)
     {
       if (isDisposed)
         throw new ObjectDisposedException(nameof(ProfileManager));
@@ -254,13 +254,13 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       if (string.IsNullOrEmpty(newProfileName))
       {
         log.ForMethod().Error("Cannot clone profile to null or empty name");
-        return (false, string.Empty);
+        return new ProfileNameResult(false, string.Empty);
       }
 
       if (!ProfileExists(sourceProfileName))
       {
         log.ForMethod().Error("Cannot clone: source profile {0} does not exist", sourceProfileName);
-        return (false, string.Empty);
+        return new ProfileNameResult(false, string.Empty);
       }
 
       string actualProfileName = GenerateUniqueProfileName(newProfileName);
@@ -307,12 +307,12 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
 
         RefreshAvailableProfiles();
 
-        return (true, actualProfileName);
+        return new ProfileNameResult(true, actualProfileName);
       }
       catch (Exception ex)
       {
         log.ForMethod().Error(ex, "Failed to clone profile {0} to {1}: {Message}", sourceProfileName, actualProfileName, ex.Message);
-        return (false, string.Empty);
+        return new ProfileNameResult(false, string.Empty);
       }
     }
 
