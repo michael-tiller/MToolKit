@@ -35,9 +35,15 @@ namespace MToolKit.Runtime.Slog
       ConfigMininumLevel(ref loggerConfig);
       ConfigLoggingToFile(ref loggerConfig);
 
-      // Configure Unity3D sink with custom formatter
+      // Configure Unity3D sink with custom formatter. Gated to the config's console minimum
+      // level (default Warning): the console sink is the expensive one — per-event template
+      // formatting, editor console entries, and the full dispatch chain — and Info/Debug
+      // chatter through it was a measured GC/CPU cost in play mode. The file sink above keeps
+      // every level, so nothing is lost, only relocated.
       string outputTemplate = "[{Level:u1}] [{Source}.{method}]: {Message:lj}\n\r{Properties}";
-      loggerConfig = loggerConfig.WriteTo.Unity3D(outputTemplate: outputTemplate);
+      loggerConfig = loggerConfig.WriteTo.Unity3D(
+        outputTemplate: outputTemplate,
+        restrictedToMinimumLevel: configurationAsset.UnityConsoleMinimumLevel);
 
       // Apply source context filtering if enabled
       if (configurationAsset.IsSourceContextFilteringEnabled) loggerConfig = loggerConfig.Filter.ByIncludingOnly(IsSourceContextAllowed);
@@ -142,16 +148,25 @@ namespace MToolKit.Runtime.Slog
       string logsDir = Application.persistentDataPath + configurationAsset.LogPath;
       if (!string.IsNullOrEmpty(logsDir) && !Directory.Exists(logsDir)) Directory.CreateDirectory(logsDir);
 
-      loggerConfig = loggerConfig.WriteTo.File(
-        new RenamingCompactJsonFormatter(new Dictionary<string, string> { { "Source", "src" } }),
-        Application.persistentDataPath + configurationAsset.LogPath + configurationAsset.LogFileName,
-        rollingInterval: RollingInterval.Day,
-        retainedFileCountLimit: 7,
-        fileSizeLimitBytes: 10 * 1024 * 1024, // 10MB
-        rollOnFileSizeLimit: true,
-        shared: false, // Don't share file handles
-        flushToDiskInterval: TimeSpan.FromSeconds(1)
-        );
+      // The file sink runs behind AsyncForwardingSink: synchronous per-event disk writes on
+      // the emitting (main) thread profiled as "WaitForSignal" main-thread stalls under log
+      // bursts (2026-08-02). The inner Logger is built standalone and disposed (flushed) by
+      // the forwarding sink; it accepts every level — per-level gating stays the console
+      // sink's concern.
+      var fileLogger = new LoggerConfiguration()
+        .MinimumLevel.Verbose()
+        .WriteTo.File(
+          new RenamingCompactJsonFormatter(new Dictionary<string, string> { { "Source", "src" } }),
+          Application.persistentDataPath + configurationAsset.LogPath + configurationAsset.LogFileName,
+          rollingInterval: RollingInterval.Day,
+          retainedFileCountLimit: 7,
+          fileSizeLimitBytes: 10 * 1024 * 1024, // 10MB
+          rollOnFileSizeLimit: true,
+          shared: false, // Don't share file handles
+          flushToDiskInterval: TimeSpan.FromSeconds(1)
+          )
+        .CreateLogger();
+      loggerConfig = loggerConfig.WriteTo.Sink(new AsyncForwardingSink(fileLogger));
     }
 
     private static void ConfigMininumLevel(ref LoggerConfiguration loggerConfig)

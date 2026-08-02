@@ -17,6 +17,10 @@ namespace MToolKit.Runtime.Slog
     [SerializeField]
     private LogEventLevel logLevel = LogEventLevel.Debug;
 
+    [Tooltip("Minimum level written to the Unity Console sink. The file sink keeps everything at LogLevel; the console is the expensive sink (per-event format + editor console entry + dispatch chain), so gating it to Warning removes Info/Debug chatter cost without losing any data from the file log.")]
+    [SerializeField]
+    private LogEventLevel unityConsoleMinimumLevel = LogEventLevel.Warning;
+
     [FormerlySerializedAs("loggingToFile")]
     [SerializeField]
     private bool isLoggingToFile;
@@ -45,6 +49,7 @@ namespace MToolKit.Runtime.Slog
     public string LogPath => logPath;
     public string LogFileName => logFileName;
     public LogEventLevel LogLevel => logLevel;
+    public LogEventLevel UnityConsoleMinimumLevel => unityConsoleMinimumLevel;
     public bool IsLoggingToFile => isLoggingToFile;
     public bool IsSourceContextFilteringEnabled => isSourceContextFilteringEnabled;
     public List<string> AllowedSourceContexts => allowedSourceContexts;
