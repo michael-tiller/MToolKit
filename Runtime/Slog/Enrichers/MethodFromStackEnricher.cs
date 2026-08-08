@@ -20,6 +20,13 @@ namespace Serilog
       if (evt.Properties.ContainsKey(METHOD_PROPERTY))
         return;
 
+      // Stack walking costs ~0.05-0.1ms + ~70B/frame walked PER EVENT — under a Debug-level log
+      // burst (hundreds of events/frame) this enricher alone profiled as a frame hitch
+      // (dirigible2D 2026-08-08). Below Warning, callers who want `method` set it via ForMethod();
+      // high-volume Debug/Verbose chatter goes without rather than paying the walk.
+      if (evt.Level < LogEventLevel.Warning)
+        return;
+
       StackTrace trace = new(fNeedFileInfo: false);
       int frameCount = trace.FrameCount;
       for (int i = 0; i < frameCount; i++)

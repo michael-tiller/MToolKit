@@ -98,6 +98,10 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
 
       try
       {
+        // Batch bracket: controller key writes land in the ES3 memory cache; the single
+        // file store happens in EndSaveBatch (finally). Without this, every controller's
+        // ES3.Save rewrote the full save file — 30 rewrites per autosave, ~3.3s stall.
+        es3Service.BeginSaveBatch();
         if (domainControllers != null)
         {
           List<ISaveDomainController> controllers = domainControllers.ToList();
@@ -107,7 +111,15 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
           // individual Stopwatch readings are upper-bounds (include scheduler interleaving).
           // Use the total wall-clock at the SaveSystemCoordinator level for the user-observed cost.
           long[] elapsedMs = new long[controllers.Count];
-          await UniTask.WhenAll(controllers.Select((d, i) => RunWithTimingAsync(d, i, elapsedMs, ct)));
+          // SEQUENTIAL with a yield between controllers, not WhenAll: controller SaveAsync bodies
+          // are synchronous until their first real await, so WhenAll ran all 30 serializations in
+          // ONE frame (~150-200ms — a 30fps violation every autosave even after cache batching).
+          // Yielding spreads them across frames; the batch cache makes ordering irrelevant.
+          for (int i = 0; i < controllers.Count; i++)
+          {
+            await RunWithTimingAsync(controllers[i], i, elapsedMs, ct);
+            await UniTask.Yield();
+          }
 
           // Per-controller timing: Debug by default (quiet), Warning when above threshold.
           // Diagnostic confirmed Branch A on 2026-05-14: per-controller logs fire correctly via UniTask.WhenAll.
@@ -115,7 +127,8 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
           for (int i = 0; i < controllers.Count; i++)
           {
             if (elapsedMs[i] > SlowControllerThresholdMs)
-              log.ForMethod().Warning("Save timing per controller (SLOW): domain={0} elapsed_ms={1} threshold_ms={2}", controllers[i].Domain, elapsedMs[i], SlowControllerThresholdMs);
+              log.ForMethod().Information("Save timing per controller (SLOW): domain={0} elapsed_ms={1} threshold_ms={2}", controllers[i].Domain, elapsedMs[i],
+                SlowControllerThresholdMs);
             else
               log.ForMethod().Debug("Save timing per controller: domain={0} elapsed_ms={1}", controllers[i].Domain, elapsedMs[i]);
           }
@@ -129,6 +142,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         // per-controller serialization and the file write. Information level by default.
         Stopwatch flushSw = Stopwatch.StartNew();
         await es3Service.SaveAsync();
+        es3Service.EndSaveBatch();
         flushSw.Stop();
         log.ForMethod().Information("Save timing es3_flush: elapsed_ms={0}", flushSw.ElapsedMilliseconds);
 
@@ -143,6 +157,12 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       {
         log.ForMethod().Error(ex, "ES3 save operation failed: {Message}", ex.Message);
         throw;
+      }
+      finally
+      {
+        // Idempotent (no-op after the success-path call). On a mid-batch exception this
+        // flushes whatever was cached so later standalone writes don't strand in cache.
+        es3Service.EndSaveBatch();
       }
     }
 

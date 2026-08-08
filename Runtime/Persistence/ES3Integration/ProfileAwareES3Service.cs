@@ -23,6 +23,12 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     public readonly IProfileManager ProfileManager;
     private volatile bool isDisposed;
 
+    // Batched-save state: inside a batch, key writes go to ES3's in-memory cache and
+    // EndSaveBatch() stores the file ONCE. Without this every ES3.Save rewrites the whole
+    // save file (30 controllers × ~100ms = the 3.3s autosave main-thread stall, 2026-08-08).
+    private bool batchActive;
+    private readonly System.Collections.Generic.HashSet<string> cachedPaths = new();
+
     public ProfileAwareES3Service(ES3SaveConfig config, IProfileManager profileManager)
     {
       this.config = config ?? throw new ArgumentNullException(nameof(config));
@@ -84,7 +90,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
 
       try
       {
-        ES3Settings es3Settings = GetCurrentES3Settings();
+        ES3Settings es3Settings = GetWriteSettings();
         string currentTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
         // Update reactive properties
@@ -169,7 +175,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
 
       try
       {
-        ES3Settings es3Settings = GetCurrentES3Settings();
+        ES3Settings es3Settings = GetWriteSettings();
         ES3.Save(key, value, es3Settings);
         log.ForMethod().Verbose("Saved key '{0}' to file: {1}", key, es3Settings.FullPath);
       }
@@ -185,6 +191,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     {
       if (isDisposed)
         throw new ObjectDisposedException(nameof(ProfileAwareES3Service));
+      JoinPendingFlush();
 
       try
       {
@@ -209,6 +216,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     {
       if (isDisposed)
         throw new ObjectDisposedException(nameof(ProfileAwareES3Service));
+      JoinPendingFlush();
 
       try
       {
@@ -231,6 +239,13 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       {
         ES3Settings es3Settings = GetCurrentES3Settings();
         ES3.DeleteKey(key, es3Settings);
+        // Keep the in-memory cache coherent, or the next EndSaveBatch resurrects the key.
+        if (cachedPaths.Contains(es3Settings.FullPath))
+        {
+          ES3Settings cacheSettings = GetCurrentES3Settings();
+          cacheSettings.location = ES3.Location.Cache;
+          try { ES3.DeleteKey(key, cacheSettings); } catch (Exception) { /* not cached yet */ }
+        }
         log.ForMethod().Information("Deleted key '{0}' from file: {1}", key, es3Settings.FullPath);
       }
       catch (Exception ex)
@@ -249,6 +264,14 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       {
         ES3Settings es3Settings = GetCurrentES3Settings();
         ES3.DeleteFile(es3Settings);
+        // Drop the cached copy too, or the next EndSaveBatch resurrects the whole file.
+        if (cachedPaths.Remove(es3Settings.FullPath))
+        {
+          ES3Settings cacheSettings = GetCurrentES3Settings();
+          cacheSettings.location = ES3.Location.Cache;
+          try { ES3.DeleteFile(cacheSettings); } catch (Exception) { /* not cached */ }
+        }
+        batchActive = false;
         log.ForMethod().Information("Deleted save file: {0}", es3Settings.FullPath);
 
         // Reset reactive properties
@@ -387,6 +410,83 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       string defaultFilePath = config.GetSaveFilePath();
       log.ForMethod().Verbose("No active profile, using default save file: {0}", defaultFilePath);
       return defaultFilePath;
+    }
+
+    /// <summary>
+    ///   Begin a batched save: subsequent key writes land in ES3's in-memory cache instead of
+    ///   rewriting the file per key. The existing file is loaded into the cache once per path
+    ///   (so the eventual store writes the FULL key set, not just this batch's keys).
+    /// </summary>
+    public void BeginSaveBatch()
+    {
+      if (isDisposed || batchActive) return;
+      JoinPendingFlush();
+      try
+      {
+        ES3Settings fileSettings = GetCurrentES3Settings();
+        if (!cachedPaths.Contains(fileSettings.FullPath))
+        {
+          if (ES3.FileExists(fileSettings))
+            ES3.CacheFile(fileSettings);
+          cachedPaths.Add(fileSettings.FullPath);
+        }
+        batchActive = true;
+      }
+      catch (Exception ex)
+      {
+        // Fail open: without a batch, writes fall back to the per-key file path (slow but correct).
+        log.ForMethod().Error(ex, "BeginSaveBatch failed; falling back to per-key file writes");
+        batchActive = false;
+      }
+    }
+
+    // In-flight background flush from EndSaveBatch. File-located reads and the next batch join it
+    // first (JoinPendingFlush) so nothing observes a half-written save file. Batches are ~120s
+    // apart and the flush takes ~50ms, so contention is effectively never.
+    private System.Threading.Tasks.Task flushTask;
+
+    private void JoinPendingFlush()
+    {
+      var t = flushTask;
+      if (t != null && !t.IsCompleted)
+      {
+        try { t.Wait(); }
+        catch (Exception ex) { log.ForMethod().Error(ex, "Background save flush failed: {Message}", ex.Message); }
+      }
+    }
+
+    /// <summary>
+    ///   Flush the batch: store the cached file to disk once, with the configured
+    ///   compression/encryption — on a background thread. The ~50ms disk write was the last
+    ///   single-frame autosave cost above the 33ms budget; ES3.StoreCachedFile only reads the
+    ///   in-memory cache and writes the file, both safe off the main thread.
+    /// </summary>
+    public void EndSaveBatch()
+    {
+      if (!batchActive) return;
+      batchActive = false;
+      JoinPendingFlush();
+      ES3Settings fileSettings = GetCurrentES3Settings();
+      flushTask = System.Threading.Tasks.Task.Run(() =>
+      {
+        try
+        {
+          ES3.StoreCachedFile(fileSettings);
+        }
+        catch (Exception ex)
+        {
+          log.ForMethod().Error(ex, "EndSaveBatch background store failed: {Message}", ex.Message);
+        }
+      });
+    }
+
+    /// <summary>File-located settings normally; cache-located inside a save batch.</summary>
+    private ES3Settings GetWriteSettings()
+    {
+      ES3Settings settings = GetCurrentES3Settings();
+      if (batchActive)
+        settings.location = ES3.Location.Cache;
+      return settings;
     }
 
     /// <summary>
