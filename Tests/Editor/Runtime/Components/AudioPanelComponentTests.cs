@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using MToolKit.Runtime.Audio.Config;
 using MToolKit.Runtime.Audio.Interface;
 using MToolKit.Runtime.Components;
 using MToolKit.Runtime.Settings.Audio;
@@ -12,6 +13,39 @@ namespace MToolKit.Tests.Editor.Runtime.Components
 {
   public class AudioPanelComponentTests
   {
+    [Test]
+    public void OpenAndClose_ConsumeInterchangeablePanelConfig()
+    {
+      var go = new GameObject("Configured Panel");
+      var openClip = AudioClip.Create("open", 1, 1, 44100, false);
+      var closeClip = AudioClip.Create("close", 1, 1, 44100, false);
+      var config = ScriptableObject.CreateInstance<AudioPanelConfig>();
+      try
+      {
+        var component = go.AddComponent<AudioPanelComponent>();
+        var service = new RecordingAudioService();
+        config.open.clips.Add(openClip);
+        config.close.clips.Add(closeClip);
+        config.open.volume = 0.4f;
+        config.close.volume = 0.9f;
+        SetField(component, "audioService", service);
+        SetField(component, "audioConfig", config);
+
+        component.PlayOpenSound();
+        Assert.That(service.Volume, Is.EqualTo(0.4f));
+        component.PlayCloseSound();
+        Assert.That(service.Volume, Is.EqualTo(0.9f));
+        Assert.That(service.PlayCount, Is.EqualTo(2));
+      }
+      finally
+      {
+        Object.DestroyImmediate(config);
+        Object.DestroyImmediate(openClip);
+        Object.DestroyImmediate(closeClip);
+        Object.DestroyImmediate(go);
+      }
+    }
+
     [Test]
     public void EnablingPanel_PlaysConfiguredInterfaceAudioEachTime()
     {

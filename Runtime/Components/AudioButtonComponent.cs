@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MToolKit.Runtime.Audio.Config;
 using MToolKit.Runtime.Audio.Interface;
 using MToolKit.Runtime.Installer;
 using MToolKit.Runtime.Settings.Audio;
@@ -20,68 +21,85 @@ namespace MToolKit.Runtime.Components
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<AudioButtonComponent>().ForFeature("Components"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 
+    [SerializeField]
+    [Tooltip("Reusable click/select/hover sound package. When unset, legacy inline settings are used.")]
+    [Required]
+    private AudioButtonConfig audioConfig;
+
     [BoxGroup("Audio Clips")]
     [SerializeField]
+    [HideInInspector]
     private List<AudioClip> clickAudioClips = new();
 
     [BoxGroup("Audio Clips")]
     [SerializeField]
+    [HideInInspector]
     private List<AudioClip> selectAudioClips = new();
 
     [BoxGroup("Audio Clips")]
     [SerializeField]
+    [HideInInspector]
     private List<AudioClip> hoverAudioClips = new();
     
     [BoxGroup("Audio Settings")]
     [SerializeField]
+    [HideInInspector]
     [Range(0f, 1f)]
     [Tooltip("Volume multiplier for click sounds")]
     private float clickVolume = 1f;
 
     [BoxGroup("Audio Settings")]
     [SerializeField]
+    [HideInInspector]
     [Range(0f, 1f)]
     [Tooltip("Volume multiplier for select sounds")]
     private float selectVolume = 0.8f;
 
     [BoxGroup("Audio Settings")]
     [SerializeField]
+    [HideInInspector]
     [Range(0f, 1f)]
     [Tooltip("Volume multiplier for hover sounds")]
     private float hoverVolume = 0.8f;
     
     [BoxGroup("Audio Settings")]
     [SerializeField]
+    [HideInInspector]
     [Range(0.5f, 2f)]
     [Tooltip("Pitch variation for click sounds")]
     private float clickPitch = 1f;
 
     [BoxGroup("Audio Settings")]
     [SerializeField]
+    [HideInInspector]
     [Range(0.5f, 2f)]
     [Tooltip("Pitch variation for select sounds")]
     private float selectPitch = 1f;
 
     [BoxGroup("Audio Settings")]
     [SerializeField]
+    [HideInInspector]
     [Range(0.5f, 2f)]
     [Tooltip("Pitch variation for hover sounds")]
     private float hoverPitch = 1f;
     
     [BoxGroup("Cooldown Settings")]
     [SerializeField]
+    [HideInInspector]
     [MinValue(0f)]
     [Tooltip("Minimum time between click sounds to prevent spam")]
     private float clickCooldown = 0.1f;
 
     [BoxGroup("Cooldown Settings")]
     [SerializeField]
+    [HideInInspector]
     [MinValue(0f)]
     [Tooltip("Minimum time between select sounds to prevent spam")]
     private float selectCooldown = 0.05f;
 
     [BoxGroup("Cooldown Settings")]
     [SerializeField]
+    [HideInInspector]
     [MinValue(0f)]
     [Tooltip("Minimum time between hover sounds to prevent spam")]
     private float hoverCooldown = 0.05f;
@@ -143,13 +161,18 @@ namespace MToolKit.Runtime.Components
         return;
       }
 
-      if (Time.time - lastSelectTime < selectCooldown)
+      AudioCueConfig cue = audioConfig != null ? audioConfig.select : null;
+      float cooldown = cue?.cooldown ?? selectCooldown;
+      IReadOnlyList<AudioClip> clips = cue?.clips ?? selectAudioClips;
+      if (cue != null && !cue.enabled) return;
+
+      if (Time.time - lastSelectTime < cooldown)
       {
         log.ForMethod().Debug("Select sound skipped due to cooldown on {0}", gameObject.name);
         return;
       }
 
-      if (selectAudioClips == null || selectAudioClips.Count == 0)
+      if (clips == null || clips.Count == 0)
       {
         log.ForMethod().Warning("No select audio clips assigned to {0}", gameObject.name);
         return;
@@ -157,7 +180,8 @@ namespace MToolKit.Runtime.Components
 
       try
       {
-        audioService.PlayOneShot(selectAudioClips, volume: selectVolume, pitch: selectPitch, audioType: EAudioTypes.Interface);
+        audioService.PlayOneShot(clips, volume: cue?.volume ?? selectVolume, pitch: cue?.pitch ?? selectPitch,
+          audioType: cue?.audioType ?? EAudioTypes.Interface);
         lastSelectTime = Time.time;
         log.ForMethod().Verbose("Select sound played on {0}", gameObject.name);
       }
@@ -175,13 +199,18 @@ namespace MToolKit.Runtime.Components
         return;
       }
 
-      if (Time.time - lastHoverTime < hoverCooldown)
+      AudioCueConfig cue = audioConfig != null ? audioConfig.hover : null;
+      float cooldown = cue?.cooldown ?? hoverCooldown;
+      IReadOnlyList<AudioClip> clips = cue?.clips ?? hoverAudioClips;
+      if (cue != null && !cue.enabled) return;
+
+      if (Time.time - lastHoverTime < cooldown)
       {
         log.ForMethod().Debug("Hover sound skipped due to cooldown on {0}", gameObject.name);
         return;
       }
 
-      if (hoverAudioClips == null || hoverAudioClips.Count == 0)
+      if (clips == null || clips.Count == 0)
       {
 //        log.ForMethod().Warning("No hover audio clips assigned to {0}", gameObject.name);
         return;
@@ -189,7 +218,8 @@ namespace MToolKit.Runtime.Components
 
       try
       {
-        audioService.PlayOneShot(hoverAudioClips, volume: hoverVolume, pitch: hoverPitch, audioType: EAudioTypes.Interface);
+        audioService.PlayOneShot(clips, volume: cue?.volume ?? hoverVolume, pitch: cue?.pitch ?? hoverPitch,
+          audioType: cue?.audioType ?? EAudioTypes.Interface);
         lastHoverTime = Time.time;
         log.ForMethod().Verbose("Hover sound played on {0}", gameObject.name);
       }
@@ -227,13 +257,18 @@ namespace MToolKit.Runtime.Components
         return;
       }
 
-      if (Time.time - lastClickTime < clickCooldown)
+      AudioCueConfig cue = audioConfig != null ? audioConfig.click : null;
+      float cooldown = cue?.cooldown ?? clickCooldown;
+      IReadOnlyList<AudioClip> clips = cue?.clips ?? clickAudioClips;
+      if (cue != null && !cue.enabled) return;
+
+      if (Time.time - lastClickTime < cooldown)
       {
         log.ForMethod().Debug("Click sound skipped due to cooldown on {0}", gameObject.name);
         return;
       }
 
-      if (clickAudioClips == null || clickAudioClips.Count == 0)
+      if (clips == null || clips.Count == 0)
       {
         log.ForMethod().Warning("No click audio clips assigned to {0}", gameObject.name);
         return;
@@ -241,7 +276,8 @@ namespace MToolKit.Runtime.Components
 
       try
       {
-        audioService.PlayOneShot(clickAudioClips, volume: clickVolume, pitch: clickPitch, audioType: EAudioTypes.Interface);
+        audioService.PlayOneShot(clips, volume: cue?.volume ?? clickVolume, pitch: cue?.pitch ?? clickPitch,
+          audioType: cue?.audioType ?? EAudioTypes.Interface);
         lastClickTime = Time.time;
         log.ForMethod().Verbose("Click sound played on {0}", gameObject.name);
       }
@@ -255,7 +291,7 @@ namespace MToolKit.Runtime.Components
     [PropertyOrder(100)]
     private void TestClickSound()
     {
-      if (Application.isPlaying && clickAudioClips is {Count: > 0 })
+      if (Application.isPlaying && (audioConfig?.click?.clips is {Count: > 0 } || clickAudioClips is {Count: > 0 }))
         OnClick();
       else
         log.ForMethod().Warning("Cannot test click sound - not in play mode or no clips assigned");
@@ -265,7 +301,7 @@ namespace MToolKit.Runtime.Components
     [PropertyOrder(101)]
     private void TestSelectSound()
     {
-      if (Application.isPlaying && selectAudioClips is {Count: > 0 })
+      if (Application.isPlaying && (audioConfig?.select?.clips is {Count: > 0 } || selectAudioClips is {Count: > 0 }))
         OnSelect(null);
       else
         log.ForMethod().Warning("Cannot test select sound - not in play mode or no clips assigned");
@@ -275,7 +311,7 @@ namespace MToolKit.Runtime.Components
     [PropertyOrder(102)]
     private void TestHoverSound()
     {
-      if (Application.isPlaying && hoverAudioClips is {Count: > 0 })
+      if (Application.isPlaying && (audioConfig?.hover?.clips is {Count: > 0 } || hoverAudioClips is {Count: > 0 }))
         OnHover(null);
       else
         log.ForMethod().Warning("Cannot test hover sound - not in play mode or no clips assigned");
