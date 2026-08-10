@@ -18,7 +18,6 @@ namespace MToolKit.Runtime.Settings.UI
     private static ILogger log => logLazy.Value ?? Logger.None;
     
     [SerializeField]
-    [Required]
     private SubviewManager subviewManager;
 
     [SerializeField]
