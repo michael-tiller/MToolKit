@@ -27,6 +27,9 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     // Tuned conservatively; can be lowered as the perf budget tightens.
     private const long SlowControllerThresholdMs = 100;
 
+    /// <summary>Controller type names that failed during the last <see cref="LoadAsync"/>. Empty on success.</summary>
+    public IReadOnlyList<string> FailedControllers { get; private set; } = Array.Empty<string>();
+
     [ShowInInspector]
     [ReadOnly]
     private readonly ES3SaveConfig config;
@@ -186,8 +189,27 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       {
         log.ForMethod().Verbose("Starting ES3 load operation with {0} domain controllers", domainControllers.Count());
 
-        // Load all domain controllers in parallel
-        await UniTask.WhenAll(domainControllers.Select(d => d.LoadAsync(ct)));
+        // Load each controller with fault isolation so one failure doesn't mask the rest.
+        var failures = new List<(string Controller, Exception Error)>();
+        foreach (ISaveDomainController controller in domainControllers)
+        {
+          ct.ThrowIfCancellationRequested();
+          string name = controller.GetType().FullName ?? controller.GetType().Name;
+          try
+          {
+            await controller.LoadAsync(ct);
+          }
+          catch (OperationCanceledException) { throw; }
+          catch (Exception ex)
+          {
+            failures.Add((name, ex));
+            log.ForMethod().Error(ex, "Save controller {Controller} failed during load", name);
+          }
+        }
+        if (failures.Count > 0)
+          FailedControllers = failures.Select(f => f.Controller).ToArray();
+        else
+          FailedControllers = Array.Empty<string>();
 
         // Update the main load timestamp
         await es3Service.LoadAsync(ct);

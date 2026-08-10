@@ -108,6 +108,14 @@ namespace MToolKit.Runtime.Persistence
     /// </summary>
     public TruncationReport LastLoadTruncationReport { get; private set; } = TruncationReport.Empty;
 
+    /// <summary>Monotonically increasing counter incremented on each <see cref="LoadAsync"/> attempt.</summary>
+    public int LoadGeneration { get; private set; }
+
+    /// <summary>Controller type names that failed during the last <see cref="LoadAsync"/>. Empty on success or before first load.</summary>
+    public IReadOnlyList<string> LastFailedControllers =>
+        (useLocalSystem ? localSaveSystem : globalSaveSystem)?.FailedControllers
+        ?? Array.Empty<string>();
+
     /// <summary>
     ///   Fires after a successful <see cref="LoadAsync"/> completes, allowing subscribers
     ///   to perform post-load cross-controller hydration (e.g. resolve references that
@@ -392,7 +400,8 @@ namespace MToolKit.Runtime.Persistence
         throw new InvalidOperationException("No active save system available");
       }
 
-      log.ForMethod().Information("Loading using {0} system", useLocalSystem ? "local" : "global");
+      LoadGeneration++;
+      log.ForMethod().Information("Loading using {0} system (generation {1})", useLocalSystem ? "local" : "global", LoadGeneration);
 
       // Validate first; only then take the load gate and touch the truncation reporter.
       // The gate serializes overlapping LoadAsync calls so the reporter's load scope is not
