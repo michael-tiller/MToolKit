@@ -84,6 +84,7 @@ namespace MToolKit.Runtime.MessageBus
       isInitialized = false;
       hasStarted = false;
       lifecycleReporter = null;
+      loggedViolations.Clear();
     }
 #endif
 
@@ -91,6 +92,8 @@ namespace MToolKit.Runtime.MessageBus
       isInitialized && resolver != null
         ? BrokerLifecyclePhase.Initialized
         : hasStarted ? BrokerLifecyclePhase.Shutdown : BrokerLifecyclePhase.PreInit;
+
+    private static readonly HashSet<string> loggedViolations = new();
 
     private static void ReportUnavailableAccess(string operation, Type messageType)
     {
@@ -108,12 +111,16 @@ namespace MToolKit.Runtime.MessageBus
         log.ForMethod().Error(ex, "{0} lifecycle reporter failed while recording {1}<{2}>", scope.Name, operation, messageType?.Name);
       }
 
-      log.ForMethod().Error(
-        "{0} broker access before/after its lifecycle: {1}<{2}> at {3}",
-        scope.Name,
-        operation,
-        messageType?.Name,
-        access.Phase);
+      string key = $"{scope.Name}|{operation}|{messageType?.FullName}|{access.Phase}";
+      if (loggedViolations.Add(key))
+      {
+        log.ForMethod().Warning(
+          "{0} broker access before/after its lifecycle: {1}<{2}> at \"{3}\"",
+          scope.Name,
+          operation,
+          messageType?.Name,
+          access.Phase);
+      }
     }
 
     internal static IPublisher<T> GetPublisher<T>()
@@ -371,6 +378,7 @@ namespace MToolKit.Runtime.MessageBus
       accessedSubscribers.Clear();
 #endif
 
+      loggedViolations.Clear();
       log.ForMethod().Verbose("{0} reset", scope.Name);
     }
 
