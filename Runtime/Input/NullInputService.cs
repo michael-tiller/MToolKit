@@ -3,6 +3,7 @@ using MToolKit.Runtime.Input.Interfaces;
 using Serilog;
 using Serilog.Core;
 using ILogger = Serilog.ILogger;
+using Vector2 = UnityEngine.Vector2;
 
 namespace MToolKit.Runtime.Input
 {
@@ -49,5 +50,14 @@ namespace MToolKit.Runtime.Input
     {
       return false;
     }
+
+    public Vector2 PointerPosition => Vector2.zero;
+    public bool LeftButtonPressedThisFrame => false;
+    public bool LeftButtonReleasedThisFrame => false;
+    public bool LeftButtonHeld => false;
+    public bool RightButtonPressedThisFrame => false;
+    public bool RightButtonReleasedThisFrame => false;
+    public bool RightButtonHeld => false;
+    public bool CancelPressedThisFrame => false;
   }
 }

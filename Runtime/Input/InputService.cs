@@ -5,6 +5,7 @@ using Serilog;
 using Serilog.Core;
 using ILogger = Serilog.ILogger;
 using Object = UnityEngine.Object;
+using Vector2 = UnityEngine.Vector2;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 
@@ -318,6 +319,29 @@ namespace MToolKit.Runtime.Input
 
       return false;
     }
+
+    // Pointer + button + cancel edge state. Read straight off the input backend statics so the
+    // production source stays framework-owned; the interface makes the whole surface mockable for
+    // consumers (armed cursor tools) that must be EditMode-testable.
+#if ENABLE_INPUT_SYSTEM
+    public Vector2 PointerPosition => Mouse.current != null ? Mouse.current.position.ReadValue() : Vector2.zero;
+    public bool LeftButtonPressedThisFrame => Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame;
+    public bool LeftButtonReleasedThisFrame => Mouse.current != null && Mouse.current.leftButton.wasReleasedThisFrame;
+    public bool LeftButtonHeld => Mouse.current != null && Mouse.current.leftButton.isPressed;
+    public bool RightButtonPressedThisFrame => Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame;
+    public bool RightButtonReleasedThisFrame => Mouse.current != null && Mouse.current.rightButton.wasReleasedThisFrame;
+    public bool RightButtonHeld => Mouse.current != null && Mouse.current.rightButton.isPressed;
+    public bool CancelPressedThisFrame => Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;
+#else
+    public Vector2 PointerPosition => Vector2.zero;
+    public bool LeftButtonPressedThisFrame => false;
+    public bool LeftButtonReleasedThisFrame => false;
+    public bool LeftButtonHeld => false;
+    public bool RightButtonPressedThisFrame => false;
+    public bool RightButtonReleasedThisFrame => false;
+    public bool RightButtonHeld => false;
+    public bool CancelPressedThisFrame => false;
+#endif
 
 #if ENABLE_INPUT_SYSTEM
     private void OnPauseActionPerformed(InputAction.CallbackContext context)
