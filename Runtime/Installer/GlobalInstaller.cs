@@ -787,7 +787,7 @@ namespace MToolKit.Runtime.Installer
 
         // Check if we need to hide canvases based on current scene
         // This handles the case where NavigationPlugin is created after scene load
-        CheckAndApplyNavigationCanvasVisibility(navigationPlugin);
+        CheckAndApplyNavigationCanvasVisibility(navigationPlugin).Forget();
       }
       else
       {
@@ -887,17 +887,44 @@ namespace MToolKit.Runtime.Installer
           foreach (AbstractGamePlugin plugin in instantiatedGlobalPlugins)
             if (plugin is IRuntimePlugin runtimePlugin)
             {
-              // Skip plugins that implement IAsyncStartable - they're handled by RegisterEntryPoint
-              if (plugin is IAsyncStartable)
+              // Isolate each plugin's lifecycle. A scene transition can destroy a plugin while
+              // its async initialization is suspended; that must not abort initialization of all
+              // later global plugins (including navigation-related services).
+              try
               {
-                log.ForGameObject(gameObject).ForMethod().Verbose("Skipping {0} initialization - handled by RegisterEntryPoint", plugin.name);
-                continue;
-              }
+                // Skip plugins that implement IAsyncStartable - they're handled by RegisterEntryPoint
+                if (plugin is IAsyncStartable)
+                {
+                  string asyncPluginName = plugin != null ? plugin.name : "<destroyed>";
+                  log.ForGameObject(gameObject).ForMethod().Verbose("Skipping {0} initialization - handled by RegisterEntryPoint", asyncPluginName);
+                  continue;
+                }
 
-              runtimePlugin.PerformSetup(resolver);
-              if (runtimePlugin.AreDependenciesReady(resolver))
-                await runtimePlugin.PerformRuntimeInitializationAsync(resolver);
-              log.ForGameObject(gameObject).ForMethod().Verbose("Initialized global runtime plugin: {0}", plugin.name);
+                if (plugin == null)
+                {
+                  log.ForGameObject(gameObject).ForMethod().Warning("Skipping destroyed global runtime plugin during initialization");
+                  continue;
+                }
+
+                runtimePlugin.PerformSetup(resolver);
+                if (runtimePlugin.AreDependenciesReady(resolver))
+                  await runtimePlugin.PerformRuntimeInitializationAsync(resolver);
+
+                // A plugin may be destroyed during its awaited initialization. Unity overloads
+                // Object.name and throws for destroyed objects, so never dereference it without
+                // a Unity-null guard.
+                string pluginName = plugin != null ? plugin.name : "<destroyed during initialization>";
+                log.ForGameObject(gameObject).ForMethod().Verbose("Initialized global runtime plugin: {0}", pluginName);
+              }
+              catch (MissingReferenceException)
+              {
+                log.ForGameObject(gameObject).ForMethod().Warning("Global runtime plugin was destroyed during initialization; continuing");
+              }
+              catch (Exception ex)
+              {
+                string pluginName = plugin != null ? plugin.name : "<destroyed>";
+                log.ForGameObject(gameObject).ForMethod().Error(ex, "Global runtime plugin {0} failed initialization; continuing", pluginName);
+              }
             }
 
           log.ForGameObject(gameObject).ForMethod().Verbose("Global runtime plugins initialization completed");
@@ -965,14 +992,14 @@ namespace MToolKit.Runtime.Installer
       }
 
       // Now handle visibility
-      HandleNavigationCanvasVisibility(loadedScene);
+      await HandleNavigationCanvasVisibility(loadedScene);
     }
 
     /// <summary>
     ///   Checks if navigation canvases should be hidden/shown based on current scene and applies it.
     ///   This is called when NavigationPlugin is found/refreshed to ensure canvases are hidden in gameplay scenes.
     /// </summary>
-    private void CheckAndApplyNavigationCanvasVisibility(NavigationPlugin navigationPlugin)
+    private async UniTask CheckAndApplyNavigationCanvasVisibility(NavigationPlugin navigationPlugin)
     {
       if (navigationPlugin == null || navigationPlugin.gameObject == null)
         return;
@@ -986,8 +1013,8 @@ namespace MToolKit.Runtime.Installer
       AssetReferenceScene gameplaySceneRef = globalConstants.GameplaySceneReference;
       AssetReferenceScene menuSceneRef = globalConstants.MenuSceneReference;
 
-      bool isGameplayScene = IsSceneMatch(gameplaySceneRef, currentScene);
-      bool isMenuScene = IsSceneMatch(menuSceneRef, currentScene);
+      bool isGameplayScene = await IsSceneMatchAsync(gameplaySceneRef, currentScene);
+      bool isMenuScene = await IsSceneMatchAsync(menuSceneRef, currentScene);
 
       if (isGameplayScene)
       {
@@ -1013,7 +1040,7 @@ namespace MToolKit.Runtime.Installer
     /// <summary>
     ///   Hides navigation canvases when gameplay scene is loaded, shows them when menu scene is loaded.
     /// </summary>
-    private void HandleNavigationCanvasVisibility(Scene loadedScene)
+    private async UniTask HandleNavigationCanvasVisibility(Scene loadedScene)
     {
       // Find NavigationPlugin - try stored reference first, then search in scene
       NavigationPlugin navigationPlugin = NavigationPluginInstance;
@@ -1046,9 +1073,9 @@ namespace MToolKit.Runtime.Installer
       AssetReferenceScene menuSceneRef = globalConstants.MenuSceneReference;
 
       // Check if this is the gameplay scene
-      bool isGameplayScene = IsSceneMatch(gameplaySceneRef, loadedScene);
+      bool isGameplayScene = await IsSceneMatchAsync(gameplaySceneRef, loadedScene);
       // Check if this is the menu scene
-      bool isMenuScene = IsSceneMatch(menuSceneRef, loadedScene);
+      bool isMenuScene = await IsSceneMatchAsync(menuSceneRef, loadedScene);
 
       log.ForGameObject(gameObject).ForMethod().Verbose("Scene loaded: {0}, isGameplayScene: {1}, isMenuScene: {2}", loadedScene.name, isGameplayScene, isMenuScene);
 
@@ -1090,7 +1117,7 @@ namespace MToolKit.Runtime.Installer
     ///   Checks if a loaded scene matches an AssetReferenceScene by comparing scene names/paths.
     ///   Handles GUID-based RuntimeKeys by resolving them through Addressables.
     /// </summary>
-    private bool IsSceneMatch(AssetReferenceScene sceneRef, Scene loadedScene)
+    private async UniTask<bool> IsSceneMatchAsync(AssetReferenceScene sceneRef, Scene loadedScene)
     {
       if (sceneRef == null || !sceneRef.RuntimeKeyIsValid())
       {
@@ -1116,41 +1143,49 @@ namespace MToolKit.Runtime.Installer
         try
         {
           AsyncOperationHandle<IList<IResourceLocation>> locationHandle = Addressables.LoadResourceLocationsAsync(sceneKey);
-          if (locationHandle.IsDone && locationHandle.Status == AsyncOperationStatus.Succeeded)
+          try
           {
-            IList<IResourceLocation> locations = locationHandle.Result;
-            foreach (IResourceLocation location in locations)
-              if (location != null)
-              {
-                // Check InternalId which should contain the asset path
-                string internalId = location.InternalId;
-                if (!string.IsNullOrEmpty(internalId))
+            await locationHandle.ToUniTask();
+            if (locationHandle.Status == AsyncOperationStatus.Succeeded)
+            {
+              IList<IResourceLocation> locations = locationHandle.Result;
+              foreach (IResourceLocation location in locations)
+                if (location != null)
                 {
-                  // Extract scene name from path (e.g., "Assets/_Template/Data/Scenes/Menu.unity" -> "Menu")
-                  string sceneNameFromPath = Path.GetFileNameWithoutExtension(internalId);
-
-                  // Compare with loaded scene name
-                  if (string.Equals(sceneNameFromPath, loadedScene.name, StringComparison.OrdinalIgnoreCase))
+                  // Check InternalId which should contain the asset path
+                  string internalId = location.InternalId;
+                  if (!string.IsNullOrEmpty(internalId))
                   {
-                    log.ForGameObject(gameObject).ForMethod().Verbose("Scene match found via GUID resolution: '{0}' -> '{1}'", sceneKey, internalId);
-                    return true;
-                  }
+                    // Extract scene name from path (e.g., "Assets/_Template/Data/Scenes/Menu.unity" -> "Menu")
+                    string sceneNameFromPath = Path.GetFileNameWithoutExtension(internalId);
 
-                  // Also compare with full path if available
-                  if (!string.IsNullOrEmpty(loadedScene.path))
-                  {
-                    // Normalize paths for comparison (remove leading/trailing slashes, handle different separators)
-                    string normalizedInternalId = internalId.Replace('\\', '/').Trim('/');
-                    string normalizedLoadedPath = loadedScene.path.Replace('\\', '/').Trim('/');
-
-                    if (string.Equals(normalizedInternalId, normalizedLoadedPath, StringComparison.OrdinalIgnoreCase))
+                    // Compare with loaded scene name
+                    if (string.Equals(sceneNameFromPath, loadedScene.name, StringComparison.OrdinalIgnoreCase))
                     {
-                      log.ForGameObject(gameObject).ForMethod().Verbose("Scene match found via GUID resolution (full path): '{0}' -> '{1}'", sceneKey, internalId);
+                      log.ForGameObject(gameObject).ForMethod().Verbose("Scene match found via GUID resolution: '{0}' -> '{1}'", sceneKey, internalId);
                       return true;
+                    }
+
+                    // Also compare with full path if available
+                    if (!string.IsNullOrEmpty(loadedScene.path))
+                    {
+                      // Normalize paths for comparison (remove leading/trailing slashes, handle different separators)
+                      string normalizedInternalId = internalId.Replace('\\', '/').Trim('/');
+                      string normalizedLoadedPath = loadedScene.path.Replace('\\', '/').Trim('/');
+
+                      if (string.Equals(normalizedInternalId, normalizedLoadedPath, StringComparison.OrdinalIgnoreCase))
+                      {
+                        log.ForGameObject(gameObject).ForMethod().Verbose("Scene match found via GUID resolution (full path): '{0}' -> '{1}'", sceneKey, internalId);
+                        return true;
+                      }
                     }
                   }
                 }
-              }
+            }
+          }
+          finally
+          {
+            Addressables.Release(locationHandle);
           }
         }
         catch (InvalidKeyException ex)
