@@ -36,6 +36,8 @@ namespace MToolKit.Runtime.MessageBus
 
     private static IObjectResolver resolver;
     private static bool isInitialized;
+    private static bool hasStarted;
+    private static IBrokerLifecycleReporter lifecycleReporter;
 
     /// <summary>Per-scope interceptor storage — this is what keeps game and global registrations apart.</summary>
     private static readonly InterceptorRegistry interceptors = new();
@@ -67,14 +69,58 @@ namespace MToolKit.Runtime.MessageBus
 
       resolver = objectResolver;
       isInitialized = true;
+      hasStarted = true;
       log.ForMethod().Verbose("{0} initialized", scope.Name);
+    }
+
+    internal static void SetLifecycleReporter(IBrokerLifecycleReporter reporter) => lifecycleReporter = reporter;
+
+    internal static void ClearLifecycleReporter() => lifecycleReporter = null;
+
+#if UNITY_EDITOR
+    internal static void ResetLifecycleForTests()
+    {
+      resolver = null;
+      isInitialized = false;
+      hasStarted = false;
+      lifecycleReporter = null;
+    }
+#endif
+
+    private static BrokerLifecyclePhase CurrentLifecyclePhase =>
+      isInitialized && resolver != null
+        ? BrokerLifecyclePhase.Initialized
+        : hasStarted ? BrokerLifecyclePhase.Shutdown : BrokerLifecyclePhase.PreInit;
+
+    private static void ReportUnavailableAccess(string operation, Type messageType)
+    {
+      BrokerLifecycleAccess access = new(
+        scope.Name,
+        operation,
+        messageType?.FullName ?? "<null>",
+        CurrentLifecyclePhase);
+      try
+      {
+        lifecycleReporter?.Report(access);
+      }
+      catch (Exception ex)
+      {
+        log.ForMethod().Error(ex, "{0} lifecycle reporter failed while recording {1}<{2}>", scope.Name, operation, messageType?.Name);
+      }
+
+      log.ForMethod().Error(
+        "{0} broker access before/after its lifecycle: {1}<{2}> at {3}",
+        scope.Name,
+        operation,
+        messageType?.Name,
+        access.Phase);
     }
 
     internal static IPublisher<T> GetPublisher<T>()
     {
       if (!isInitialized || resolver == null)
       {
-        log.ForMethod().Verbose("{0} not initialized; returning null publisher for {1}", scope.Name, typeof(T).Name);
+        ReportUnavailableAccess("GetPublisher", typeof(T));
         return null;
       }
 
@@ -102,7 +148,7 @@ namespace MToolKit.Runtime.MessageBus
     {
       if (!isInitialized || resolver == null)
       {
-        log.ForMethod().Verbose("{0} not initialized; returning null subscriber for {1}", scope.Name, typeof(T).Name);
+        ReportUnavailableAccess("GetSubscriber", typeof(T));
         return null;
       }
 
@@ -154,7 +200,7 @@ namespace MToolKit.Runtime.MessageBus
       // An unavailable broker bypasses the pipeline entirely — no pre ops, no subscribers, no post ops.
       if (!IsAvailable())
       {
-        log.ForMethod().Verbose("Skipping publish of {0} - broker not available (likely during shutdown or before initialization)", typeof(T).Name);
+        ReportUnavailableAccess("Publish", typeof(T));
         return;
       }
 
@@ -209,7 +255,7 @@ namespace MToolKit.Runtime.MessageBus
     {
       if (!isInitialized || resolver == null)
       {
-        log.ForMethod().Error("{0} not initialized", scope.Name);
+        ReportUnavailableAccess("RequestAsync", typeof(TRequest));
         return default;
       }
 
@@ -309,6 +355,7 @@ namespace MToolKit.Runtime.MessageBus
     {
       resolver = null;
       isInitialized = false;
+      hasStarted = true;
 
       // Cancel all pending requests
       foreach (KeyValuePair<Type, ConcurrentQueue<(string RequestId, TaskCompletionSource<object> Tcs)>> kvp in pendingRequestsByType)

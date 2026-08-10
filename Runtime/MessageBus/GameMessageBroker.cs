@@ -22,6 +22,14 @@ namespace MToolKit.Runtime.MessageBus
     /// </summary>
     public static void Initialize(IObjectResolver resolver) => MessageBrokerCore<GameScope>.Initialize(resolver);
 
+    public static void SetLifecycleReporter(IBrokerLifecycleReporter reporter) => MessageBrokerCore<GameScope>.SetLifecycleReporter(reporter);
+
+    public static void ClearLifecycleReporter() => MessageBrokerCore<GameScope>.ClearLifecycleReporter();
+
+#if UNITY_EDITOR
+    internal static void ResetLifecycleForTests() => MessageBrokerCore<GameScope>.ResetLifecycleForTests();
+#endif
+
     /// <summary>
     ///   Get a publisher for the specified message type.
     ///   Returns null if the broker is not initialized (shutdown/pre-init grace).
