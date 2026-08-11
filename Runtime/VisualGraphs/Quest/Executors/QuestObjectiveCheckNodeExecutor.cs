@@ -51,6 +51,12 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       // Handle ObjectiveAssetReference directly
       if (objectiveParam is ObjectiveAssetReference objectiveAssetRef)
       {
+        if (!TryLocateObjective(objectiveAssetRef.RuntimeKey))
+        {
+          EnqueueAllOutputs(graph, node, context);
+          return;
+        }
+
         var handle = Addressables.LoadAssetAsync<QuestObjective>(objectiveAssetRef);
         objectiveDef = await handle.ToUniTask(cancellationToken: ct);
         objectiveGuid = objectiveDef.Guid;
@@ -58,6 +64,12 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       // Handle SerializableAssetReference
       else if (objectiveParam is SerializableAssetReference assetRef)
       {
+        if (!TryLocateObjective(assetRef.AssetGuid))
+        {
+          EnqueueAllOutputs(graph, node, context);
+          return;
+        }
+
         var handle = Addressables.LoadAssetAsync<QuestObjective>(assetRef.AssetGuid);
         objectiveDef = await handle.ToUniTask(cancellationToken: ct);
         objectiveGuid = objectiveDef.Guid;
@@ -66,16 +78,14 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       {
         log.ForMethod().Warning("Quest: QuestObjectiveCheckNode 'Objective' parameter is not an ObjectiveAssetReference or SerializableAssetReference (type: {Type}), continuing to all outputs",
           objectiveParam?.GetType().Name ?? "null");
-        foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
-          context.EnqueueNext(connection.ToNodeId);
+        EnqueueAllOutputs(graph, node, context);
         return;
       }
 
       if (string.IsNullOrEmpty(objectiveGuid))
       {
         log.ForMethod().Warning("Quest: QuestObjectiveCheckNode has null objective GUID, continuing to all outputs");
-        foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
-          context.EnqueueNext(connection.ToNodeId);
+        EnqueueAllOutputs(graph, node, context);
         return;
       }
 
@@ -139,6 +149,20 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
         targetPort, matchingConnections.Count, objectiveGuid);
 
       foreach (var connection in matchingConnections)
+        context.EnqueueNext(connection.ToNodeId);
+    }
+
+    private static bool TryLocateObjective(object key)
+    {
+      return QuestObjectiveAddressableLocator.Exists(key, typeof(QuestObjective));
+    }
+
+    private static void EnqueueAllOutputs(
+      IRuntimeGraphDefinition graph,
+      RuntimeNodeDefinition node,
+      GraphNodeExecutionContext context)
+    {
+      foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
         context.EnqueueNext(connection.ToNodeId);
     }
   }

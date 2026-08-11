@@ -12,6 +12,23 @@ not a roadmap milestone.
 
 ### Added
 
+- `QuestObjectiveAddressableLocator` utility to validate Addressables key existence without triggering load errors in EditMode tests (v1.0.1)
+
+### Changed
+
+- Quest objective executors now pre-check asset existence before attempting Addressables load (v1.0.1)
+- Objective executors fall back to state-based lookup if asset doesn't exist (for missing or test-synthetic GUIDs) (v1.0.1)
+- Refactored duplicate "enqueue all outputs" pattern into helper methods across objective executors (v1.0.1)
+
+### Fixed
+
+- `Bootstrapper` now uses `DestroyImmediate` in Editor when not playing, preventing stale-handle errors (v1.0.1)
+- Quest objective executors no longer fail-load when Addressable keys reference non-existent or synthetic-GUID assets (v1.0.1)
+- Null reference exceptions by using optional-chaining and null-coalesce in objective definition access (v1.0.1)
+- Negative progress values now clamped to 0 in increment/set objective executors (v1.0.1)
+
+### Added
+
 - Message-bus interception — `GameMessageBroker`/`GlobalAsyncMessageBroker` gain `InterceptPre<T>` / `InterceptPost<T>` / `ResetInterceptors()`, plus `HandlerPriority` (First/Normal/Last bands) and the opt-in `ICancellableMessage`. A pre-op runs before the message reaches the bus and may veto it (`Cancel`); a post-op always runs afterward — including after a cancel and after a throwing subscriber — and can observe cancellation. Bands run ascending and registration order is execution order within a band. Registries are per broker scope, so game and global registrations never cross. A throwing interceptor is attributed to its `owner` and surfaced through `ErrorSystem` (i.e. `ErrorPanel`) rather than swallowed, with recursion closed by error-type suppression plus a reporting-depth guard. **Scope limit:** this intercepts the two static broker façades only — publishes made through an injected or resolved `IPublisher<T>` (e.g. `QuestManager`, `SettingsSystem`) are not intercepted. Cancellable messages must be reference types; this is enforced at registration and at dispatch, not merely documented. Purely additive — no existing call site changes.
 
 - `ProfileMetaData.WorldSettingsJson` — an opaque per-profile string blob for consuming projects to persist their own world/game-creation settings model, threaded through the constructor and `SaveProfile`'s pending-merge exactly like the existing `WorldSeed` field. `IProfileManager.SetWorldSettingsJson(string)` mirrors `SetWorldSeed`'s pending-field + live-metadata-update pattern. MToolKit does not interpret the JSON — it's opaque storage, same contract as the rest of `ProfileMetaData`. Legacy profiles without the field deserialize to an empty string (best-effort persistence).

@@ -296,7 +296,14 @@ namespace MToolKit.Runtime.Bootstrapper
       // Delay slightly to show completion UI
       await UniTask.Delay(500);
 
+#if UNITY_EDITOR
+      if (!Application.isPlaying)
+        DestroyImmediate(gameObjectRef);
+      else
+        Destroy(gameObjectRef);
+#else
       Destroy(gameObjectRef);
+#endif
     }
 
 #if ENABLE_INPUT_SYSTEM

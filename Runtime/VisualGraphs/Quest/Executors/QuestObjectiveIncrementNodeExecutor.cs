@@ -50,16 +50,42 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       // Handle ObjectiveAssetReference directly
       if (objectiveParam is ObjectiveAssetReference objectiveAssetRef)
       {
-        var handle = Addressables.LoadAssetAsync<QuestObjective>(objectiveAssetRef);
-        objectiveDef = await handle.ToUniTask(cancellationToken: ct);
-        objectiveGuid = objectiveDef.Guid;
+        if (!QuestObjectiveAddressableLocator.Exists(objectiveAssetRef.RuntimeKey, typeof(QuestObjective)))
+        {
+          objectiveGuid = objectiveAssetRef.AssetGUID;
+          if (string.IsNullOrEmpty(objectiveGuid) ||
+              !state.TryGet($"objective_{objectiveGuid}", out QuestObjectiveProgress _))
+          {
+            EnqueueAllOutputs(graph, node, context);
+            return;
+          }
+        }
+        else
+        {
+          var handle = Addressables.LoadAssetAsync<QuestObjective>(objectiveAssetRef);
+          objectiveDef = await handle.ToUniTask(cancellationToken: ct);
+          objectiveGuid = objectiveDef.Guid;
+        }
       }
       // Handle SerializableAssetReference
       else if (objectiveParam is SerializableAssetReference assetRef)
       {
-        var handle = Addressables.LoadAssetAsync<QuestObjective>(assetRef.AssetGuid);
-        objectiveDef = await handle.ToUniTask(cancellationToken: ct);
-        objectiveGuid = objectiveDef.Guid;
+        if (!QuestObjectiveAddressableLocator.Exists(assetRef.AssetGuid, typeof(QuestObjective)))
+        {
+          objectiveGuid = assetRef.AssetGuid;
+          if (string.IsNullOrEmpty(objectiveGuid) ||
+              !state.TryGet($"objective_{objectiveGuid}", out QuestObjectiveProgress _))
+          {
+            EnqueueAllOutputs(graph, node, context);
+            return;
+          }
+        }
+        else
+        {
+          var handle = Addressables.LoadAssetAsync<QuestObjective>(assetRef.AssetGuid);
+          objectiveDef = await handle.ToUniTask(cancellationToken: ct);
+          objectiveGuid = objectiveDef.Guid;
+        }
       }
       else
       {
@@ -70,7 +96,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
         return;
       }
 
-      if (objectiveDef == null || string.IsNullOrEmpty(objectiveGuid))
+      if (string.IsNullOrEmpty(objectiveGuid))
       {
         log.ForMethod().Warning("Quest: QuestObjectiveIncrementNode has null objective GUID, continuing execution");
         foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
@@ -106,7 +132,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
         {
           ObjectiveGuid = objectiveGuid,
           Current = 0,
-          Required = objectiveDef.RequiredProgress
+          Required = objectiveDef?.RequiredProgress ?? 1
         };
         log.ForMethod().Debug("Quest: Initialized new progress for objective {ObjectiveGuid} (required: {Required})",
           objectiveGuid, progress.Required);
@@ -117,6 +143,8 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       progress.Current += amount;
 
       // Clamp to required value (don't overshoot)
+      if (progress.Current < 0)
+        progress.Current = 0;
       if (progress.Current > progress.Required)
         progress.Current = progress.Required;
 
@@ -165,6 +193,15 @@ namespace MToolKit.Runtime.VisualGraphs.Quest.Executors
       }
 
       // Continue to connected nodes
+      foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
+        context.EnqueueNext(connection.ToNodeId);
+    }
+
+    private static void EnqueueAllOutputs(
+      IRuntimeGraphDefinition graph,
+      RuntimeNodeDefinition node,
+      GraphNodeExecutionContext context)
+    {
       foreach (var connection in graph.GetConnectionsFrom(node.NodeId))
         context.EnqueueNext(connection.ToNodeId);
     }
