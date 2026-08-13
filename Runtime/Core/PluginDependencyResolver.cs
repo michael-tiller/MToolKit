@@ -137,15 +137,9 @@ namespace MToolKit.Runtime.Core
     private bool IsExternallyRegisteredService(Type serviceType)
     {
       // Services registered directly in GameInstaller (not by plugins)
-      string serviceName = serviceType.Name;
-
-      // Services registered in GameInstaller
-      return serviceName == "IInventoryService" ||
-             serviceName == "ITilemapService" ||
-             serviceName == "IMouseOverService" ||
-             serviceName == "INavigationService" ||
-             serviceName == "IOneShotAudioService" ||
-             serviceName == "IInventoryPanelCoordinator";
+      // Application services are now declared by their owning composition module. The resolver
+      // intentionally does not infer ownership from a historical name allowlist.
+      return false;
     }
 
     private bool WouldCreateCircularDependency(Type providerType, Type dependentType, Dictionary<Type, List<Type>> graph)
@@ -202,28 +196,8 @@ namespace MToolKit.Runtime.Core
         }
       }
 
-      // Check for known service providers by plugin type and service name
-      if (pluginType.Name == "PlayerPlugin")
-        // PlayerPlugin provides IPlayerService and IRangeCalculationService
-        if (serviceType.Name == "IPlayerService" || serviceType.Name == "IRangeCalculationService")
-          return true;
-
-      if (pluginType.Name == "InventoryPlugin")
-        // InventoryPlugin provides IInventoryService
-        if (serviceType.Name == "IInventoryService")
-          return true;
-
-      if (pluginType.Name == "TooltipPlugin")
-        // TooltipPlugin provides ITooltipSystem
-        if (serviceType.Name == "ITooltipSystem")
-          return true;
-
-      if (pluginType.Name == "NavigationPlugin")
-        // NavigationPlugin provides INavigationService
-        if (serviceType.Name == "INavigationService")
-          return true;
-
-      // Check for specific service registrations by naming convention
+      // Providers must be represented by a generic DomainPlugin/ConfigPlugin contract or an
+      // explicit plugin capability declaration; historical plugin-name inference is retired.
       return pluginType.Name.Contains(serviceType.Name.Replace("System", "").Replace("Service", ""));
     }
 
