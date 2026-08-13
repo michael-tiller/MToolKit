@@ -16,8 +16,10 @@ using R3;
 using Serilog;
 using Serilog.Core;
 using Sirenix.OdinInspector;
+using UnityEngine;
 using VContainer;
 using ILogger = Serilog.ILogger;
+using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.Settings
 {
@@ -330,6 +332,10 @@ namespace MToolKit.Runtime.Settings
           if (iniService.KeyExists("Game", "AnalyticsEnabled"))
             GameSettings.AnalyticsEnabled.Value = iniService.GetValue<bool>("Game", "AnalyticsEnabled", GameSettings.AnalyticsEnabled.Default);
         }
+
+        // ponytail: headless builds must not blast audio
+        if (Application.isBatchMode && AudioSettings != null)
+          AudioSettings.MasterVolume.Value = 0f;
 
         // Mark as applied so they're not dirty
         GraphicsSettings?.Apply();

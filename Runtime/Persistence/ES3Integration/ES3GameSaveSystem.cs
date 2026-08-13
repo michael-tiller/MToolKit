@@ -174,7 +174,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         /// </summary>
         /// <param name="ct">Cancellation token</param>
         /// <returns>UniTask for the load operation</returns>
-        public async UniTask LoadAsync(CancellationToken ct = default)
+    public async UniTask LoadAsync(CancellationToken ct = default)
     {
       // Check cancellation token before proceeding
       ct.ThrowIfCancellationRequested();
@@ -226,6 +226,70 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         log.ForMethod().Error(ex, "ES3 load operation failed: {ExType}: {ExFull}", ex.GetType().Name, ex.ToString());
         throw;
       }
+    }
+
+    /// <summary>
+    /// Loads controllers in a caller-supplied, validated transaction order.  The legacy overload
+    /// intentionally retains its fault-isolating behavior for existing consumers; new application
+    /// transactions use this overload so a required failure prevents every dependent controller
+    /// from observing or mutating a partial aggregate.
+    /// </summary>
+    public async UniTask<IReadOnlyList<string>> LoadAsync(
+      IReadOnlyList<string> orderedControllerTypeNames,
+      Func<string, bool> isRequired,
+      CancellationToken ct = default)
+    {
+      if (orderedControllerTypeNames == null) throw new ArgumentNullException(nameof(orderedControllerTypeNames));
+      if (isRequired == null) throw new ArgumentNullException(nameof(isRequired));
+      ct.ThrowIfCancellationRequested();
+
+      if (IsLoading.Value)
+      {
+        log.ForMethod().Warning("Load operation already in progress");
+        return Array.Empty<string>();
+      }
+
+      var controllersByType = (domainControllers ?? Enumerable.Empty<ISaveDomainController>())
+        .Where(controller => controller != null)
+        .ToDictionary(
+          controller => controller.GetType().FullName ?? controller.GetType().Name,
+          controller => controller,
+          StringComparer.Ordinal);
+      var failures = new List<string>();
+
+      foreach (string controllerTypeName in orderedControllerTypeNames)
+      {
+        ct.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(controllerTypeName))
+          throw new ArgumentException("Ordered load contains an empty controller type name.", nameof(orderedControllerTypeNames));
+
+        if (!controllersByType.TryGetValue(controllerTypeName, out ISaveDomainController controller))
+        {
+          failures.Add(controllerTypeName);
+          if (isRequired(controllerTypeName)) break;
+          continue;
+        }
+
+        try
+        {
+          await controller.LoadAsync(ct);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+          failures.Add(controllerTypeName);
+          log.ForMethod().Error(ex, "Save controller {Controller} failed during ordered load", controllerTypeName);
+          if (isRequired(controllerTypeName)) break;
+        }
+      }
+
+      FailedControllers = failures.ToArray();
+      if (failures.Any(isRequired))
+        return FailedControllers;
+
+      await es3Service.LoadAsync(ct);
+      log.ForMethod().Verbose("Ordered ES3 load operation completed successfully");
+      return FailedControllers;
     }
 
         /// <summary>

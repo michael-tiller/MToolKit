@@ -6,6 +6,7 @@ using MToolKit.Runtime.Core.Interfaces;
 using MToolKit.Runtime.ErrorSystem.Messages;
 using MToolKit.Runtime.MessageBus;
 using Serilog;
+using UnityEngine;
 using VContainer;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
@@ -13,6 +14,22 @@ using Logger = Serilog.Core.Logger;
 
 namespace MToolKit.Runtime.Core
 {
+  /// <summary>
+  ///   Identifies the plugin that failed during the awaited runtime-initialization transaction.
+  ///   The application boot owner decides whether this is fatal or an explicitly classified
+  ///   optional degradation; the registry must never turn it into a log-only success.
+  /// </summary>
+  public sealed class PluginRuntimeInitializationException : InvalidOperationException
+  {
+    public string PluginName { get; }
+
+    public PluginRuntimeInitializationException(string pluginName, Exception innerException)
+      : base($"Plugin runtime initialization failed: {pluginName}", innerException)
+    {
+      PluginName = pluginName;
+    }
+  }
+
   
   /// <summary>
   ///   The plugin registry for managing game plugins and runtime plugins.
@@ -130,6 +147,15 @@ namespace MToolKit.Runtime.Core
 
       foreach (IRuntimePlugin plugin in pluginsCopy)
       {
+        // Scene transitions can complete an awaited plugin before this sequential pass
+        // reaches it. A Unity-null entry belongs to the superseded boot generation and
+        // must not turn the replacement scene's startup into a false fatal failure.
+        if (plugin is UnityEngine.Object unityPlugin && unityPlugin == null)
+        {
+          log.Debug("Skipping destroyed runtime plugin during async initialization");
+          continue;
+        }
+
         string pluginName = plugin.GetType().Name;
         try
         {
@@ -237,6 +263,12 @@ namespace MToolKit.Runtime.Core
       int initialized = 0;
       foreach (IRuntimePlugin plugin in pluginsCopy)
       {
+        if (plugin is UnityEngine.Object unityPlugin && unityPlugin == null)
+        {
+          log.Debug("Skipping destroyed runtime plugin during async initialization");
+          continue;
+        }
+
         string pluginName = plugin.GetType().Name;
 
         if (plugin.AreDependenciesReady(resolver))
@@ -248,9 +280,14 @@ namespace MToolKit.Runtime.Core
             log.Verbose("Plugin {PluginName} async runtime initialization completed successfully", pluginName);
             initialized++;
           }
+          catch (OperationCanceledException)
+          {
+            throw;
+          }
           catch (Exception ex)
           {
             log.Error(ex, "Plugin {PluginName} async runtime initialization failed: {Message}", pluginName, ex.Message);
+            throw new PluginRuntimeInitializationException(pluginName, ex);
           }
         }
         else

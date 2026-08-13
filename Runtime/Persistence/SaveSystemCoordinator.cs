@@ -20,7 +20,7 @@ namespace MToolKit.Runtime.Persistence
     ///   Coordinates between global and local save systems.
     ///   Acts as a "man in the middle" to route save/load operations to the appropriate system.
     /// </summary>
-    public class SaveSystemCoordinator : IRuntimeSystem
+    public class SaveSystemCoordinator : IRuntimeSystem, IOrderedSaveLoadExecutor
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<SaveSystemCoordinator>().ForFeature("Persistence.Coordinator"));
     private static ILogger log => logLazy.Value ?? Logger.None;
@@ -84,6 +84,21 @@ namespace MToolKit.Runtime.Persistence
     ///   do NOT recreate it). Blocks BOTH local and global save paths uniformly (Phase F boundary F2).
     /// </summary>
     public ReactiveProperty<bool> IsSaveBlocked { get; }
+
+    /// <summary>
+    /// Permanently prevents save writes for this coordinator lifetime after a failed required
+    /// restore. The gameplay scope is then discarded by the application; keeping the source
+    /// save intact is safer than allowing any partial runtime state to overwrite it.
+    /// </summary>
+    public void BlockSavesForFailedLoad()
+    {
+      if (IsSaveBlocked.Value)
+        return;
+
+      IsSaveBlocked.Value = true;
+      StopAutoSave();
+      log.ForMethod().Error("Save blocked: required controller failed during load; discard the current gameplay scope before retrying");
+    }
 
     /// <summary>
     ///   True while a session restore is in progress, spanning a WIDER window than
@@ -447,6 +462,66 @@ namespace MToolKit.Runtime.Persistence
             IsSaveBlocked.Value = true;
           GameMessageBroker.Publish(new SaveTruncatedOnLoadMessage(drained.Severity, drained.Entries));
           log.ForMethod().Warning("Save loaded with {0} truncation entries; published SaveTruncatedOnLoadMessage at severity {1}", drained.Entries.Count, drained.Severity);
+        }
+      }
+      finally
+      {
+        loadGate.Release();
+      }
+    }
+
+    /// <summary>
+    /// Executes a declared controller transaction rather than registry insertion order.  A
+    /// required-controller failure is returned after execution stops; optional failures are
+    /// returned after the remaining independent steps finish.  Post-load hydration is invoked
+    /// only after a transaction without required failures.
+    /// </summary>
+    public async UniTask<IReadOnlyList<string>> LoadAsync(
+      IReadOnlyList<string> orderedControllerTypeNames,
+      Func<string, bool> isRequired,
+      CancellationToken ct = default)
+    {
+      if (orderedControllerTypeNames == null) throw new ArgumentNullException(nameof(orderedControllerTypeNames));
+      if (isRequired == null) throw new ArgumentNullException(nameof(isRequired));
+      ct.ThrowIfCancellationRequested();
+
+      ES3GameSaveSystem activeSystem = useLocalSystem ? localSaveSystem : globalSaveSystem;
+      if (activeSystem == null)
+        throw new InvalidOperationException("No active save system available");
+
+      LoadGeneration++;
+      await loadGate.WaitAsync(ct);
+      try
+      {
+        truncationReporter.BeginLoadScope();
+        bool loadSucceeded = false;
+        TruncationReport drained = TruncationReport.Empty;
+        IReadOnlyList<string> failures;
+        try
+        {
+          failures = await activeSystem.LoadAsync(orderedControllerTypeNames, isRequired, ct);
+          if (failures.Any(isRequired))
+          {
+            BlockSavesForFailedLoad();
+            LastLoadTruncationReport = TruncationReport.Empty;
+            return failures;
+          }
+
+          UpdateReactiveProperties();
+          await InvokePostLoadHydrateAsync(ct);
+          loadSucceeded = true;
+          return failures;
+        }
+        finally
+        {
+          drained = truncationReporter.DrainReport();
+          LastLoadTruncationReport = loadSucceeded ? drained : TruncationReport.Empty;
+          if (loadSucceeded && drained.HasEntries)
+          {
+            if (drained.Severity == SaveTruncatedOnLoadMessage.Severity.BlockOverwrite)
+              IsSaveBlocked.Value = true;
+            GameMessageBroker.Publish(new SaveTruncatedOnLoadMessage(drained.Severity, drained.Entries));
+          }
         }
       }
       finally
