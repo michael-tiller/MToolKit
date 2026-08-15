@@ -10,6 +10,11 @@ not a roadmap milestone.
 
 ## [Unreleased]
 
+### Changed
+
+- `Bootstrapper` no longer calls `DontDestroyOnLoad`; the target scene loads as Single, so the bootstrapper is disposed with its own scene at the transition (v1.0.2)
+- `NavigationSystem`: initial-canvas-shown and view-validation logging raised to Information; cancellation/failure logs now include `initialViewsShown` state and the exception object (v1.0.2)
+
 ### Added
 
 - `QuestObjectiveAddressableLocator` utility to validate Addressables key existence without triggering load errors in EditMode tests (v1.0.1)
@@ -22,6 +27,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- `Bootstrapper`: guard `OnBootstrappedAsync`/`ForceQuit` against running after the Single-mode scene load has already destroyed the bootstrapper object (v1.0.2)
+- `GlobalInstaller`: log the destroyed plugin's type name when skipping it during initialization, and warn (not verbose) when `NavigationPlugin` is missing for canvas visibility handling (v1.0.2)
 - `Bootstrapper` now uses `DestroyImmediate` in Editor when not playing, preventing stale-handle errors (v1.0.1)
 - Quest objective executors no longer fail-load when Addressable keys reference non-existent or synthetic-GUID assets (v1.0.1)
 - Null reference exceptions by using optional-chaining and null-coalesce in objective definition access (v1.0.1)

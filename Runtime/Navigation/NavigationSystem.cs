@@ -197,11 +197,11 @@ namespace MToolKit.Runtime.Navigation
       }
       catch (OperationCanceledException)
       {
-        log.ForMethod().Warning("Initialization was canceled.");
+        log.ForMethod().Warning("Initialization was canceled. initialViewsShown={0}", initialViewsShown);
       }
       catch (Exception ex)
       {
-        log.ForMethod().Error("Initialization failed: {0}", ex.Message);
+        log.ForMethod().Error(ex, "Initialization failed: {0}", ex.Message);
       }
       finally
       {
@@ -276,6 +276,7 @@ namespace MToolKit.Runtime.Navigation
         }
 
         initialViewsShown = true;
+        log.ForGameObject(gameObject).ForMethod().Information("Initial canvas elements shown; validating views");
         await ValidateViewsAsync();
       }
       catch (Exception ex)
@@ -390,6 +391,9 @@ namespace MToolKit.Runtime.Navigation
       }
 
       View view = await ShowViewAsync(type, canvasConfig.InitialViewPrefab, token);
+      log.ForGameObject(gameObject).ForMethod().Information(
+        "Initial view push for canvas {0}: prefab={1} result={2}",
+        type, canvasConfig.InitialViewPrefab.name, view != null ? view.name : "NULL");
       return view;
     }
 

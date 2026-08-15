@@ -78,7 +78,8 @@ namespace MToolKit.Runtime.Bootstrapper
     private void Start()
     {
       log.ForGameObject(gameObject).ForMethod().Verbose("Begin bootstrapper");
-      DontDestroyOnLoad(gameObject);
+      // Intentionally NOT DontDestroyOnLoad: the target scene loads as Single,
+      // so the bootstrapper is disposed with its own scene at the transition.
       progressBar.gameObject.SetActive(false);
 
       // Initialize input system if available
@@ -281,28 +282,29 @@ namespace MToolKit.Runtime.Bootstrapper
 
     private async UniTask OnBootstrappedAsync()
     {
-      progressBar.gameObject.SetActive(true);
-      // Store reference early to avoid null reference in async context
-      GameObject gameObjectRef = gameObject;
+      // The Single-mode scene load normally destroys the bootstrapper with its
+      // scene before this continuation runs; the destroy below is a fallback for
+      // environments where no scene actually loaded (e.g. tests).
+      if (this == null)
+        return;
 
-      // Show completion progress
+      progressBar.gameObject.SetActive(true);
       progressBar.value = 1.0f;
       progressText.SetText(string.Empty);
-
-      // Manifest scenes are already loaded by IGameLoader (via LoadGameAssetsAsync),
-      // so we just need to clean up the bootstrapper object.
-      log.ForMethod().Information("Bootstrap completed in {0}ms", DateTime.Now.Subtract(now).TotalMilliseconds.ToString("F3"));
 
       // Delay slightly to show completion UI
       await UniTask.Delay(500);
 
+      if (this == null)
+        return;
+
 #if UNITY_EDITOR
       if (!Application.isPlaying)
-        DestroyImmediate(gameObjectRef);
+        DestroyImmediate(gameObject);
       else
-        Destroy(gameObjectRef);
+        Destroy(gameObject);
 #else
-      Destroy(gameObjectRef);
+      Destroy(gameObject);
 #endif
     }
 
@@ -363,6 +365,7 @@ namespace MToolKit.Runtime.Bootstrapper
           log.ForMethod().Warning("Optional dependencies did not initialize in time, continuing anyway");
         }
 
+        log.ForMethod().Information("Bootstrap completed in {0}ms", DateTime.Now.Subtract(now).TotalMilliseconds.ToString("F3"));
         IsBootstrapped.Value = true;
       }
       catch (Exception e)
@@ -446,7 +449,9 @@ namespace MToolKit.Runtime.Bootstrapper
     private void ForceQuit()
     {
       log.ForMethod().Information("Halting execution due to fatal error.");
-      progressText.SetText(GetLocalizedTextSafely(errorText, "Error occurred"));
+      // May run after the scene swap already destroyed this object.
+      if (this != null)
+        progressText.SetText(GetLocalizedTextSafely(errorText, "Error occurred"));
       IsLoading.Value = false;
 
       // Route fatal error through ErrorSystem if available

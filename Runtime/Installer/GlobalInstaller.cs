@@ -902,7 +902,10 @@ namespace MToolKit.Runtime.Installer
 
                 if (plugin == null)
                 {
-                  log.ForGameObject(gameObject).ForMethod().Warning("Skipping destroyed global runtime plugin during initialization");
+                  // Unity-null: the C# object still knows its type even after Destroy.
+                  log.ForGameObject(gameObject).ForMethod().Warning(
+                    "Skipping destroyed global runtime plugin during initialization: {0}",
+                    ((object)plugin)?.GetType().Name ?? "<null>");
                   continue;
                 }
 
@@ -1057,7 +1060,7 @@ namespace MToolKit.Runtime.Installer
 
       if (navigationPlugin == null || navigationPlugin.gameObject == null)
       {
-        log.ForGameObject(gameObject).ForMethod().Verbose("NavigationPlugin not found, skipping canvas visibility handling");
+        log.ForGameObject(gameObject).ForMethod().Warning("NavigationPlugin not found, skipping canvas visibility handling for scene {0}", loadedScene.name);
         return;
       }
 
@@ -1081,12 +1084,12 @@ namespace MToolKit.Runtime.Installer
 
       if (isGameplayScene)
       {
-        log.ForGameObject(gameObject).ForMethod().Debug("Gameplay scene loaded, hiding navigation canvases");
+        log.ForGameObject(gameObject).ForMethod().Information("Gameplay scene loaded, hiding navigation canvases");
         SetNavigationCanvasesVisibility(navigationPlugin, false);
       }
       else if (isMenuScene)
       {
-        log.ForGameObject(gameObject).ForMethod().Debug("Menu scene loaded, showing navigation canvases");
+        log.ForGameObject(gameObject).ForMethod().Information("Menu scene loaded, showing navigation canvases");
         SetNavigationCanvasesVisibility(navigationPlugin, true);
       }
       else
@@ -1289,7 +1292,7 @@ namespace MToolKit.Runtime.Installer
       if (canvasCount == 0)
         log.ForGameObject(gameObject).ForMethod().Warning("No canvas children found in NavigationPlugin to hide/show");
       else
-        log.ForGameObject(gameObject).ForMethod().Verbose("Set visibility for {0} navigation canvas(es) to {1}", canvasCount, visible);
+        log.ForGameObject(gameObject).ForMethod().Information("Set visibility for {0} navigation canvas(es) to {1}", canvasCount, visible);
     }
 
     /// <summary>
