@@ -40,7 +40,15 @@ namespace MToolKit.Runtime.Slog
       // formatting, editor console entries, and the full dispatch chain — and Info/Debug
       // chatter through it was a measured GC/CPU cost in play mode. The file sink above keeps
       // every level, so nothing is lost, only relocated.
+      // {Properties} is EDITOR-ONLY: rendering the full property bag (appName/deviceID/session
+      // context etc.) per console event was profiled at up to 331 ms inside player hitch frames
+      // (PropertiesOutputFormat.Render). The file sink keeps every property at every level —
+      // the player console line only needs to be greppable, not exhaustive.
+#if UNITY_EDITOR
       string outputTemplate = "[{Level:u1}] [{Source}.{method}]: {Message:lj}\n\r{Properties}";
+#else
+      string outputTemplate = "[{Level:u1}] [{Source}.{method}]: {Message:lj}";
+#endif
       loggerConfig = loggerConfig.WriteTo.Unity3D(
         outputTemplate: outputTemplate,
         restrictedToMinimumLevel: configurationAsset.UnityConsoleMinimumLevel);
