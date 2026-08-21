@@ -45,6 +45,20 @@ namespace MToolKit.Runtime.Slog
         outputTemplate: outputTemplate,
         restrictedToMinimumLevel: configurationAsset.UnityConsoleMinimumLevel);
 
+      // PLAYER builds: strip Unity script stack traces from Log/Warning console emits. Every
+      // console emit in a player otherwise extracts + serializes a script trace — profiled at
+      // 20-215 ms inside hitch frames, and Player.log becomes majority trace blocks. TWO calls
+      // (the LogType parameter is an enum, not flags — OR-ing silently half-delivers).
+      // Error/Exception/Assert keep their traces; the Serilog file sink is unaffected; editor
+      // behavior never changes.
+#if !UNITY_EDITOR
+      if (configurationAsset.StripPlayerLogStackTraces)
+      {
+        Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
+        Application.SetStackTraceLogType(LogType.Warning, StackTraceLogType.None);
+      }
+#endif
+
       // Apply source context filtering if enabled
       if (configurationAsset.IsSourceContextFilteringEnabled) loggerConfig = loggerConfig.Filter.ByIncludingOnly(IsSourceContextAllowed);
 

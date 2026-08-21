@@ -25,6 +25,10 @@ namespace MToolKit.Runtime.Slog
     [SerializeField]
     private bool isLoggingToFile;
 
+    [Tooltip("PLAYER builds only: strip Unity script stack traces from Log and Warning console emits. Every player console emit otherwise extracts + serializes a script stack trace (profiled 20-215 ms per hitch frame; Player.log becomes majority trace blocks). Error/Exception/Assert always keep traces, and the Serilog file sink is unaffected. Editor behavior never changes.")]
+    [SerializeField]
+    private bool stripPlayerLogStackTraces = true;
+
     [Header("Source Context Filtering")]
     [FormerlySerializedAs("enableSourceContextFiltering")]
     [Tooltip("If enabled, only log messages from these source contexts will be output")]
@@ -50,6 +54,7 @@ namespace MToolKit.Runtime.Slog
     public string LogFileName => logFileName;
     public LogEventLevel LogLevel => logLevel;
     public LogEventLevel UnityConsoleMinimumLevel => unityConsoleMinimumLevel;
+    public bool StripPlayerLogStackTraces => stripPlayerLogStackTraces;
     public bool IsLoggingToFile => isLoggingToFile;
     public bool IsSourceContextFilteringEnabled => isSourceContextFilteringEnabled;
     public List<string> AllowedSourceContexts => allowedSourceContexts;
