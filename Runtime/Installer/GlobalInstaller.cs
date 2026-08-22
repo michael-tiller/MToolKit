@@ -1128,6 +1128,26 @@ namespace MToolKit.Runtime.Installer
         return false;
       }
 
+      // Baked name/path first (AssetReferenceScene serializes them in-editor): the only
+      // resolution that works in a player, where AssetDatabase is absent and built-in
+      // scenes are not Addressables catalog entries.
+      if (sceneRef is AssetReferenceScene bakedRef)
+      {
+        if (!string.IsNullOrEmpty(bakedRef.ScenePath) && !string.IsNullOrEmpty(loadedScene.path)
+            && string.Equals(bakedRef.ScenePath.Replace('\\', '/'), loadedScene.path.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase))
+        {
+          log.ForGameObject(gameObject).ForMethod().Verbose("Scene match via baked path: '{0}'", bakedRef.ScenePath);
+          return true;
+        }
+
+        if (!string.IsNullOrEmpty(bakedRef.SceneName)
+            && string.Equals(bakedRef.SceneName, loadedScene.name, StringComparison.OrdinalIgnoreCase))
+        {
+          log.ForGameObject(gameObject).ForMethod().Verbose("Scene match via baked name: '{0}'", bakedRef.SceneName);
+          return true;
+        }
+      }
+
       // Get the runtime key (could be GUID, address, or label)
       object runtimeKey = sceneRef.RuntimeKey;
       string sceneKey = runtimeKey?.ToString() ?? string.Empty;
