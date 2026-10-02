@@ -36,6 +36,8 @@ namespace MToolKit.Runtime.Persistence
     // is not corrupted by overlapping callers. AvailableWaitHandle is never accessed, so
     // disposal is not required (see Shutdown).
     private readonly SemaphoreSlim loadGate = new(1, 1);
+    private readonly object sessionBoundaryGate = new();
+    private int activePersistenceOperations;
 
     // Auto-save functionality
     private CancellationTokenSource autoSaveCts;
@@ -43,6 +45,8 @@ namespace MToolKit.Runtime.Persistence
     private ES3GameSaveSystem globalSaveSystem;
     private ES3GameSaveSystem localSaveSystem;
     private bool useLocalSystem;
+    private bool failedLocalRestore;
+    private bool applicationSaveBlocked;
 
     public SaveSystemCoordinator(IES3Service es3Service, SaveDomainControllerRegistry globalRegistry, SaveDomainControllerRegistry localRegistry, ES3SaveConfig saveConfig,
       IProfileManager profileManager, ITruncationReporter truncationReporter)
@@ -79,25 +83,118 @@ namespace MToolKit.Runtime.Persistence
     /// <summary>
     ///   Sticky-true after a successful load drains a <see cref="SaveTruncatedOnLoadMessage.Severity.BlockOverwrite"/>
     ///   truncation report. Set by THIS coordinator (not the UI) so the save-safety invariant holds even when
-    ///   no presenter is alive. No public clear API — recovery requires app exit / global container teardown
-    ///   (this coordinator is registered <c>Lifetime.Singleton</c> in <c>GlobalInstaller</c>; scene transitions
-    ///   do NOT recreate it). Blocks BOTH local and global save paths uniformly (Phase F boundary F2).
+    ///   no presenter is alive. Severe truncation and global restore failures require app exit /
+    ///   global container teardown. A failed local restore can recover only through
+    ///   <see cref="BeginLocalSessionAfterDiscard"/> after the entire gameplay scope is discarded.
+    ///   Blocks BOTH local and global save paths uniformly (Phase F boundary F2).
     /// </summary>
     public ReactiveProperty<bool> IsSaveBlocked { get; }
 
     /// <summary>
-    /// Permanently prevents save writes for this coordinator lifetime after a failed required
-    /// restore. The gameplay scope is then discarded by the application; keeping the source
-    /// save intact is safer than allowing any partial runtime state to overwrite it.
+    /// Prevents save writes after a failed required restore. Local failure recovery requires
+    /// discarding the entire gameplay scope; global failure remains blocked for this lifetime.
+    /// Existing application-level blocks are never downgraded to recoverable local failures.
     /// </summary>
     public void BlockSavesForFailedLoad()
+      => BlockSavesForFailedLoad(useLocalSystem);
+
+    private void BlockSavesForFailedLoad(bool wasLocalRestore)
     {
-      if (IsSaveBlocked.Value)
-        return;
+      if (IsSaveBlocked.Value && !failedLocalRestore)
+        applicationSaveBlocked = true;
+      if (wasLocalRestore)
+        failedLocalRestore = true;
+      else
+        applicationSaveBlocked = true;
 
       IsSaveBlocked.Value = true;
       StopAutoSave();
       log.ForMethod().Error("Save blocked: required controller failed during load; discard the current gameplay scope before retrying");
+    }
+
+    /// <summary>
+    /// Begins a new local persistence session after the application has destroyed the previous
+    /// gameplay container, unregistered every local controller and unsubscribed its hydrators.
+    /// Rejects busy or retained scopes. Clears only a failed-local-restore block; severe truncation,
+    /// global failure and unclassified existing blocks remain sticky for the coordinator lifetime.
+    /// This method does not dispose gameplay objects or authorize reuse of a partially loaded world.
+    /// </summary>
+    public void BeginLocalSessionAfterDiscard()
+    {
+      lock (sessionBoundaryGate)
+      {
+        if (activePersistenceOperations != 0)
+          throw new InvalidOperationException("Cannot begin a local session while controller persistence is active or queued.");
+        if (!loadGate.Wait(0))
+          throw new InvalidOperationException("Cannot begin a local session while a load transaction is active.");
+
+        try
+        {
+          if (localRegistry.Count != 0 || PostLoadHydrate != null)
+            throw new InvalidOperationException("Discard the old gameplay scope and unregister its controllers and hydrators first.");
+          if (IsSaving.Value || IsLoading.Value || RestoreInProgress.Value || IsAutoSaveExecuting.Value ||
+              es3Service.IsSaving.Value || es3Service.IsLoading.Value ||
+              (localSaveSystem?.IsSaving.Value ?? false) || (localSaveSystem?.IsLoading.Value ?? false) ||
+              (globalSaveSystem?.IsSaving.Value ?? false) || (globalSaveSystem?.IsLoading.Value ?? false))
+            throw new InvalidOperationException("Cannot begin a local session while persistence or restore is active.");
+
+          if (IsSaveBlocked.Value && !failedLocalRestore)
+            applicationSaveBlocked = true;
+          StopAutoSave();
+          localSaveSystem = new ES3GameSaveSystem(Array.Empty<ISaveDomainController>(), es3Service);
+          failedLocalRestore = false;
+          IsSaveBlocked.Value = applicationSaveBlocked;
+          LastLoadTruncationReport = TruncationReport.Empty;
+          UpdateReactiveProperties();
+          log.ForMethod().Information("Began local persistence session after gameplay discard; application save block: {0}", applicationSaveBlocked);
+        }
+        finally
+        {
+          loadGate.Release();
+        }
+      }
+    }
+
+    private PersistenceOperation BeginPersistenceOperation()
+    {
+      lock (sessionBoundaryGate)
+      {
+        bool wasLocal = useLocalSystem;
+        ES3GameSaveSystem system = wasLocal ? localSaveSystem : globalSaveSystem;
+        if (system == null)
+          throw new InvalidOperationException("No active save system available");
+        var operation = new PersistenceOperation(this, system, wasLocal);
+        activePersistenceOperations++;
+        return operation;
+      }
+    }
+
+    private sealed class PersistenceOperation : IDisposable
+    {
+      private SaveSystemCoordinator owner;
+      public ES3GameSaveSystem System { get; }
+      public bool WasLocal { get; }
+
+      public PersistenceOperation(SaveSystemCoordinator owner, ES3GameSaveSystem system, bool wasLocal)
+      {
+        this.owner = owner;
+        System = system;
+        WasLocal = wasLocal;
+      }
+
+      public void Dispose()
+      {
+        SaveSystemCoordinator current = Interlocked.Exchange(ref owner, null);
+        if (current == null) return;
+        lock (current.sessionBoundaryGate) current.activePersistenceOperations--;
+      }
+    }
+
+    private void BlockSavesForSevereTruncation()
+    {
+      applicationSaveBlocked = true;
+      IsSaveBlocked.Value = true;
+      StopAutoSave();
     }
 
     /// <summary>
@@ -369,19 +466,14 @@ namespace MToolKit.Runtime.Persistence
         return;
       }
 
-      ES3GameSaveSystem activeSystem = useLocalSystem ? localSaveSystem : globalSaveSystem;
-
-      if (activeSystem == null)
-      {
-        log.ForMethod().Error("No active save system available");
-        throw new InvalidOperationException("No active save system available");
-      }
+      using PersistenceOperation operation = BeginPersistenceOperation();
+      ES3GameSaveSystem activeSystem = operation.System;
 
       // Log which controllers are available for saving
-      SaveDomainControllerRegistry activeRegistry = useLocalSystem ? localRegistry : globalRegistry;
+      SaveDomainControllerRegistry activeRegistry = operation.WasLocal ? localRegistry : globalRegistry;
       List<ISaveDomainController> controllers = activeRegistry.GetControllers().ToList();
       log.ForMethod().Verbose("Saving using {0} system with {1} controllers: {2}",
-        useLocalSystem ? "local" : "global",
+        operation.WasLocal ? "local" : "global",
         controllers.Count,
         string.Join(", ", controllers.Select(c => c.Domain.ToString())));
 
@@ -393,11 +485,11 @@ namespace MToolKit.Runtime.Persistence
         UpdateReactiveProperties();
 
         log.ForMethod().Information("Save timing total: system={0} wall_clock_ms={1} controller_count={2}",
-          useLocalSystem ? "local" : "global", sw.ElapsedMilliseconds, controllers.Count);
+          operation.WasLocal ? "local" : "global", sw.ElapsedMilliseconds, controllers.Count);
       }
       catch (Exception ex)
       {
-        log.ForMethod().Error(ex, "Save failed using {0} system: {Message}", useLocalSystem ? "local" : "global", ex.Message);
+        log.ForMethod().Error(ex, "Save failed using {0} system: {Message}", operation.WasLocal ? "local" : "global", ex.Message);
         throw;
       }
     }
@@ -407,16 +499,11 @@ namespace MToolKit.Runtime.Persistence
       // Check cancellation token before proceeding
       ct.ThrowIfCancellationRequested();
 
-      ES3GameSaveSystem activeSystem = useLocalSystem ? localSaveSystem : globalSaveSystem;
-
-      if (activeSystem == null)
-      {
-        log.ForMethod().Error("No active save system available");
-        throw new InvalidOperationException("No active save system available");
-      }
+      using PersistenceOperation operation = BeginPersistenceOperation();
+      ES3GameSaveSystem activeSystem = operation.System;
 
       LoadGeneration++;
-      log.ForMethod().Information("Loading using {0} system (generation {1})", useLocalSystem ? "local" : "global", LoadGeneration);
+      log.ForMethod().Information("Loading using {0} system (generation {1})", operation.WasLocal ? "local" : "global", LoadGeneration);
 
       // Validate first; only then take the load gate and touch the truncation reporter.
       // The gate serializes overlapping LoadAsync calls so the reporter's load scope is not
@@ -433,7 +520,7 @@ namespace MToolKit.Runtime.Persistence
           UpdateReactiveProperties();
           loadSucceeded = true;
 
-          log.ForMethod().Information("Load completed successfully using {0} system", useLocalSystem ? "local" : "global");
+          log.ForMethod().Information("Load completed successfully using {0} system", operation.WasLocal ? "local" : "global");
 
           // Phase E.2 Wave 3: hydrate runs INSIDE the load scope so cross-reference rot
           // reported by handlers merges into the single drained report. OperationCanceledException
@@ -443,7 +530,7 @@ namespace MToolKit.Runtime.Persistence
         }
         catch (Exception ex)
         {
-          log.ForMethod().Error(ex, "Load failed using {0} system: {ExType}: {ExFull}", useLocalSystem ? "local" : "global", ex.GetType().Name, ex.ToString());
+          log.ForMethod().Error(ex, "Load failed using {0} system: {ExType}: {ExFull}", operation.WasLocal ? "local" : "global", ex.GetType().Name, ex.ToString());
           throw;
         }
         finally
@@ -457,9 +544,9 @@ namespace MToolKit.Runtime.Persistence
         {
           // Phase F (F5): set the sticky save block BEFORE publishing so any subscriber that reads
           // IsSaveBlocked sees the consistent post-block state. One-way ratchet: no path inside this
-          // coordinator ever assigns false. Recovery requires app exit (F1).
+          // coordinator clears a truncation block. Recovery requires app exit (F1).
           if (drained.Severity == SaveTruncatedOnLoadMessage.Severity.BlockOverwrite)
-            IsSaveBlocked.Value = true;
+            BlockSavesForSevereTruncation();
           GameMessageBroker.Publish(new SaveTruncatedOnLoadMessage(drained.Severity, drained.Entries));
           log.ForMethod().Warning("Save loaded with {0} truncation entries; published SaveTruncatedOnLoadMessage at severity {1}", drained.Entries.Count, drained.Severity);
         }
@@ -485,9 +572,8 @@ namespace MToolKit.Runtime.Persistence
       if (isRequired == null) throw new ArgumentNullException(nameof(isRequired));
       ct.ThrowIfCancellationRequested();
 
-      ES3GameSaveSystem activeSystem = useLocalSystem ? localSaveSystem : globalSaveSystem;
-      if (activeSystem == null)
-        throw new InvalidOperationException("No active save system available");
+      using PersistenceOperation operation = BeginPersistenceOperation();
+      ES3GameSaveSystem activeSystem = operation.System;
 
       LoadGeneration++;
       await loadGate.WaitAsync(ct);
@@ -502,7 +588,7 @@ namespace MToolKit.Runtime.Persistence
           failures = await activeSystem.LoadAsync(orderedControllerTypeNames, isRequired, ct);
           if (failures.Any(isRequired))
           {
-            BlockSavesForFailedLoad();
+            BlockSavesForFailedLoad(operation.WasLocal);
             LastLoadTruncationReport = TruncationReport.Empty;
             return failures;
           }
@@ -519,7 +605,7 @@ namespace MToolKit.Runtime.Persistence
           if (loadSucceeded && drained.HasEntries)
           {
             if (drained.Severity == SaveTruncatedOnLoadMessage.Severity.BlockOverwrite)
-              IsSaveBlocked.Value = true;
+              BlockSavesForSevereTruncation();
             GameMessageBroker.Publish(new SaveTruncatedOnLoadMessage(drained.Severity, drained.Entries));
           }
         }

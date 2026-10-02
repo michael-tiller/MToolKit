@@ -217,6 +217,40 @@ When you change a persisted schema at or after the floor:
 
 Each domain pins its schema with a **drift test** (asserts `CurrentSchemaVersion` + `CurrentSchemaHash`) and a **golden-corpus test** (loads every `golden_<domain>_v*.es3` and asserts the outcome). The golden generator is `[Explicit]` so it never runs in CI — invoke it manually when intentionally rotating a schema, and commit the produced fixture.
 
+### Failed local restore recovery (2026-10-02)
+
+`SaveSystemCoordinator` survives scene changes. A required local-controller failure blocks
+save writes so a partially restored world cannot overwrite its source. Applications may now
+opt into `BeginLocalSessionAfterDiscard()` when reconstructing a verified pre-load snapshot:
+
+1. Capture and verify the live session before attempting the candidate load; keep the source
+   profile and immutable revision intact.
+2. Destroy the old gameplay container. Its owners must unregister every local save controller
+   and unsubscribe all `PostLoadHydrate` handlers; clearing a registry alone does not dispose
+   the world and is not a recovery procedure.
+3. Await outstanding persistence work and the startup owner's restore completion, including
+   any direct/legacy `ES3GameSaveSystem` calls made outside the coordinator.
+4. Call `BeginLocalSessionAfterDiscard()` before registering the replacement scope's controllers.
+5. Bootstrap a fresh gameplay scope from the verified snapshot through the application's
+   normal ordered-load/readiness boundary. A failed recovery stays blocked and preserves the
+   snapshot for diagnosis.
+
+The seam rejects retained controllers/hydrators, active or queued coordinator-owned save/load
+transactions, exposed ES3 busy flags and active restore state. Direct/legacy save-system work
+must be awaited by its owner before calling the seam; it does not acquire the coordinator's
+operation lease. The seam clears only the block caused by a failed local restore.
+Severe truncation (`BlockOverwrite`), failed
+global restores and unclassified existing blocks still require application/global-container
+teardown and continue to block both global and local writes. Applications must not assign
+`IsSaveBlocked.Value = false` themselves. Existing applications that never call the seam retain
+their previous blocked-session behavior.
+
+Michael selected this additive boundary for Dirigible's F9 recovery on 2026-10-02: restoring
+the old persisted profile loses unsaved progress, while retrying in the partially loaded world
+can retain poisoned scene objects. The application owns world disposal and verified snapshot
+selection; MToolKit owns the persistence guard and block classification. Compatibility review
+and the existing truncation severity rules remain their respective authorities.
+
 ## Dependencies
 
 - **ES3** - Easy Save 3 for serialization

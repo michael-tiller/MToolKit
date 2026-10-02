@@ -17,6 +17,10 @@ not a roadmap milestone.
 
 ### Added
 
+- `SaveSystemCoordinator.BeginLocalSessionAfterDiscard()` enables recovery after a failed
+  local restore once gameplay ownership is discarded. Complete coordinator save/load
+  operations block recovery; severe truncation, global failure and unclassified save
+  blocks remain application-sticky. (v1.1.0)
 - `QuestObjectiveAddressableLocator` utility to validate Addressables key existence without triggering load errors in EditMode tests (v1.0.1)
 
 ### Changed
