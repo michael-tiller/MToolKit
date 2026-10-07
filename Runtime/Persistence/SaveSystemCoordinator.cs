@@ -25,6 +25,8 @@ namespace MToolKit.Runtime.Persistence
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<SaveSystemCoordinator>().ForFeature("Persistence.Coordinator"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 
+    public event Action<ES3FlushReceipt> DurableSaveCompleted;
+
     private readonly IES3Service es3Service;
     private readonly SaveDomainControllerRegistry globalRegistry;
     private readonly SaveDomainControllerRegistry localRegistry;
@@ -152,6 +154,74 @@ namespace MToolKit.Runtime.Persistence
         {
           loadGate.Release();
         }
+      }
+    }
+
+    /// <summary>
+    /// Pins active controllers' live save bindings until the caller restores its source profile.
+    /// The scope prevents session discard but permits the nested save used to produce the capture.
+    /// </summary>
+    public IDisposable BeginProvisionalSaveCapture()
+    {
+      PersistenceOperation operation;
+      lock (sessionBoundaryGate)
+      {
+        if (activePersistenceOperations != 0)
+          throw new InvalidOperationException("Cannot begin provisional capture while persistence is active or queued.");
+        operation = BeginPersistenceOperation();
+      }
+      var entered = new List<IDisposable>();
+      try
+      {
+        SaveDomainControllerRegistry registry = operation.WasLocal ? localRegistry : globalRegistry;
+        IProvisionalSaveCaptureParticipant[] participants = registry.GetControllers()
+          .OfType<IProvisionalSaveCaptureParticipant>().ToArray();
+        foreach (IProvisionalSaveCaptureParticipant participant in participants)
+          entered.Add(participant.BeginProvisionalSaveCapture()
+            ?? throw new InvalidOperationException("A provisional save participant returned no scope."));
+        return new ProvisionalSaveCaptureScope(operation, entered);
+      }
+      catch
+      {
+        try { DisposeProvisionalParticipants(entered, throwOnFailure: false); }
+        finally { operation.Dispose(); }
+        throw;
+      }
+    }
+
+    private static void DisposeProvisionalParticipants(IReadOnlyList<IDisposable> entered, bool throwOnFailure)
+    {
+      List<Exception> failures = null;
+      for (int i = entered.Count - 1; i >= 0; i--)
+      {
+        try { entered[i].Dispose(); }
+        catch (Exception error)
+        {
+          (failures ??= new List<Exception>()).Add(error);
+          log.ForMethod().Error(error, "Provisional save participant cleanup failed: {Message}", error.Message);
+        }
+      }
+      if (throwOnFailure && failures != null)
+        throw new AggregateException("Provisional save participant cleanup failed.", failures);
+    }
+
+    private sealed class ProvisionalSaveCaptureScope : IDisposable
+    {
+      private PersistenceOperation operation;
+      private readonly IReadOnlyList<IDisposable> entered;
+
+      public ProvisionalSaveCaptureScope(PersistenceOperation operation, IReadOnlyList<IDisposable> entered)
+      {
+        this.operation = operation;
+        this.entered = entered;
+      }
+
+      public void Dispose()
+      {
+        PersistenceOperation current = Interlocked.Exchange(ref operation, null);
+        if (current == null) return;
+        try { DisposeProvisionalParticipants(entered, throwOnFailure: true); }
+        finally { current.Dispose(); }
       }
     }
 
@@ -454,12 +524,9 @@ namespace MToolKit.Runtime.Persistence
 
     public async UniTask SaveAsync(CancellationToken ct = default)
     {
-      // Check cancellation token before proceeding
       ct.ThrowIfCancellationRequested();
 
-      // Phase F (F2): skip-and-warn rather than throw. Callers (pause-menu quit-and-save, OS-quit
-      // handler) check IsSaveBlocked separately to surface user-facing messaging; throwing here
-      // would propagate spuriously through their shutdown paths.
+      // Shutdown callers use the existing skip-and-warn contract for blocked saves.
       if (IsSaveBlocked.Value)
       {
         log.ForMethod().Warning("Save blocked: prior load reported severe truncation; quit and restart the game to use a different save");
@@ -467,29 +534,55 @@ namespace MToolKit.Runtime.Persistence
       }
 
       using PersistenceOperation operation = BeginPersistenceOperation();
-      ES3GameSaveSystem activeSystem = operation.System;
+      await SaveCoreAsync(operation, operation.System.SupportsDurableReceipts, ct);
+    }
 
-      // Log which controllers are available for saving
+    /// <summary>Returns the completed durable flush receipt; blocked saves cannot produce a receipt.</summary>
+    public async UniTask<ES3FlushReceipt> SaveWithReceiptAsync(CancellationToken ct = default)
+    {
+      ct.ThrowIfCancellationRequested();
+      if (IsSaveBlocked.Value)
+        throw new InvalidOperationException("Save is blocked because the prior load reported severe truncation.");
+
+      using PersistenceOperation operation = BeginPersistenceOperation();
+      return await SaveCoreAsync(operation, requireReceipt: true, ct);
+    }
+
+    private async UniTask<ES3FlushReceipt> SaveCoreAsync(
+      PersistenceOperation operation, bool requireReceipt, CancellationToken ct)
+    {
+      ES3GameSaveSystem activeSystem = operation.System;
       SaveDomainControllerRegistry activeRegistry = operation.WasLocal ? localRegistry : globalRegistry;
       List<ISaveDomainController> controllers = activeRegistry.GetControllers().ToList();
       log.ForMethod().Verbose("Saving using {0} system with {1} controllers: {2}",
-        operation.WasLocal ? "local" : "global",
-        controllers.Count,
+        operation.WasLocal ? "local" : "global", controllers.Count,
         string.Join(", ", controllers.Select(c => c.Domain.ToString())));
 
       try
       {
         Stopwatch sw = Stopwatch.StartNew();
-        await activeSystem.SaveAsync(ct);
+        ES3FlushReceipt receipt = null;
+        if (requireReceipt) receipt = await activeSystem.SaveWithReceiptAsync(ct);
+        else await activeSystem.SaveAsync(ct);
         sw.Stop();
         UpdateReactiveProperties();
 
         log.ForMethod().Information("Save timing total: system={0} wall_clock_ms={1} controller_count={2}",
           operation.WasLocal ? "local" : "global", sw.ElapsedMilliseconds, controllers.Count);
+        if (receipt != null)
+        {
+          try { DurableSaveCompleted?.Invoke(receipt); }
+          catch (Exception observerError)
+          {
+            log.ForMethod().Error(observerError, "Durable save receipt observer failed: {Message}", observerError.Message);
+          }
+        }
+        return receipt;
       }
       catch (Exception ex)
       {
-        log.ForMethod().Error(ex, "Save failed using {0} system: {Message}", operation.WasLocal ? "local" : "global", ex.Message);
+        log.ForMethod().Error(ex, "Save failed using {0} system: {Message}",
+          operation.WasLocal ? "local" : "global", ex.Message);
         throw;
       }
     }

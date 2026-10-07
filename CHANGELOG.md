@@ -10,6 +10,17 @@ not a roadmap milestone.
 
 ## [Unreleased]
 
+### Added
+
+- Durable ES3 save contexts, awaited flush receipts, completion callbacks, and save-before-clone workflow, combined with discarded-local-restore recovery. Both coordinator save entry points retain the session boundary through flush completion and receipt notification (v1.2.0).
+- Typed provisional capture participants preserve live controller save bindings across temporary-profile captures; coordinator scopes hold the session boundary and unwind participant scopes in reverse order (v1.2.0).
+
+### Fixed
+
+- Cancelled or failed profile save batches discard cached controller writes before local-session recovery, preserve the original failure, and publish no completed receipt (v1.2.0).
+
+- `InputService` now enables a `Shared` action map and resolves gameplay maps when they use a name other than `Player`; shared Pause takes priority while UI/Player fallbacks remain supported (v1.2.0).
+
 ### Changed
 
 - `Bootstrapper` no longer calls `DontDestroyOnLoad`; the target scene loads as Single, so the bootstrapper is disposed with its own scene at the transition (v1.0.2)

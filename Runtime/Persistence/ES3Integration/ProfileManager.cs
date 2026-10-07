@@ -345,6 +345,8 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
           CurrentProfile.Value = string.Empty;
 
         File.Delete(filePath);
+        string identityPath = Path.GetFullPath(filePath) + ".saveid";
+        if (File.Exists(identityPath)) File.Delete(identityPath);
 
         log.ForMethod().Information("Deleted profile: {0}", profileName);
 

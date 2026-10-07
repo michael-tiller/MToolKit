@@ -20,17 +20,16 @@ namespace MToolKit.Runtime.Persistence.Interfaces
     UniTask LoadAsync(CancellationToken ct = default);
     UniTask SaveAsync(string key, object value, CancellationToken ct = default);
 
-    /// <summary>
-    ///   Optional batched-save bracket. Inside a batch, key writes may be redirected to an
-    ///   in-memory cache and flushed to disk once in <see cref="EndSaveBatch"/> — without it,
-    ///   backends like ES3 rewrite the whole save file on EVERY key write (30 controllers =
-    ///   30 full-file rewrites per autosave; profiled at 3.3s on the main thread). Default
-    ///   no-op so implementations without a cache keep their per-write behavior.
-    /// </summary>
+    /// <summary>Begins the optional in-memory save batch.</summary>
     void BeginSaveBatch() { }
 
-    /// <summary>Flushes a batch begun with <see cref="BeginSaveBatch"/>. Default no-op.</summary>
+    /// <summary>Legacy fire-and-forget batch flush; durable callers use IDurableES3Service.</summary>
     void EndSaveBatch() { }
+
+    /// <summary>Closes an unsuccessful batch. Backends with a cache discard pending writes.</summary>
+    /// <remarks>The default preserves legacy backends' batch-closing behavior without a receipt.</remarks>
+    void AbortSaveBatch() => EndSaveBatch();
+
     UniTask<T> LoadAsync<T>(string key, T defaultValue = default, CancellationToken ct = default);
     bool KeyExists(string key);
     void DeleteKey(string key);

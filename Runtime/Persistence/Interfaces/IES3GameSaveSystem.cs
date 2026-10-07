@@ -42,6 +42,9 @@ namespace MToolKit.Runtime.Persistence.Interfaces
     /// <returns>UniTask for the save operation</returns>
     UniTask SaveAsync(CancellationToken ct = default);
 
+    /// <summary>Saves all controllers and returns the durable flush receipt for this save.</summary>
+    UniTask<ES3FlushReceipt> SaveWithReceiptAsync(CancellationToken ct = default);
+
     /// <summary>
     ///   Loads all game data asynchronously using ES3.
     /// </summary>

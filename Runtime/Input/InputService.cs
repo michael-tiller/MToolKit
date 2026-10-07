@@ -28,12 +28,14 @@ namespace MToolKit.Runtime.Input
     private InputActionAsset inputActionAsset;
     private InputActionMap playerActionMap;
     private InputActionMap uiActionMap;
+    private InputActionMap sharedActionMap;
     private InputAction pauseAction;
     private InputAction anyKeyAction;
 #else
     private object inputActionAsset;
     private object playerActionMap;
     private object uiActionMap;
+    private object sharedActionMap;
     private object pauseAction;
     private object anyKeyAction;
 #endif
@@ -94,42 +96,30 @@ namespace MToolKit.Runtime.Input
         log.ForMethod().Verbose("InputService: Set PlayerInput.actions to use InputService's managed asset. Component: {0}", playerInput.name);
       }
 
-      // Get action maps from our managed asset
-      playerActionMap = inputActionAsset.FindActionMap("Player");
+      // Get action maps from our managed asset. Keep the conventional Player name,
+      // but support projects that name their gameplay map differently.
       uiActionMap = inputActionAsset.FindActionMap("UI");
+      sharedActionMap = inputActionAsset.FindActionMap("Shared");
+      playerActionMap = inputActionAsset.FindActionMap("Player")
+        ?? inputActionAsset.actionMaps.FirstOrDefault(map =>
+          map != uiActionMap && map != sharedActionMap);
 
-      log.ForMethod().Verbose("InputService: Found Player action map: {0}", playerActionMap != null);
+      log.ForMethod().Verbose("InputService: Found gameplay action map: {0}", playerActionMap != null);
       log.ForMethod().Verbose("InputService: Found UI action map: {0}", uiActionMap != null);
+      log.ForMethod().Verbose("InputService: Found Shared action map: {0}", sharedActionMap != null);
 
-      // Look for Pause action - try UI action map first (to avoid PlayerInput conflicts), then Player map
-      if (uiActionMap != null)
+      // Shared owns actions that must remain available across gameplay and UI.
+      // Preserve the older UI/Player fallback for existing package consumers.
+      pauseAction = sharedActionMap?.FindAction("Pause")
+        ?? uiActionMap?.FindAction("Pause")
+        ?? playerActionMap?.FindAction("Pause");
+      if (pauseAction != null)
       {
-        pauseAction = uiActionMap.FindAction("Pause");
-        if (pauseAction != null)
-        {
-          pauseAction.performed += OnPauseActionPerformed;
-          log.ForMethod().Verbose("InputService: Pause action found and subscribed in UI action map");
-        }
+        pauseAction.performed += OnPauseActionPerformed;
+        log.ForMethod().Verbose("InputService: Pause action found and subscribed in {0} action map",
+          pauseAction.actionMap?.name ?? "unknown");
       }
-
-      // If not found in UI map, try Player map
-      if (pauseAction == null && playerActionMap != null)
-      {
-        pauseAction = playerActionMap.FindAction("Pause");
-
-        if (pauseAction != null)
-        {
-          pauseAction.performed += OnPauseActionPerformed;
-          log.ForMethod().Verbose("InputService: Pause action found and subscribed in Player action map");
-        }
-        else
-        {
-          log.ForMethod().Warning("InputService: Pause action not found in Player action map. Available actions: {0}",
-            string.Join(", ", playerActionMap.actions.Select(a => a.name)));
-        }
-      }
-
-      if (pauseAction == null)
+      else
         log.ForMethod().Warning("InputService: Pause action not found in any action map");
 
       // Look for AnyKey action in UI action map
@@ -200,11 +190,17 @@ namespace MToolKit.Runtime.Input
         if (playerActionMap != null)
         {
           playerActionMap.Enable();
-          log.ForMethod().Verbose("InputService: Player action map enabled");
+          log.ForMethod().Verbose("InputService: Gameplay action map enabled");
         }
         else
         {
-          log.ForMethod().Warning("InputService: Player action map is null, cannot enable");
+          log.ForMethod().Warning("InputService: Gameplay action map is null, cannot enable");
+        }
+
+        if (sharedActionMap != null)
+        {
+          sharedActionMap.Enable();
+          log.ForMethod().Verbose("InputService: Shared action map enabled");
         }
 
         // Log pause action details for debugging
@@ -264,7 +260,13 @@ namespace MToolKit.Runtime.Input
       if (playerActionMap != null)
       {
         playerActionMap.Disable();
-        log.ForMethod().Verbose("InputService: Player action map disabled");
+        log.ForMethod().Verbose("InputService: Gameplay action map disabled");
+      }
+
+      if (sharedActionMap != null)
+      {
+        sharedActionMap.Disable();
+        log.ForMethod().Verbose("InputService: Shared action map disabled");
       }
 #endif
 

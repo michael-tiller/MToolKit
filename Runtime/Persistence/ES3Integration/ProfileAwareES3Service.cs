@@ -13,7 +13,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
   /// <summary>
   ///   Profile-aware ES3 service that can switch between different save file paths based on the current profile
   /// </summary>
-  public class ProfileAwareES3Service : IES3Service, IDisposable
+  public class ProfileAwareES3Service : IDurableES3Service, IDisposable
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<ProfileAwareES3Service>().ForFeature("Persistence.ES3"));
     private static ILogger log => logLazy.Value ?? Logger.None;
@@ -264,6 +264,8 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       {
         ES3Settings es3Settings = GetCurrentES3Settings();
         ES3.DeleteFile(es3Settings);
+        string identityPath = Path.GetFullPath(es3Settings.FullPath) + ".saveid";
+        if (File.Exists(identityPath)) File.Delete(identityPath);
         // Drop the cached copy too, or the next EndSaveBatch resurrects the whole file.
         if (cachedPaths.Remove(es3Settings.FullPath))
         {
@@ -417,6 +419,28 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     ///   rewriting the file per key. The existing file is loaded into the cache once per path
     ///   (so the eventual store writes the FULL key set, not just this batch's keys).
     /// </summary>
+    public ES3SaveContext GetSaveContext()
+    {
+      if (isDisposed) throw new ObjectDisposedException(nameof(ProfileAwareES3Service));
+      return ES3SaveContextIdentityStore.GetOrCreate(GetCurrentSaveFilePath());
+    }
+
+    public async UniTask<ES3FlushReceipt> FlushSaveBatchAsync(CancellationToken ct = default)
+    {
+      if (isDisposed) throw new ObjectDisposedException(nameof(ProfileAwareES3Service));
+      ct.ThrowIfCancellationRequested();
+      JoinPendingFlush(propagateFailure: true);
+      string saveFilePath = Path.GetFullPath(GetCurrentSaveFilePath());
+      if (batchActive)
+      {
+        batchActive = false;
+        ES3Settings fileSettings = GetCurrentES3Settings();
+        await UniTask.RunOnThreadPool(() => ES3.StoreCachedFile(fileSettings), cancellationToken: ct);
+      }
+
+      ES3SaveContext context = ES3SaveContextIdentityStore.GetOrCreate(saveFilePath);
+      return await UniTask.RunOnThreadPool(() => ES3FlushReceipt.ReadBackAndFlush(context), cancellationToken: ct);
+    }
     public void BeginSaveBatch()
     {
       if (isDisposed || batchActive) return;
@@ -445,16 +469,21 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     // apart and the flush takes ~50ms, so contention is effectively never.
     private System.Threading.Tasks.Task flushTask;
 
-    private void JoinPendingFlush()
+    private void JoinPendingFlush(bool propagateFailure = false)
     {
       var t = flushTask;
-      if (t != null && !t.IsCompleted)
+      if (t == null) return;
+      try { t.GetAwaiter().GetResult(); }
+      catch (Exception ex)
       {
-        try { t.Wait(); }
-        catch (Exception ex) { log.ForMethod().Error(ex, "Background save flush failed: {Message}", ex.Message); }
+        log.ForMethod().Error(ex, "Background save flush failed: {Message}", ex.Message);
+        if (propagateFailure) throw;
+      }
+      finally
+      {
+        if (ReferenceEquals(flushTask, t)) flushTask = null;
       }
     }
-
     /// <summary>
     ///   Flush the batch: store the cached file to disk once, with the configured
     ///   compression/encryption — on a background thread. The ~50ms disk write was the last
@@ -476,8 +505,27 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         catch (Exception ex)
         {
           log.ForMethod().Error(ex, "EndSaveBatch background store failed: {Message}", ex.Message);
+          throw;
         }
       });
+    }
+
+    /// <summary>Abandons cached controller writes without storing them or producing a receipt.</summary>
+    public void AbortSaveBatch()
+    {
+      // Cancellation must never leave the service in cache-write mode for the next session.
+      batchActive = false;
+      try
+      {
+        JoinPendingFlush();
+        foreach (string path in cachedPaths)
+          ES3.DeleteFile(new ES3Settings(path) { location = ES3.Location.Cache });
+      }
+      finally
+      {
+        // A fresh batch must reload disk state even if cache cleanup itself failed.
+        cachedPaths.Clear();
+      }
     }
 
     /// <summary>File-located settings normally; cache-located inside a save batch.</summary>

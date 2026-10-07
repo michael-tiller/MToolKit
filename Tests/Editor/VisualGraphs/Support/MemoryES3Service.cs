@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.IO;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Persistence.Interfaces;
 using R3;
@@ -12,7 +13,7 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Support
   ///   format). Lets GraphStateSaveController save/load characterization run synchronously in EditMode. Real
   ///   ES3 wire behavior is pinned separately by ES3SnapshotFileRoundTripTests.
   /// </summary>
-  public sealed class MemoryES3Service : IES3Service
+  public sealed class MemoryES3Service : IDurableES3Service
   {
     private readonly Dictionary<string, object> store = new();
 
@@ -21,6 +22,20 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Support
     public ReactiveProperty<string> LastSaveTime { get; } = new(string.Empty);
     public ReactiveProperty<string> LastLoadTime { get; } = new(string.Empty);
     public ReactiveProperty<int> SaveCounter { get; } = new(0);
+
+    private readonly ES3SaveContext saveContext = new(Guid.NewGuid(), Path.Combine(Path.GetTempPath(), "memory-save.es3"));
+
+    public ES3SaveContext GetSaveContext() => saveContext;
+    public Exception FlushFailure { get; set; }
+    public UniTaskCompletionSource<ES3FlushReceipt> PendingFlush { get; set; }
+    public int FlushCount { get; private set; }
+    public UniTask<ES3FlushReceipt> FlushSaveBatchAsync(CancellationToken ct = default)
+    {
+      FlushCount++;
+      if (FlushFailure != null) return UniTask.FromException<ES3FlushReceipt>(FlushFailure);
+      if (PendingFlush != null) return PendingFlush.Task;
+      return UniTask.FromResult(new ES3FlushReceipt(saveContext, new string('0', 64), DateTime.UtcNow));
+    }
 
     public UniTask SaveAsync(CancellationToken ct = default)
     {

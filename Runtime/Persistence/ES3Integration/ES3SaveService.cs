@@ -14,7 +14,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
   ///   Easy Save 3 service implementation with reactive state management
   ///   Updated to use string versions instead of int
   /// </summary>
-  public class ES3SaveService : IES3Service, IDisposable
+  public class ES3SaveService : IDurableES3Service, IDisposable
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<ES3SaveService>().ForFeature("Persistence.ES3"));
     private static ILogger log => logLazy.Value ?? Logger.None;
@@ -133,6 +133,31 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     public ReactiveProperty<string> LastLoadTime { get; } = new(string.Empty);
     public ReactiveProperty<int> SaveCounter { get; } = new(0);
 
+    public ES3SaveContext GetSaveContext()
+    {
+      if (isDisposed) throw new ObjectDisposedException(nameof(ES3SaveService));
+      return ES3SaveContextIdentityStore.GetOrCreate(es3Settings.FullPath);
+    }
+
+    public async UniTask<ES3FlushReceipt> FlushSaveBatchAsync(CancellationToken ct = default)
+    {
+      if (isDisposed) throw new ObjectDisposedException(nameof(ES3SaveService));
+      ct.ThrowIfCancellationRequested();
+      ES3SaveContext context = GetSaveContext();
+      await fileAccessSemaphore.WaitAsync(ct);
+      try
+      {
+        return await UniTask.RunOnThreadPool(() => ES3FlushReceipt.ReadBackAndFlush(context), cancellationToken: ct);
+      }
+      finally
+      {
+        if (!isDisposed)
+        {
+          try { fileAccessSemaphore.Release(); }
+          catch (ObjectDisposedException) { }
+        }
+      }
+    }
     public async UniTask SaveAsync(CancellationToken ct = default)
     {
       if (isDisposed)
@@ -551,6 +576,8 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       try
       {
         ES3.DeleteFile(filePath);
+        string identityPath = Path.GetFullPath(es3Settings.FullPath) + ".saveid";
+        if (File.Exists(identityPath)) File.Delete(identityPath);
         log.ForMethod().Information("Deleted save file: {0}", filePath);
       }
       catch (Exception ex)

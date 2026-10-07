@@ -89,25 +89,39 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         /// <param name="ct">Cancellation token</param>
         /// <returns>UniTask for the save operation</returns>
         public async UniTask SaveAsync(CancellationToken ct = default)
+        {
+          await SaveCoreAsync(ct, requireReceipt: false);
+        }
+
+        public async UniTask<ES3FlushReceipt> SaveWithReceiptAsync(CancellationToken ct = default)
+          => await SaveCoreAsync(ct, requireReceipt: true);
+
+            public bool SupportsDurableReceipts => es3Service is IDurableES3Service;
+
+    private async UniTask<ES3FlushReceipt> SaveCoreAsync(CancellationToken ct, bool requireReceipt)
     {
       // Check cancellation token before proceeding
       ct.ThrowIfCancellationRequested();
+      IDurableES3Service durableService = es3Service as IDurableES3Service;
+      if (requireReceipt && durableService == null)
+        throw new NotSupportedException("The configured ES3 backend does not provide durable flush receipts.");
 
       if (IsSaving.Value)
       {
-        log.ForMethod().Warning("Save operation already in progress");
-        return;
+        throw new InvalidOperationException("Save operation is already in progress; a durable receipt is unavailable.");
       }
 
+      bool flushCompleted = false;
+      List<ISaveDomainController> saveControllers = domainControllers?.ToList();
       try
       {
         // Batch bracket: controller key writes land in the ES3 memory cache; the single
         // file store happens in EndSaveBatch (finally). Without this, every controller's
         // ES3.Save rewrote the full save file — 30 rewrites per autosave, ~3.3s stall.
         es3Service.BeginSaveBatch();
-        if (domainControllers != null)
+        if (saveControllers != null)
         {
-          List<ISaveDomainController> controllers = domainControllers.ToList();
+          List<ISaveDomainController> controllers = saveControllers;
           log.ForMethod().Information("Save iteration: domain_controller_count={0}", controllers.Count);
 
           // Per-controller timing instrumentation. UniTask.WhenAll runs cooperatively, so
@@ -144,12 +158,30 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         // Wrap the ES3 cache flush separately so we can attribute total wall-clock between
         // per-controller serialization and the file write. Information level by default.
         Stopwatch flushSw = Stopwatch.StartNew();
-        await es3Service.SaveAsync();
-        es3Service.EndSaveBatch();
+        await es3Service.SaveAsync(ct);
+        ES3FlushReceipt receipt = null;
+        if (durableService != null) receipt = await durableService.FlushSaveBatchAsync(ct);
+        else es3Service.EndSaveBatch();
+        flushCompleted = true;
+        if (receipt != null && saveControllers != null)
+        {
+          foreach (ISaveDomainController controller in saveControllers)
+          {
+            if (controller is not IDurableSaveCompletionHandler completionHandler) continue;
+            try { await completionHandler.OnDurableSaveCompletedAsync(receipt, ct); }
+            catch (Exception completionError)
+            {
+              log.ForMethod().Error(completionError,
+                "Durable save completion handler failed for {Controller}: {Message}; the journal remains available for recovery",
+                controller.GetType().FullName, completionError.Message);
+            }
+          }
+        }
         flushSw.Stop();
         log.ForMethod().Information("Save timing es3_flush: elapsed_ms={0}", flushSw.ElapsedMilliseconds);
 
         log.ForMethod().Information("ES3 save operation completed successfully");
+        return receipt;
       }
       catch (ObjectDisposedException ex) when (ex.ObjectName == "ES3SaveService")
       {
@@ -163,9 +195,17 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
       }
       finally
       {
-        // Idempotent (no-op after the success-path call). On a mid-batch exception this
-        // flushes whatever was cached so later standalone writes don't strand in cache.
-        es3Service.EndSaveBatch();
+        // A failed/cancelled controller or flush must close the batch without publishing
+        // partial cached writes. Cleanup ignores the save token and preserves the original error.
+        if (!flushCompleted)
+        {
+          try { es3Service.AbortSaveBatch(); }
+          catch (Exception cleanupError)
+          {
+            log.ForMethod().Error(cleanupError,
+              "Failed to abandon unsuccessful save batch: {Message}", cleanupError.Message);
+          }
+        }
       }
     }
 
