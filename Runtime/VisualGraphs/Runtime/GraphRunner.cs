@@ -91,7 +91,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
       if (message == null) return;
 
       var messageTypeName = message.GetType().Name;
-      log.ForMethod().Information("Quest: Graph '{GraphId}' received message '{MessageType}' (domain: {Domain})",
+      log.ForMethod().Debug("Quest: Graph '{GraphId}' received message '{MessageType}' (domain: {Domain})",
         Definition.GraphId, messageTypeName, domain ?? "null");
 
       // Special logging for dialogue messages
@@ -158,7 +158,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
             entryNodeCount++;
           }
 
-        log.ForMethod().Information("Quest: Found {EntryNodeCount} entry nodes in graph '{GraphId}'",
+        log.ForMethod().Debug("Quest: Found {EntryNodeCount} entry nodes in graph '{GraphId}'",
           entryNodeCount, Definition.GraphId);
       }
 
@@ -205,7 +205,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
         // This ensures proper pausing after each dialogue node
         if (IsEntryNode(nodeDef.NodeType))
         {
-          log.ForMethod().Information("Quest: Processing entry node {NodeId} (type: {NodeType})",
+          log.ForMethod().Debug("Quest: Processing entry node {NodeId} (type: {NodeType})",
             nodeId, nodeDef.NodeType);
 
           // Check if this is a dialogue graph - if so, store next node IDs in state
@@ -235,7 +235,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
             {
               // For non-dialogue graphs, enqueue directly
               queue.Enqueue(connection.ToNodeId);
-              log.ForMethod().Information("Quest: Enqueued node {ToNodeId} from entry node {FromNodeId}",
+              log.ForMethod().Debug("Quest: Enqueued node {ToNodeId} from entry node {FromNodeId}",
                 connection.ToNodeId, nodeId);
             }
           }
@@ -253,7 +253,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
           }
           else
           {
-            log.ForMethod().Information("Quest: Entry node {NodeId} enqueued {ConnectionCount} connected node(s)",
+            log.ForMethod().Debug("Quest: Entry node {NodeId} enqueued {ConnectionCount} connected node(s)",
               nodeId, connectionCount);
           }
           continue;
@@ -281,7 +281,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
         }
         else
         {
-          log.ForMethod().Information("Quest: Executing node {NodeId} (type: {NodeType}) in graph '{GraphId}'",
+          log.ForMethod().Debug("Quest: Executing node {NodeId} (type: {NodeType}) in graph '{GraphId}'",
             nodeId, nodeDef.NodeType, Definition.GraphId);
         }
 
@@ -291,7 +291,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
         try
         {
           await executor.Execute(Definition, nodeDef, state, message, context, ct);
-          log.ForMethod().Information("Quest: Completed execution of node {NodeType} ({NodeId})",
+          log.ForMethod().Debug("Quest: Completed execution of node {NodeType} ({NodeId})",
             nodeDef.NodeType, nodeId);
 
           // Check if this is a dialogue node that has stored next node IDs in state

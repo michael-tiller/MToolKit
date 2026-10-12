@@ -150,7 +150,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
           ? $"exact domain match ('{domainFilter}')"
           : "wildcard domain match (any domain)";
 
-      log.Information("Routing message '{MessageType}' (domain: '{Domain}') to {GraphCount} graph(s) via {Strategy}: {GraphIds}",
+      log.Debug("Routing message '{MessageType}' (domain: '{Domain}') to {GraphCount} graph(s) via {Strategy}: {GraphIds}",
         messageType.Name, domainFilter, matchedGraphs.Count, routingStrategy,
         string.Join(", ", matchedGraphs.Select(r => r.GraphId)));
 

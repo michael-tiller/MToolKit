@@ -93,14 +93,18 @@ namespace MToolKit.Runtime.Bootstrapper
 
     private void LateUpdate()
     {
-      // Fallback to legacy input if Input System is not available
+      // Poll the enabled backend when no AnyKey action is configured.
 #if ENABLE_INPUT_SYSTEM
-      if (anyKeyAction == null && UnityEngine.Input.anyKey && !userReadyToProceed)
+      if (anyKeyAction == null && !userReadyToProceed &&
+          (Keyboard.current?.anyKey.isPressed == true ||
+           Mouse.current?.leftButton.isPressed == true ||
+           Mouse.current?.rightButton.isPressed == true ||
+           Mouse.current?.middleButton.isPressed == true))
 #else
       if (Input.anyKey && !userReadyToProceed)
 #endif
       {
-        log.ForMethod().Verbose("Using legacy input fallback");
+        log.ForMethod().Verbose("Using input fallback");
         userReadyToProceed = true;
         CheckIfReadyToLoad();
       }
@@ -129,7 +133,7 @@ namespace MToolKit.Runtime.Bootstrapper
     {
       if (inputActionAsset == null)
       {
-        log.ForMethod().Warning("InputActionAsset not assigned, falling back to legacy input");
+        log.ForMethod().Warning("InputActionAsset not assigned, falling back to device polling");
         return;
       }
 
@@ -157,7 +161,7 @@ namespace MToolKit.Runtime.Bootstrapper
       }
       catch (Exception ex)
       {
-        log.ForMethod().Error(ex, "Failed to initialize Input System, falling back to legacy input");
+        log.ForMethod().Error(ex, "Failed to initialize Input System, falling back to device polling");
       }
     }
 #endif

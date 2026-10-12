@@ -17,6 +17,10 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Bootstrapper fallback polls the enabled Input System backend safely when keyboard or mouse devices are absent, preserving keyboard and mouse-button readiness and configured action ownership (v1.2.1).
+- Sequential ES3 saves wait for a cancellable next-frame boundary after each controller, preserving durable receipts, aborted-batch cleanup and safe retry (v1.2.1).
+- Routine graph routing and node execution use Debug; dialogue Information messages, warnings and errors retain their existing levels (v1.2.1).
+
 - Cancelled or failed profile save batches discard cached controller writes before local-session recovery, preserve the original failure, and publish no completed receipt (v1.2.0).
 
 - `InputService` now enables a `Shared` action map and resolves gameplay maps when they use a name other than `Player`; shared Pause takes priority while UI/Player fallbacks remain supported (v1.2.0).
