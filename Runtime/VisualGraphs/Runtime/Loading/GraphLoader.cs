@@ -6,6 +6,7 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Core.Types;
 using MToolKit.Runtime.VisualGraphs.Config;
+using MToolKit.Runtime.VisualGraphs.Contexts;
 using MToolKit.Runtime.VisualGraphs.Dialogue.Definitions;
 using MToolKit.Runtime.VisualGraphs.Dialogue.Messages;
 using MToolKit.Runtime.VisualGraphs.Event.Definitions;
@@ -41,6 +42,8 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
     private readonly NodeExecutorRegistry executorRegistry;
     private readonly IServiceProvider services;
     private readonly IEventEmitter eventEmitter;
+    private readonly GraphContextRegistry? contextRegistry;
+    private readonly Dictionary<string, IGraphContext> ownedContexts = new();
 
     private readonly Dictionary<string, IGraphRunner> loadedRunners = new();
     private readonly Dictionary<string, object> loadedHandles = new(); // Addressables handles
@@ -50,13 +53,15 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       GraphEventRouter router,
       NodeExecutorRegistry executorRegistry,
       IServiceProvider services,
-      IEventEmitter eventEmitter)
+      IEventEmitter eventEmitter,
+      GraphContextRegistry? contextRegistry = null)
     {
       this.registry = registry ?? throw new ArgumentNullException(nameof(registry));
       this.router = router ?? throw new ArgumentNullException(nameof(router));
       this.executorRegistry = executorRegistry ?? throw new ArgumentNullException(nameof(executorRegistry));
       this.services = services ?? throw new ArgumentNullException(nameof(services));
       this.eventEmitter = eventEmitter ?? throw new ArgumentNullException(nameof(eventEmitter));
+      this.contextRegistry = contextRegistry;
     }
 
     public async UniTask<IGraphRunner?> LoadGraphAsync(string graphId, CancellationToken ct = default)
@@ -317,6 +322,11 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
     private async UniTask<IGraphRunner> LoadEventGraphAsync(EventDefinition eventDef, CancellationToken ct)
     {
       await UniTask.WaitForEndOfFrame(ct);
+      return CreateEventGraphRunner(eventDef);
+    }
+
+    private GraphRunner CreateEventGraphRunner(EventDefinition eventDef)
+    {
       EventGraphAsset? graphAsset = eventDef.GraphAsset;
 
       if (graphAsset == null)
@@ -338,6 +348,12 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       }
 
       GraphRunner runner = new(runtimeDef, state, executorRegistry, services, eventEmitter, graphAsset.DeclaredVariables);
+      if (contextRegistry != null)
+      {
+        var existed = contextRegistry.TryGet(EGraphContextScope.Graph, runtimeDef.GraphId, out _);
+        var context = contextRegistry.GetOrCreate(EGraphContextScope.Graph, runtimeDef.GraphId, state, graphAsset.DeclaredVariables);
+        if (!existed) ownedContexts.Add(runtimeDef.GraphId, context);
+      }
       log.ForMethod().Information("Loaded event graph '{EventId}': {NodeCount} nodes, {SubscriptionCount} subscriptions",
         eventDef.EventId, runtimeDef.Nodes.Count, runtimeDef.Subscriptions.Count);
 

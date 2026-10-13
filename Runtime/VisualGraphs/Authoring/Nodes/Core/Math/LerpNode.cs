@@ -1,11 +1,12 @@
 using Sirenix.OdinInspector;
+using MToolKit.Runtime.VisualGraphs.Variables;
 using UnityEngine;
 using XNode;
 
 namespace MToolKit.Runtime.VisualGraphs.Authoring.Nodes.Core.Math
 {
   /// <summary>
-  ///   Linearly interpolates between two float state values by a float t state value (Mathf.Lerp
+  ///   Linearly interpolates between two numeric state values by a float t state value (Mathf.Lerp
   ///   semantics — t implicitly clamped [0,1]) and writes the result to a fourth state key.
   /// </summary>
   [CreateNodeMenu("Core/Math/Lerp")]
@@ -38,6 +39,11 @@ namespace MToolKit.Runtime.VisualGraphs.Authoring.Nodes.Core.Math
     [Required]
     [Tooltip("State key the interpolated value is written to")]
     public string ResultKey = "result";
+
+    /// <summary>Numeric operand and output type; Float preserves existing serialized graph behavior.</summary>
+    [BoxGroup("Operands")]
+    [Tooltip("Int or Float arithmetic; Float preserves existing graph behavior.")]
+    public EGraphVariableType ValueType = EGraphVariableType.Float;
 
     public override object GetValue(NodePort port)
     {

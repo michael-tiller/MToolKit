@@ -12,6 +12,7 @@ not a roadmap milestone.
 
 ### Added
 
+- Add typed scoped math and logic graph operations, including Subtract, Divide, Compare, AllTrue and AnyTrue, event graph contexts, and declaration validation. (v1.4.0)
 - Shared graph-variable literal syntax supports all seven types with invariant finite numbers, escaped strings, vectors and RGBA colors; document the canonical Dirigible variables contract. (v1.3.0)
 
 ### Added

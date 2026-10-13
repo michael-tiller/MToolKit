@@ -14,6 +14,7 @@ using MToolKit.Runtime.VisualGraphs.Quest.Nodes;
 using MToolKit.Runtime.VisualGraphs.Runtime.DTOs;
 using MToolKit.Runtime.VisualGraphs.Runtime.Execution;
 using MToolKit.Runtime.VisualGraphs.Variables;
+using MToolKit.Runtime.VisualGraphs.Contexts;
 using Serilog;
 using UnityEngine;
 using XNode;
@@ -456,8 +457,99 @@ namespace MToolKit.Runtime.VisualGraphs.Export
                 WarnIfUndeclared(graph, set, parameter.VariableName, emitNode.name);
             }
             break;
+          default:
+            ValidateCoreNode(graph, set, node, errors);
+            break;
         }
       }
+    }
+
+    private static void ValidateCoreNode(NodeGraph graph, GraphVariableSet set, Node node, List<string> errors)
+    {
+      if (node == null) return;
+      var name = node.GetType().Name;
+      if (node.GetType().Namespace?.StartsWith("MToolKit.Runtime.VisualGraphs.Authoring.Nodes.Core.", StringComparison.Ordinal) != true)
+        return;
+      var typeField = node.GetType().GetField("ValueType");
+      var valueType = typeField?.GetValue(node) is EGraphVariableType typed ? typed : EGraphVariableType.Float;
+      if (!Enum.IsDefined(typeof(EGraphVariableType), valueType))
+      {
+        errors.Add($"Graph '{graph.name}': {name} has invalid ValueType.");
+        return;
+      }
+      switch (name)
+      {
+        case "AddNode": case "SubtractNode": case "MultiplyNode": case "DivideNode":
+        case "LerpNode":
+          if (valueType != EGraphVariableType.Int && valueType != EGraphVariableType.Float)
+            errors.Add($"Graph '{graph.name}': {name} requires Int or Float ValueType.");
+          CoreKey(graph, set, node, "AKey", valueType, errors);
+          CoreKey(graph, set, node, "BKey", valueType, errors);
+          CoreKey(graph, set, node, "ResultKey", valueType, errors);
+          if (name == "LerpNode") CoreKey(graph, set, node, "TKey", EGraphVariableType.Float, errors);
+          break;
+        case "ClampNode":
+          if (valueType != EGraphVariableType.Int && valueType != EGraphVariableType.Float)
+            errors.Add($"Graph '{graph.name}': ClampNode requires Int or Float ValueType.");
+          foreach (var field in new[] { "ValueKey", "MinKey", "MaxKey", "ResultKey" })
+            CoreKey(graph, set, node, field, valueType, errors);
+          break;
+        case "CompareNode":
+          if (valueType != EGraphVariableType.Int && valueType != EGraphVariableType.Float && valueType != EGraphVariableType.Bool)
+            errors.Add($"Graph '{graph.name}': CompareNode supports Int, Float or Bool.");
+          CoreKey(graph, set, node, "AKey", valueType, errors);
+          CoreKey(graph, set, node, "BKey", valueType, errors);
+          CoreKey(graph, set, node, "ResultKey", EGraphVariableType.Bool, errors);
+          var comparison = node.GetType().GetField("Operator")?.GetValue(node)?.ToString();
+          if (valueType == EGraphVariableType.Bool && comparison != "Equal" && comparison != "NotEqual")
+            errors.Add($"Graph '{graph.name}': Bool CompareNode only supports Equal and NotEqual.");
+          break;
+        case "AndNode": case "OrNode": case "XorNode": case "AllTrueNode": case "AnyTrueNode":
+          CoreKeys(graph, set, node, EGraphVariableType.Bool, errors);
+          CoreKey(graph, set, node, "ResultKey", EGraphVariableType.Bool, errors);
+          break;
+        case "NotNode":
+          CoreKey(graph, set, node, "Key", EGraphVariableType.Bool, errors);
+          CoreKey(graph, set, node, "ResultKey", EGraphVariableType.Bool, errors);
+          break;
+
+      }
+    }
+
+    private static void CoreKeys(NodeGraph graph, GraphVariableSet set, Node node, EGraphVariableType? type, List<string> errors)
+    {
+      if (node.GetType().GetField("Keys")?.GetValue(node) is IEnumerable<string> keys)
+        foreach (var key in keys) ValidateCoreKey(graph, set, node.GetType().Name, key, type, errors, true);
+    }
+
+    private static void CoreKey(NodeGraph graph, GraphVariableSet set, Node node, string field,
+      EGraphVariableType? type, List<string> errors, bool requireDeclaration = true)
+    {
+      var key = node.GetType().GetField(field)?.GetValue(node) as string;
+      ValidateCoreKey(graph, set, node.GetType().Name + "." + field, key, type, errors, requireDeclaration);
+    }
+
+    private static void ValidateCoreKey(NodeGraph graph, GraphVariableSet set, string name, string key,
+      EGraphVariableType? type, List<string> errors, bool requireDeclaration)
+    {
+      if (string.IsNullOrWhiteSpace(key))
+      {
+        errors.Add($"Graph '{graph.name}': {name} requires a non-empty state key.");
+        return;
+      }
+      ScopedKeyRef parsed;
+      try { parsed = ScopedKeyResolver.Parse(key); }
+      catch (ArgumentException exception) { errors.Add($"Graph '{graph.name}': {name}: {exception.Message}"); return; }
+      // External scopes own their declarations; validate syntax here and runtime type at the owner.
+      if (!parsed.IsLocal) return;
+      var declaration = set.Find(parsed.Key);
+      if (declaration == null)
+      {
+        if (requireDeclaration) errors.Add($"Graph '{graph.name}': {name} references undeclared variable '{key}'.");
+        return;
+      }
+      if (type.HasValue && declaration.type != type.Value)
+        errors.Add($"Graph '{graph.name}': {name} variable '{key}' is {declaration.type}, expected {type.Value}.");
     }
 
     /// <summary>
