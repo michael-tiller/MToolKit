@@ -282,7 +282,6 @@ namespace MToolKit.Runtime.Bootstrapper
     private static async UniTask<(RuntimeContentManifest, string)> LoadManifestAsync(CancellationToken ct)
     {
       const string manifestAddress = "manifest"; // Addressable address for the manifest
-      const string manifestTag = "manifest"; // Tag for the manifest (separate from content labels)
 
       // Try to load from Addressables first (allows remote updates)
       try

@@ -34,6 +34,9 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Support
     [SerializeField]
     private int hiddenParam = 7;
 
+    /// <summary>The serialized test value used to verify exporter parameter extraction.</summary>
+    internal int SerializedHiddenParam => hiddenParam;
+
     public override object GetValue(NodePort port)
     {
       return null;

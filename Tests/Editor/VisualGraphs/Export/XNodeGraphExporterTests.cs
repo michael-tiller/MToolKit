@@ -174,13 +174,15 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Export
     {
       var graph = NewGraph();
       AddNode<TestEntryNode>(graph);
-      AddNode<TestActionNode>(graph);
+      var source = AddNode<TestActionNode>(graph);
 
       var def = ExporterWithActionExecutor().Export(graph);
       var action = def.Nodes.Single(n => n.NodeType == "TestActionNode");
 
       Assert.That(action.Parameters.ContainsKey("PublicParam"), Is.True, "public field is extracted");
       Assert.That(action.Parameters.ContainsKey("hiddenParam"), Is.True, "[SerializeField] private field is extracted");
+      Assert.That(action.Parameters["hiddenParam"], Is.EqualTo(source.SerializedHiddenParam),
+        "export preserves the private serialized field's actual value");
       Assert.That(action.Parameters.Keys.Any(k => k.StartsWith("m_")), Is.False,
         "no Unity-internal m_ fields leak into exported parameters");
     }

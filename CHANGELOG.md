@@ -10,6 +10,10 @@ not a roadmap milestone.
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve fault-on-await when Addressables is disabled while clearing bootstrap compiler warnings; verify private serialized graph values during export. (v1.6.1)
+
 ### Added
 
 - Add ordered, isolated GameRules, scoped state access, owned event teardown and canonical dialogue routing; preserve legacy interface implementers with default members. (v1.6.0)

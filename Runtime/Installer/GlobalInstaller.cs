@@ -31,7 +31,6 @@ using MToolKit.Runtime.Persistence;
 using MToolKit.Runtime.Persistence.Migration;
 using MToolKit.Runtime.Persistence.ES3Integration;
 using MToolKit.Runtime.Persistence.Interfaces;
-using MToolKit.Runtime.Persistence.Migration;
 using MToolKit.Runtime.Settings;
 using MToolKit.Runtime.Settings.Ini;
 using Serilog;
@@ -1120,8 +1119,25 @@ namespace MToolKit.Runtime.Installer
     ///   Checks if a loaded scene matches an AssetReferenceScene by comparing scene names/paths.
     ///   Handles GUID-based RuntimeKeys by resolving them through Addressables.
     /// </summary>
+#if USE_ADDRESSABLES
     private async UniTask<bool> IsSceneMatchAsync(AssetReferenceScene sceneRef, Scene loadedScene)
+#else
+    private UniTask<bool> IsSceneMatchAsync(AssetReferenceScene sceneRef, Scene loadedScene)
+#endif
     {
+#if !USE_ADDRESSABLES
+      try
+      {
+        return UniTask.FromResult(MatchSynchronously());
+      }
+      catch (Exception exception)
+      {
+        return UniTask.FromException<bool>(exception);
+      }
+
+      bool MatchSynchronously()
+      {
+#endif
       if (sceneRef == null || !sceneRef.RuntimeKeyIsValid())
       {
         log.ForGameObject(gameObject).ForMethod().Debug("SceneRef is null or invalid");
@@ -1277,6 +1293,9 @@ namespace MToolKit.Runtime.Installer
 
       log.ForGameObject(gameObject).ForMethod().Verbose("No scene match found for RuntimeKey: '{0}'", sceneKey);
       return false;
+#if !USE_ADDRESSABLES
+      }
+#endif
     }
 
     /// <summary>
