@@ -782,6 +782,14 @@ A predecessor framework shipped this exact feature set, regretted most of its ab
 
 ### 9.4 Systemic Gameplay Primitives — FIRST SLICE of 9.1, ship before 9.1's remainder
 
+**2026-10-12 substrate ticket:** additive P1a/P1c checkpoints provide typed/scoped arithmetic,
+comparison, logic, transforms, conditional math, and entry-derived event subscriptions.
+Combined consuming-project proof also exercises the separately retained P1b dispatch/state
+work; its changes and phase closure are not claimed by these additive checkpoints.
+`RandomRangeNode` and batch `QueryStateNode` remain the explicitly deferred 9.4 remainder.
+The original checklist is retained pending phase closure; evidence lives in the consuming
+task's `.captain-sdlc/handoffs/mtk-vg-logic-closure.md`.
+
 **Goal:** Enable reactive, event-driven systems that create emergent gameplay through system interactions
 
 **Relationship to 9.1 (pinned):** this sub-phase IS the prioritized subset of 9.1's node catalog — the same state-key-mediated execution model, field naming convention, type-dropdown consolidation, and test requirements apply (see the 9.1 preamble). The node lists below are the build order; the file manifest below is authoritative for these nodes and 9.1's manifest excludes them. This is also the sub-phase that satisfies Dirigible's parity-plan Phase C minimum (variables + get/set + math + boolean branching), together with 9.0 and the 9.7 text round-trip.

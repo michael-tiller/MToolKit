@@ -228,6 +228,14 @@ namespace MToolKit.Runtime.VisualGraphs
       builder.Register<Executors.Logic.AllTrueNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
       builder.Register<Executors.Logic.AnyTrueNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
 
+      builder.Register<Executors.Transform.MapValueNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
+      builder.Register<Executors.Transform.CombineValuesNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
+      builder.Register<Executors.Transform.ExtractValueNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
+      builder.Register<Executors.Transform.FormatStringNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
+      builder.Register<Executors.Math.ConditionalAddNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
+      builder.Register<Executors.Math.ConditionalMultiplyNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
+      builder.Register<Executors.Logic.SelectNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
+
       // Build callback to register all executors in the registry
       builder.RegisterBuildCallback(container =>
       {

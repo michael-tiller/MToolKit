@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System;
+using MToolKit.Runtime.Core.Types;
 using MToolKit.Runtime.VisualGraphs.Authoring;
 using MToolKit.Runtime.VisualGraphs.Quest.Graphs;
 using MToolKit.Runtime.VisualGraphs.Variables;
@@ -44,6 +46,31 @@ namespace MToolKit.Runtime.VisualGraphs.Event.Graphs
     [InfoBox("Graph will ONLY execute when these MessagePipe events are received.")]
     [ListDrawerSettings(ShowIndexLabels = true, DraggableItems = true)]
     public List<MessageSubscription> Subscriptions = new();
+
+    /// <summary>Rebuilds explicit subscriptions from entry nodes, preserving exact domain filters.</summary>
+    [BoxGroup("Event Subscriptions")]
+    [Button("Auto-Populate from Entry Nodes", ButtonSizes.Medium)]
+    public void AutoPopulateSubscriptions()
+    {
+      Subscriptions ??= new List<MessageSubscription>();
+      Subscriptions.Clear();
+      var seen = new HashSet<(Type type, string domain)>();
+      foreach (var node in nodes)
+      {
+        if (!(node is IEventSubscriptionSource source) || source.MessageType == null || !source.MessageType.IsValid)
+          continue;
+        if (!seen.Add((source.MessageType.Type, source.DomainFilter ?? string.Empty))) continue;
+        Subscriptions.Add(new MessageSubscription
+        {
+          MessageType = new MessageTypeReference { Type = source.MessageType.Type },
+          DomainFilter = source.DomainFilter,
+          Required = true
+        });
+      }
+#if UNITY_EDITOR
+      EditorUtility.SetDirty(this);
+#endif
+    }
 
 #if UNITY_EDITOR
     /// <summary>

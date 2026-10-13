@@ -99,13 +99,92 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Core
       Assert.That(actual, Is.EqualTo(expected));
     }
 
+    [Test]
+    public void MapValue_MapsRanges()
+    {
+      var h = Create("Transform", "MapValueNode", new NodeParametersDictionary {
+        { "ValueKey", "value" }, { "InputMinKey", "min" }, { "InputMaxKey", "max" },
+        { "OutputMinKey", "low" }, { "OutputMaxKey", "high" }, { "ResultKey", "result" } });
+      h.State.Set("value", 5f); h.State.Set("min", 0f); h.State.Set("max", 10f);
+      h.State.Set("low", 10f); h.State.Set("high", 20f); h.Run(new TestMessageA());
+      Assert.That(h.State.TryGet<float>("result", out var actual), Is.True);
+      Assert.That(actual, Is.EqualTo(15f));
+    }
+
+    [Test]
+    public void CombineValues_ProducesVector3()
+    {
+      var h = Create("Transform", "CombineValuesNode", new NodeParametersDictionary {
+        { "Keys", new List<string> { "x", "y", "z" } }, { "ValueType", EGraphVariableType.Vector3 },
+        { "ResultKey", "result" } });
+      h.State.Set("x", 1f); h.State.Set("y", 2f); h.State.Set("z", 3f); h.Run(new TestMessageA());
+      Assert.That(h.State.TryGet<Vector3>("result", out var actual), Is.True);
+      Assert.That(actual, Is.EqualTo(new Vector3(1f, 2f, 3f)));
+    }
+
+    [Test]
+    public void ExtractValue_ProducesSelectedComponent()
+    {
+      var h = Create("Transform", "ExtractValueNode", new NodeParametersDictionary {
+        { "SourceKey", "vector" }, { "ValueType", EGraphVariableType.Vector3 },
+        { "Component", "Y" }, { "ResultKey", "result" } });
+      h.State.Set("vector", new Vector3(1f, 2f, 3f)); h.Run(new TestMessageA());
+      Assert.That(h.State.TryGet<float>("result", out var actual), Is.True);
+      Assert.That(actual, Is.EqualTo(2f));
+    }
+
+    [Test]
+    public void FormatString_UsesInvariantCulture()
+    {
+      var previous = CultureInfo.CurrentCulture;
+      try
+      {
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("fr-FR");
+        var h = Create("Transform", "FormatStringNode", new NodeParametersDictionary {
+          { "Format", "Value={0:F1}" }, { "Keys", new List<string> { "value" } }, { "ResultKey", "result" } });
+        h.State.Set("value", 1.5f); h.Run(new TestMessageA());
+        Assert.That(h.State.TryGet<string>("result", out var actual), Is.True);
+        Assert.That(actual, Is.EqualTo("Value=1.5"));
+      }
+      finally { CultureInfo.CurrentCulture = previous; }
+    }
+
+    [TestCase("ConditionalAddNode", true, 10f)] [TestCase("ConditionalAddNode", false, 8f)]
+    [TestCase("ConditionalMultiplyNode", true, 16f)] [TestCase("ConditionalMultiplyNode", false, 8f)]
+    public void ConditionalMath_PassesThroughWhenFalse(string name, bool condition, float expected)
+    {
+      var p = Binary(); p["ConditionKey"] = "condition";
+      var h = Create("Math", name, p);
+      h.State.Set("a", 8f); h.State.Set("b", 2f); h.State.Set("condition", condition); h.Run(new TestMessageA());
+      Assert.That(h.State.TryGet<float>("result", out var actual), Is.True);
+      Assert.That(actual, Is.EqualTo(expected));
+    }
+
+    [TestCase(true, "yes")] [TestCase(false, "no")]
+    public void Select_PreservesSelectedType(bool condition, string expected)
+    {
+      var h = Create("Logic", "SelectNode", new NodeParametersDictionary {
+        { "ConditionKey", "condition" }, { "TrueKey", "yes" }, { "FalseKey", "no" },
+        { "ValueType", EGraphVariableType.String }, { "ResultKey", "result" } });
+      h.State.Set("condition", condition); h.State.Set("yes", "yes"); h.State.Set("no", "no"); h.Run(new TestMessageA());
+      Assert.That(h.State.TryGet<string>("result", out var actual), Is.True);
+      Assert.That(actual, Is.EqualTo(expected));
+    }
+
     [TestCase("Math", "AddNode", 10f)] [TestCase("Math", "SubtractNode", 6f)]
     [TestCase("Math", "MultiplyNode", 16f)] [TestCase("Math", "DivideNode", 4f)]
     [TestCase("Math", "ClampNode", 5f)] [TestCase("Math", "LerpNode", 5f)]
+    [TestCase("Math", "ConditionalAddNode", 10f)] [TestCase("Math", "ConditionalMultiplyNode", 16f)]
     [TestCase("Logic", "AndNode", false)] [TestCase("Logic", "OrNode", true)]
     [TestCase("Logic", "NotNode", true)] [TestCase("Logic", "XorNode", true)]
     [TestCase("Logic", "AllTrueNode", false)] [TestCase("Logic", "AnyTrueNode", true)]
-    [TestCase("Logic", "CompareNode", true)]
+    [TestCase("Logic", "CompareNode", true)] [TestCase("Logic", "SelectNode", 8f)]
+    [TestCase("Transform", "MapValueNode", 15f)] [TestCase("Transform", "ExtractValueNode", 2f)]
+    [TestCase("Transform", "FormatStringNode", "Value=8.0")]
+    [TestCase("Transform", "CombineValuesNode", "vector")]
+    [TestCase("Transform", "PositionNode", "vector")]
+    [TestCase("Transform", "RotationNode", "vector")]
+    [TestCase("Transform", "ScaleNode", "vector")]
     public void ScopedOperandsAndResults_PreserveTypesUnderFrenchCulture(string family, string name, object expected)
     {
       var previous = CultureInfo.CurrentCulture;
@@ -165,6 +244,37 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Core
       Assert.That(actual, Is.False);
     }
 
+    [Test]
+    public void MapZeroRange_UsesFallback()
+    {
+      var h = Create("Transform", "MapValueNode", new NodeParametersDictionary {
+        { "ValueKey", "v" }, { "InputMinKey", "same" }, { "InputMaxKey", "same" },
+        { "OutputMinKey", "low" }, { "OutputMaxKey", "high" }, { "Fallback", 7f }, { "ResultKey", "result" } });
+      h.State.Set("v", 5f); h.State.Set("same", 1f); h.Run(new TestMessageA());
+      Assert.That(h.State.TryGet<float>("result", out var actual), Is.True);
+      Assert.That(actual, Is.EqualTo(7f));
+    }
+
+    [Test]
+    public void FormatMalformedTemplate_FailsSoft()
+    {
+      var h = Create("Transform", "FormatStringNode", new NodeParametersDictionary {
+        { "Format", "{99}" }, { "Keys", new List<string> { "a" } }, { "ResultKey", "result" } });
+      h.State.Set("a", 1f); h.Run(new TestMessageA());
+      Assert.That(h.State.TryGet<string>("result", out var actual), Is.True);
+      Assert.That(actual, Is.EqualTo(string.Empty));
+    }
+
+    [Test]
+    public void ExtractWrongType_FailsSoft()
+    {
+      var h = Create("Transform", "ExtractValueNode", new NodeParametersDictionary {
+        { "SourceKey", "a" }, { "ValueType", EGraphVariableType.Vector3 }, { "Component", "Y" }, { "ResultKey", "result" } });
+      h.State.Set("a", "not-vector"); h.Run(new TestMessageA());
+      Assert.That(h.State.TryGet<float>("result", out var actual), Is.True);
+      Assert.That(actual, Is.EqualTo(0f));
+    }
+
     [TestCase("AllTrueNode", false)] [TestCase("AnyTrueNode", false)]
     public void ExplicitBooleanFolds_MissingInputIsFalse(string name, bool expected)
     {
@@ -176,8 +286,11 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Core
     }
 
     [TestCase("Math", "SubtractNode")] [TestCase("Math", "DivideNode")]
-    [TestCase("Logic", "CompareNode")]
+    [TestCase("Math", "ConditionalAddNode")] [TestCase("Math", "ConditionalMultiplyNode")]
+    [TestCase("Logic", "CompareNode")] [TestCase("Logic", "SelectNode")]
     [TestCase("Logic", "AllTrueNode")] [TestCase("Logic", "AnyTrueNode")]
+    [TestCase("Transform", "MapValueNode")] [TestCase("Transform", "CombineValuesNode")]
+    [TestCase("Transform", "ExtractValueNode")] [TestCase("Transform", "FormatStringNode")]
     public void CatalogNode_IsAuthorableAndUsesClosedTypeDropdown(string family, string name)
     {
       var type = typeof(AddNode).Assembly.GetType("MToolKit.Runtime.VisualGraphs.Authoring.Nodes.Core." + family + "." + name);

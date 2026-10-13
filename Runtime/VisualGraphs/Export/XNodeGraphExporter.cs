@@ -480,13 +480,15 @@ namespace MToolKit.Runtime.VisualGraphs.Export
       switch (name)
       {
         case "AddNode": case "SubtractNode": case "MultiplyNode": case "DivideNode":
-        case "LerpNode":
+        case "ConditionalAddNode": case "ConditionalMultiplyNode": case "LerpNode":
           if (valueType != EGraphVariableType.Int && valueType != EGraphVariableType.Float)
             errors.Add($"Graph '{graph.name}': {name} requires Int or Float ValueType.");
           CoreKey(graph, set, node, "AKey", valueType, errors);
           CoreKey(graph, set, node, "BKey", valueType, errors);
           CoreKey(graph, set, node, "ResultKey", valueType, errors);
           if (name == "LerpNode") CoreKey(graph, set, node, "TKey", EGraphVariableType.Float, errors);
+          if (name.StartsWith("Conditional", StringComparison.Ordinal))
+            CoreKey(graph, set, node, "ConditionKey", EGraphVariableType.Bool, errors);
           break;
         case "ClampNode":
           if (valueType != EGraphVariableType.Int && valueType != EGraphVariableType.Float)
@@ -512,7 +514,40 @@ namespace MToolKit.Runtime.VisualGraphs.Export
           CoreKey(graph, set, node, "Key", EGraphVariableType.Bool, errors);
           CoreKey(graph, set, node, "ResultKey", EGraphVariableType.Bool, errors);
           break;
-
+        case "PositionNode": case "RotationNode": case "ScaleNode":
+          CoreKey(graph, set, node, "SourceKey", EGraphVariableType.Vector3, errors);
+          CoreKey(graph, set, node, "DestinationKey", EGraphVariableType.Vector3, errors);
+          break;
+        case "MapValueNode":
+          if (valueType != EGraphVariableType.Int && valueType != EGraphVariableType.Float)
+            errors.Add($"Graph '{graph.name}': MapValueNode requires Int or Float ValueType.");
+          foreach (var field in new[] { "ValueKey", "InputMinKey", "InputMaxKey", "OutputMinKey", "OutputMaxKey", "ResultKey" })
+            CoreKey(graph, set, node, field, valueType, errors);
+          break;
+        case "CombineValuesNode": case "ExtractValueNode":
+          if (valueType != EGraphVariableType.Vector2 && valueType != EGraphVariableType.Vector3 && valueType != EGraphVariableType.Color)
+            errors.Add($"Graph '{graph.name}': {name} requires Vector2, Vector3 or Color ValueType.");
+          if (name == "CombineValuesNode")
+          {
+            CoreKeys(graph, set, node, EGraphVariableType.Float, errors);
+            CoreKey(graph, set, node, "ResultKey", valueType, errors);
+          }
+          else
+          {
+            CoreKey(graph, set, node, "SourceKey", valueType, errors);
+            CoreKey(graph, set, node, "ResultKey", EGraphVariableType.Float, errors);
+          }
+          break;
+        case "FormatStringNode":
+          CoreKeys(graph, set, node, null, errors);
+          CoreKey(graph, set, node, "ResultKey", EGraphVariableType.String, errors);
+          break;
+        case "SelectNode":
+          CoreKey(graph, set, node, "ConditionKey", EGraphVariableType.Bool, errors);
+          CoreKey(graph, set, node, "TrueKey", valueType, errors);
+          CoreKey(graph, set, node, "FalseKey", valueType, errors);
+          CoreKey(graph, set, node, "ResultKey", valueType, errors);
+          break;
       }
     }
 
