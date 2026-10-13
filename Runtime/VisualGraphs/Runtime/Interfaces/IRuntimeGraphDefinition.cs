@@ -13,6 +13,12 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Interfaces
 
     /// <summary>Graph domain (Quest, Dialogue, etc.)</summary>
     string GraphDomain { get; }
+
+    /// <summary>
+    /// Optional canonical dialogue asset name, independent of its persisted graph ID.
+    /// Legacy graph definitions receive null until they provide dialogue-name metadata.
+    /// </summary>
+    string DialogueName => null;
     /// <summary>Maximum number of execution steps</summary>
     int MaxExecutionSteps { get; }
 

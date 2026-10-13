@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.MessageBus.Interfaces;
@@ -33,10 +34,10 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
       CancellationToken ct = default)
     {
       // Extract parameters
-      var stateKey = node.Parameters.TryGetValue("stateKey", out var sk) ? sk as string : null;
-      var value = node.Parameters.TryGetValue("value", out var val) ? val as string : null;
-      var valueType = node.Parameters.TryGetValue("valueType", out var vt) ? vt as string : "bool";
-      var debugLog = node.Parameters.TryGetValue("debugLog", out var dl) && Convert.ToBoolean(dl);
+      var stateKey = GraphNodeValues.Parameter(node, "StateKey", "stateKey") as string;
+      var value = GraphNodeValues.Parameter(node, "Value", "value") as string;
+      var valueType = GraphNodeValues.Parameter(node, "ValueType", "valueType", "bool") as string;
+      var debugLog = Convert.ToBoolean(GraphNodeValues.Parameter(node, "DebugLog", "debugLog", false));
 
       if (string.IsNullOrEmpty(stateKey))
       {
@@ -61,18 +62,11 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
 
       // Get old value before setting (for state change message)
       object oldValue = null;
-      state.TryGet<object>(stateKey, out oldValue);
+      var values = new GraphNodeValues(graph, state, context);
+      oldValue = values.GetObject(stateKey);
 
       // Set state
-      state.Set(stateKey, parsedValue);
-
-      // Emit state changed message
-      var stateChangedMsg = new GraphStateChangedMessage(
-        graph.GraphId,
-        stateKey,
-        oldValue,
-        parsedValue);
-      context.Emit(stateChangedMsg);
+      values.Set(stateKey, parsedValue);
 
       if (debugLog)
       {
@@ -101,8 +95,8 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
         "bool" => value == "1" || value.Equals("true", System.StringComparison.OrdinalIgnoreCase) ? true :
                   value == "0" || value.Equals("false", System.StringComparison.OrdinalIgnoreCase) ? false :
                   Convert.ToBoolean(value),
-        "int" => Convert.ToInt32(value),
-        "float" => Convert.ToSingle(value),
+        "int" => int.Parse(value, NumberStyles.Integer, CultureInfo.InvariantCulture),
+        "float" => float.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture),
         "string" => value,
         _ => value // Default to string if unknown type
       };

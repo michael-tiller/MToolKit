@@ -514,6 +514,11 @@ namespace MToolKit.Runtime.VisualGraphs.Export
           CoreKey(graph, set, node, "Key", EGraphVariableType.Bool, errors);
           CoreKey(graph, set, node, "ResultKey", EGraphVariableType.Bool, errors);
           break;
+        case "HasStateNode":
+          // An existence query intentionally accepts an undeclared source key.
+          CoreKey(graph, set, node, "Key", null, errors, false);
+          CoreKey(graph, set, node, "ResultKey", EGraphVariableType.Bool, errors);
+          break;
         case "PositionNode": case "RotationNode": case "ScaleNode":
           CoreKey(graph, set, node, "SourceKey", EGraphVariableType.Vector3, errors);
           CoreKey(graph, set, node, "DestinationKey", EGraphVariableType.Vector3, errors);

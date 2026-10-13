@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Add ordered, isolated GameRules, scoped state access, owned event teardown and canonical dialogue routing; preserve legacy interface implementers with default members. (v1.6.0)
+
 - Add value transforms, conditional math, typed Select, and entry-derived event graph subscriptions; apply scoped Vector3 transform operations. (v1.5.0)
 - Add typed scoped math and logic graph operations, including Subtract, Divide, Compare, AllTrue and AnyTrue, event graph contexts, and declaration validation. (v1.4.0)
 - Shared graph-variable literal syntax supports all seven types with invariant finite numbers, escaped strings, vectors and RGBA colors; document the canonical Dirigible variables contract. (v1.3.0)

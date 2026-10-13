@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using MToolKit.Runtime.VisualGraphs.Rules;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -11,6 +13,11 @@ namespace MToolKit.Runtime.VisualGraphs.Config
   [InlineEditor]
   public sealed class VisualGraphConfig : ScriptableObject
   {
+    /// <summary>Ordered event-graph rules active for this configured graph session.</summary>
+    [BoxGroup("Game Rules")]
+    [Tooltip("Rules run before or after normal domain graphs and share persistent World-scope variables.")]
+    public List<GameRuleDefinition> GameRules = new();
+
     [BoxGroup("Logging")]
     [Tooltip("Enable verbose debug logging for graph operations")]
     public bool EnableVerboseLogging = false;

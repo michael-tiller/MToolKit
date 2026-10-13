@@ -25,7 +25,9 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
             var registry = TryResolve<GraphContextRegistry>(context);
             resolver = TryResolve<ScopedKeyResolver>(context);
             if (resolver == null && registry != null) resolver = new ScopedKeyResolver(registry);
-            if (registry != null && registry.TryGet(EGraphContextScope.Graph, graph.GraphId, out var registered))
+            if (registry != null && graph.GraphDomain == "Rule")
+                local = registry.GetOrCreate(EGraphContextScope.World, null);
+            else if (registry != null && registry.TryGet(EGraphContextScope.Graph, graph.GraphId, out var registered))
                 local = registered;
             else
             {

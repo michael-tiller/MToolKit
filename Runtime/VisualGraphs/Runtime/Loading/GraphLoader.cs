@@ -149,6 +149,13 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
         return;
       }
 
+      router.UnregisterRunner(runner);
+      // Only event contexts created by this loader belong to it. A later owner can replace
+      // a registration; unloading our old runner must not delete that replacement.
+      if (ownedContexts.Remove(graphId, out var owned) && contextRegistry != null &&
+          contextRegistry.TryGet(EGraphContextScope.Graph, graphId, out var current) && ReferenceEquals(owned, current))
+        contextRegistry.Remove(graphId);
+
       // Unload addressables handle if exists
 #if UNITY_ADDRESSABLES
       if (loadedHandles.Remove(graphId, out var handle))
@@ -258,6 +265,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.Loading
       var exporter = new XNodeGraphExporter(executorRegistry);
       var runtimeDef = exporter.Export(graphAsset);
       runtimeDef.GraphId = dialogueDef.DialogueId;
+      runtimeDef.DialogueName = dialogueDef.name;
 
       // Automatically subscribe dialogue graphs to DialogueStartMessage if not already subscribed
       Type dialogueStartMessageType = typeof(DialogueStartMessage);

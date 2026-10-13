@@ -124,6 +124,10 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
       subscriptions?.Clear();
       subscriptions = null;
 
+      foreach (var runner in loadedRunners.Values.ToList())
+        eventRouter.UnregisterRunner(runner);
+      loadedRunners.Clear();
+
       // Tear down exactly the Graph contexts this manager attached to the shared registry (9.0.2b).
       foreach (var questGuid in attachedContextGuids.ToList())
         contextRegistry?.Remove(questGuid);
@@ -944,7 +948,7 @@ namespace MToolKit.Runtime.VisualGraphs.Quest
         {
           if (loadedRunners.Remove(runnerId, out var runner))
           {
-            // TODO: Unregister from event router (not currently supported by IGraphEventRouter)
+            eventRouter.UnregisterRunner(runner);
             Debug.Log($"[QuestManager] Unloaded graph runner {runnerId}");
           }
         }

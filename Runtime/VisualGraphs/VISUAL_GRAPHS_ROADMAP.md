@@ -564,6 +564,13 @@ A predecessor framework shipped this exact feature set, regretted most of its ab
 
 **9.0.3 GameRules System:**
 
+**2026-10-12 substrate ticket:** implementation and focused Dirigible-hosted tests now cover
+ordered before/after rules, disabled-rule inertness, session error isolation, re-entrancy,
+World persistence, and teardown. Activation-condition authoring and its false-condition
+test remain in 9.5, as selected by the revision-5 Dirigible plan. Phase closure remains
+pending the strict compile-warning gate and versioned commits; see the consuming task's
+`.captain-sdlc/handoffs/mtk-vg-logic-closure.md` for exact source and evidence.
+
 **Goal:** Global rule system for cross-quest analytics, achievements, and game-wide logic
 
 **Why Important:**
@@ -782,10 +789,9 @@ A predecessor framework shipped this exact feature set, regretted most of its ab
 
 ### 9.4 Systemic Gameplay Primitives — FIRST SLICE of 9.1, ship before 9.1's remainder
 
-**2026-10-12 substrate ticket:** additive P1a/P1c checkpoints provide typed/scoped arithmetic,
-comparison, logic, transforms, conditional math, and entry-derived event subscriptions.
-Combined consuming-project proof also exercises the separately retained P1b dispatch/state
-work; its changes and phase closure are not claimed by these additive checkpoints.
+**2026-10-12 substrate ticket:** the revision-5 Dirigible P1 node slice is implemented and
+tested in the consuming Unity project, including typed/scoped arithmetic, comparison,
+logic, transforms, conditional math, state access, and four systemic graph patterns.
 `RandomRangeNode` and batch `QueryStateNode` remain the explicitly deferred 9.4 remainder.
 The original checklist is retained pending phase closure; evidence lives in the consuming
 task's `.captain-sdlc/handoffs/mtk-vg-logic-closure.md`.

@@ -54,6 +54,7 @@ namespace MToolKit.Runtime.VisualGraphs
     private CancellationTokenSource cts;
     private GraphEventRouter graphEventRouter;
     private IQuestManager questManager;
+    private Rules.GameRuleRegistry gameRules;
     private IDisposable questStartedSubscription;
     private SaveSystemCoordinator registeredCoordinator;
     private GraphStateSaveController registeredSaveController;
@@ -118,6 +119,7 @@ namespace MToolKit.Runtime.VisualGraphs
       // injects GraphContextRegistry directly. In-method order is irrelevant (VContainer resolves at Build).
       builder.Register<Contexts.GraphContextRegistry>(Lifetime.Singleton);
       builder.Register<Contexts.ScopedKeyResolver>(Lifetime.Singleton);
+      builder.Register<Rules.GameRuleRegistry>(Lifetime.Singleton).AsSelf();
 
       // Save/load controller for graph state persistence
       // Note: Requires GraphEventRouter (registered above), IES3Service (from GlobalInstaller), and IQuestManager (registered above)
@@ -227,7 +229,7 @@ namespace MToolKit.Runtime.VisualGraphs
       builder.Register<Executors.Logic.CompareNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
       builder.Register<Executors.Logic.AllTrueNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
       builder.Register<Executors.Logic.AnyTrueNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
-
+      builder.Register<Executors.State.HasStateNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
       builder.Register<Executors.Transform.MapValueNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
       builder.Register<Executors.Transform.CombineValuesNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
       builder.Register<Executors.Transform.ExtractValueNodeExecutor>(Lifetime.Singleton).As<IGraphNodeExecutor>();
@@ -315,6 +317,8 @@ namespace MToolKit.Runtime.VisualGraphs
         graphLoader = resolver.Resolve<IGraphLoader>();
         graphEventRouter = resolver.Resolve<IGraphEventRouter>() as GraphEventRouter;
         questManager = resolver.Resolve<IQuestManager>();
+        // dependency-local: GameRuleRegistry is registered by this plugin.
+        gameRules = resolver.Resolve<Rules.GameRuleRegistry>();
 
         // Inject QuestManager into VisualGraphEventEmitter (break circular dependency)
         var eventEmitter = resolver.Resolve<IEventEmitter>() as VisualGraphEventEmitter;
@@ -363,6 +367,14 @@ namespace MToolKit.Runtime.VisualGraphs
         }
 
         log.ForGameObject(gameObject).Information("Visual Graphs plugin runtime initialization started");
+
+        // Rules are always active even when ordinary graphs use lazy loading.
+        gameRules.LoadRules(config?.GameRules);
+        if (eventBusBridge != null && graphEventRouter != null && config?.GameRules?.Count > 0)
+        {
+          eventBusBridge.Construct(graphEventRouter);
+          eventBusBridge.SubscribeToGraphMessages();
+        }
 
         // Auto-initialize graphs if configured
         if (config != null && config.AutoInitializeFromRegistry)
@@ -529,6 +541,8 @@ namespace MToolKit.Runtime.VisualGraphs
       cts?.Dispose();
       cts = null;
 
+      gameRules?.Dispose();
+      gameRules = null;
       if (service != null)
       {
         service.Clear();

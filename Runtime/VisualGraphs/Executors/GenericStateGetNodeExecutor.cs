@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using Cysharp.Threading.Tasks;
@@ -33,10 +34,10 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
       CancellationToken ct = default)
     {
       // Extract parameters
-      var sourceStateKey = node.Parameters.TryGetValue("sourceStateKey", out var ssk) ? ssk as string : null;
-      var destinationStateKey = node.Parameters.TryGetValue("destinationStateKey", out var dsk) ? dsk as string : null;
-      var defaultValue = node.Parameters.TryGetValue("defaultValue", out var dv) ? dv as string : "0";
-      var debugLog = node.Parameters.TryGetValue("debugLog", out var dl) && Convert.ToBoolean(dl);
+      var sourceStateKey = GraphNodeValues.Parameter(node, "SourceStateKey", "sourceStateKey") as string;
+      var destinationStateKey = GraphNodeValues.Parameter(node, "DestinationStateKey", "destinationStateKey") as string;
+      var defaultValue = GraphNodeValues.Parameter(node, "DefaultValue", "defaultValue", "0") as string;
+      var debugLog = Convert.ToBoolean(GraphNodeValues.Parameter(node, "DebugLog", "debugLog", false));
 
       if (string.IsNullOrEmpty(sourceStateKey) || string.IsNullOrEmpty(destinationStateKey))
       {
@@ -46,8 +47,9 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
       }
 
       // Try to get source value
+      var values = new GraphNodeValues(graph, state, context);
       object value = null;
-      if (state.TryGet<object>(sourceStateKey, out var sourceValue))
+      if (values.TryGet<object>(sourceStateKey, out var sourceValue))
       {
         value = sourceValue;
       }
@@ -57,9 +59,9 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
         // Try to infer type from default value
         if (bool.TryParse(defaultValue, out var boolVal))
           value = boolVal;
-        else if (int.TryParse(defaultValue, out var intVal))
+        else if (int.TryParse(defaultValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var intVal))
           value = intVal;
-        else if (float.TryParse(defaultValue, out var floatVal))
+        else if (float.TryParse(defaultValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var floatVal))
           value = floatVal;
         else
           value = defaultValue; // Default to string
@@ -69,7 +71,7 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
       }
 
       // Store in destination
-      state.Set(destinationStateKey, value);
+      values.Set(destinationStateKey, value);
 
       if (debugLog)
       {

@@ -5,6 +5,7 @@ using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.MessageBus.Interfaces;
 using MToolKit.Runtime.VisualGraphs.Runtime.Interfaces;
+using MToolKit.Runtime.VisualGraphs.Rules;
 using Serilog;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
@@ -55,6 +56,17 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
     private readonly List<IGraphRunner> all = new();
     private readonly Dictionary<(Type messageType, string domain), List<IGraphRunner>> byTypeDomain = new();
     private readonly Dictionary<IGraphRunner, DispatchWindow> dispatchWindows = new();
+    private sealed class RuleDispatch
+    {
+      public IGraphRunner Runner;
+      public int Order;
+      public int RegistrationIndex;
+      public ERuleTiming Timing;
+      public Func<IGameMessage, string, CancellationToken, UniTask> Invoke;
+      public Func<bool> IsEnabled;
+    }
+    private readonly List<RuleDispatch> rules = new();
+    private int nextRuleIndex;
     private int routeDepth;
 
     /// <summary>Register a graph runner and index its subscriptions</summary>
@@ -92,6 +104,48 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
 
       log.Verbose("Registered graph '{GraphId}' with {SubscriptionCount} subscription(s) (total graphs: {TotalGraphs})",
         runner.GraphId, subscriptionCount, all.Count);
+    }
+
+    /// <summary>Remove all references to an owned runner, including rules, subscriptions and rate state.</summary>
+    /// <param name="runner">Runner instance to unregister; null is a no-op.</param>
+    public void UnregisterRunner(IGraphRunner runner)
+    {
+      if (runner == null) return;
+      all.RemoveAll(candidate => ReferenceEquals(candidate, runner));
+      rules.RemoveAll(candidate => ReferenceEquals(candidate.Runner, runner));
+      foreach (var key in byTypeDomain.Keys.ToArray())
+      {
+        var bucket = byTypeDomain[key];
+        bucket.RemoveAll(candidate => ReferenceEquals(candidate, runner));
+        if (bucket.Count == 0) byTypeDomain.Remove(key);
+      }
+      dispatchWindows.Remove(runner);
+    }
+
+    /// <summary>
+    /// Register an ordered rule hook outside normal domain delivery. The supplied wrapper owns
+    /// enabled/error/reentrancy checks; this router retains the common depth and rate budgets.
+    /// </summary>
+    /// <param name="runner">Owned rule runner, registered exclusively as a rule hook.</param>
+    /// <param name="executionOrder">Ascending priority within the selected timing.</param>
+    /// <param name="timing">Run before or after normal domain graphs.</param>
+    /// <param name="invoke">Wrapper applying rule error and recursion isolation.</param>
+    /// <param name="isEnabled">Optional enable predicate checked before consuming watchdog budget.</param>
+    public void RegisterRuleRunner(IGraphRunner runner, int executionOrder, ERuleTiming timing,
+      Func<IGameMessage, string, CancellationToken, UniTask> invoke, Func<bool> isEnabled = null)
+    {
+      if (runner == null) throw new ArgumentNullException(nameof(runner));
+      if (invoke == null) throw new ArgumentNullException(nameof(invoke));
+      if (!Enum.IsDefined(typeof(ERuleTiming), timing)) throw new ArgumentOutOfRangeException(nameof(timing));
+      if (all.Any(candidate => ReferenceEquals(candidate, runner)) ||
+          rules.Any(candidate => ReferenceEquals(candidate.Runner, runner)))
+        throw new InvalidOperationException("A rule runner may only have one routing registration.");
+      rules.Add(new RuleDispatch
+      {
+        Runner = runner, Order = executionOrder, Timing = timing,
+        RegistrationIndex = nextRuleIndex++, Invoke = invoke, IsEnabled = isEnabled
+      });
+      rules.Sort((a, b) => a.Order != b.Order ? a.Order.CompareTo(b.Order) : a.RegistrationIndex.CompareTo(b.RegistrationIndex));
     }
 
     /// <summary>Route a MessagePipe message to all matching graph runners</summary>
@@ -136,14 +190,16 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
         wildcardMatched = wildcardList.Count > 0;
       }
 
-      if (matchedSet.Count == 0)
+      var matchedRules = rules.Where(rule => rule.Runner.CanHandle(messageType, domain)).ToArray();
+      if (matchedSet.Count == 0 && matchedRules.Length == 0)
       {
         log.Verbose("No graphs subscribed to message '{MessageType}' (domain: '{Domain}'). Available subscriptions: {Subscriptions}",
           messageType.Name, domainFilter, GetAvailableSubscriptionsForType(messageType));
         return;
       }
 
-      var matchedGraphs = all.Where(matchedSet.Contains).ToList();
+      // Remove from the match set as we select: a duplicate registration must still deliver once.
+      var matchedGraphs = all.Where(matchedSet.Remove).ToList();
       var routingStrategy = exactMatched && wildcardMatched
         ? $"additive: exact domain ('{domainFilter}') + wildcard (any domain)"
         : exactMatched
@@ -157,6 +213,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
       routeDepth++;
       try
       {
+        await DispatchRulesAsync(matchedRules, ERuleTiming.BeforeDomainGraphs, message, domain, ct);
         foreach (var runner in matchedGraphs)
         {
           if (ct.IsCancellationRequested)
@@ -170,10 +227,24 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
 
           await runner.HandleMessageAsync(message, domain, ct);
         }
+        await DispatchRulesAsync(matchedRules, ERuleTiming.AfterDomainGraphs, message, domain, ct);
       }
       finally
       {
         routeDepth--;
+      }
+    }
+
+    private async UniTask DispatchRulesAsync(RuleDispatch[] matches, ERuleTiming timing,
+      IGameMessage message, string domain, CancellationToken ct)
+    {
+      foreach (var rule in matches)
+      {
+        if (ct.IsCancellationRequested) break;
+        if (rule.Timing != timing || !rules.Contains(rule)) continue;
+        if (rule.IsEnabled != null && !rule.IsEnabled()) continue;
+        if (!TryConsumeDispatchBudget(rule.Runner, message.GetType())) continue;
+        await rule.Invoke(message, domain, ct);
       }
     }
 
@@ -227,7 +298,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
     /// <summary>Get all registered runners</summary>
     public IEnumerable<IGraphRunner> GetRunners()
     {
-      return all;
+      return all.Concat(rules.Select(rule => rule.Runner));
     }
 
     /// <summary>Get all unique message types that graphs are subscribed to</summary>
@@ -238,6 +309,10 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
       {
         types.Add(key.messageType);
       }
+      foreach (var rule in rules)
+        foreach (var subscription in rule.Runner.Definition.Subscriptions)
+          if (subscription.MessageType != null && subscription.MessageType.IsValid)
+            types.Add(subscription.MessageType.Type);
       return types;
     }
 
@@ -247,6 +322,8 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
       all.Clear();
       byTypeDomain.Clear();
       dispatchWindows.Clear();
+      rules.Clear();
+      nextRuleIndex = 0;
     }
   }
 }

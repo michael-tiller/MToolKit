@@ -14,6 +14,8 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.DTOs
   {
     public string GraphId;
     public string GraphDomain;
+    /// <summary>Canonical DialogueDefinition asset name used by dialogue-start messages.</summary>
+    public string DialogueName;
     [field: SerializeField]
     [MinValue(1)]
     public int MaxExecutionSteps { get; set; } = 1024;
@@ -27,6 +29,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime.DTOs
 
     string IRuntimeGraphDefinition.GraphId => GraphId;
     string IRuntimeGraphDefinition.GraphDomain => GraphDomain;
+    string IRuntimeGraphDefinition.DialogueName => DialogueName;
     IReadOnlyList<RuntimeSubscriptionDefinition> IRuntimeGraphDefinition.Subscriptions => Subscriptions;
     IReadOnlyList<RuntimeNodeDefinition> IRuntimeGraphDefinition.Nodes => Nodes;
     IReadOnlyList<RuntimeConnectionDefinition> IRuntimeGraphDefinition.Connections => Connections;

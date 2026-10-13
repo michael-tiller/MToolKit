@@ -80,6 +80,9 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
 
         foreach (var runner in runners)
         {
+          // Rules share World backing state. Persist it only through the canonical scope snapshot;
+          // per-rule copies could otherwise overwrite its declaration-sanitized restore.
+          if (runner.GraphDomain == "Rule") continue;
           try
           {
             var snapshot = runner.ExportState();
@@ -340,6 +343,9 @@ namespace MToolKit.Runtime.VisualGraphs.Persistence
             var runner = runners.FirstOrDefault(r => r.GraphId == graphId);
             if (runner != null)
             {
+              // Ignore duplicate rule snapshots from older saves: World scope was already restored
+              // and sanitized above, and must remain the sole source of persistent rule state.
+              if (runner.GraphDomain == "Rule") continue;
               runner.ImportState(snapshot);
               restoredCount++;
               log.ForMethod().Verbose("Restored state for graph '{GraphId}' ({StateKeyCount} keys): {Keys}",

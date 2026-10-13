@@ -52,6 +52,9 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
     public string GraphDomain => Definition.GraphDomain;
     public IRuntimeGraphDefinition Definition { get; }
 
+    /// <summary>Direct failure signal for a graph node; rule owners use it for session error isolation.</summary>
+    public event Action<string, string, Exception> NodeExecutionFailed;
+
     public bool CanHandle(Type messageType, string domain = null)
     {
       if (messageType == null) return false;
@@ -89,6 +92,15 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
     public async UniTask HandleMessageAsync(IGameMessage message, string domain = null, CancellationToken ct = default)
     {
       if (message == null) return;
+
+      // Published dialogue names and saved graph IDs are separate identities. This guard belongs
+      // exclusively to Dialogue graphs; event graphs may legitimately observe every dialogue start.
+      // Reject before the debug-start signal so an ignored message cannot leave an unmatched start.
+      if (Definition.GraphDomain == "Dialogue" && message is DialogueStartMessage start &&
+          (string.IsNullOrEmpty(start.DialogueId) ||
+           (!string.Equals(start.DialogueId, Definition.GraphId, StringComparison.Ordinal) &&
+            !string.Equals(start.DialogueId, Definition.DialogueName, StringComparison.Ordinal))))
+        return;
 
       var messageTypeName = message.GetType().Name;
       log.ForMethod().Information("Quest: Graph '{GraphId}' received message '{MessageType}' (domain: {Domain})",
@@ -269,6 +281,7 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
           log.ForMethod().Error(ex, "Quest: Graph '{GraphId}' - no executor found for node {NodeId} (type: {NodeType})",
             Definition.GraphId, nodeId, nodeDef.NodeType);
           // TODO: Emit Graph.ExecutorMissing message
+          RaiseNodeExecutionFailed(nodeId, ex);
           continue;
         }
 
@@ -309,12 +322,14 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
             }
           }
         }
-        catch (ArgumentException)
+        catch (ArgumentException ex)
         {
           // Invalid node configuration is an authoring error, not an operational graph
           // failure. In particular, ScopedKeyResolver guarantees malformed reserved
           // keys fail loudly; swallowing them here turns a bad graph into a silent
           // fallback and violates that contract.
+          errorMessage = ex.Message;
+          RaiseNodeExecutionFailed(nodeId, ex);
           throw;
         }
         catch (Exception ex)
@@ -322,7 +337,8 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
           errorMessage = ex.Message;
           log.ForMethod().Error(ex, "Quest: Graph '{GraphId}' - error executing node {NodeType} ({NodeId}): {Message}",
             Definition.GraphId, nodeDef.NodeType, nodeId, ex.Message);
-          // TODO: Emit Graph.ExecutorError message
+          if (!(ex is OperationCanceledException && ct.IsCancellationRequested))
+            RaiseNodeExecutionFailed(nodeId, ex);
         }
         finally
         {
@@ -387,6 +403,21 @@ namespace MToolKit.Runtime.VisualGraphs.Runtime
     }
 
     #endregion
+
+    private void RaiseNodeExecutionFailed(string nodeId, Exception exception)
+    {
+      var handlers = NodeExecutionFailed;
+      if (handlers == null) return;
+      // A failed observer must not hide the original node failure or block independent listeners.
+      foreach (Action<string, string, Exception> handler in handlers.GetInvocationList())
+      {
+        try { handler(GraphId, nodeId, exception); }
+        catch (Exception observerError)
+        {
+          log.Error(observerError, "Graph '{GraphId}' failure observer threw for node '{NodeId}'", GraphId, nodeId);
+        }
+      }
+    }
 
     private static bool IsEntryNode(string nodeType)
     {

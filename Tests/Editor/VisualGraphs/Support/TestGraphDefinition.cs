@@ -16,6 +16,7 @@ namespace MToolKit.Tests.Editor.VisualGraphs.Support
   {
     public string GraphId { get; set; } = "TestGraph";
     public string GraphDomain { get; set; } = "Quest";
+    public string DialogueName { get; set; }
     public int MaxExecutionSteps { get; set; } = 100;
     public IReadOnlyList<RuntimeSubscriptionDefinition> Subscriptions { get; set; } = new List<RuntimeSubscriptionDefinition>();
     public IReadOnlyList<RuntimeNodeDefinition> Nodes { get; set; } = new List<RuntimeNodeDefinition>();

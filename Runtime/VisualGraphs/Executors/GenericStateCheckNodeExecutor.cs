@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.MessageBus.Interfaces;
@@ -32,10 +33,10 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
       CancellationToken ct = default)
     {
       // Extract parameters
-      var stateKey = node.Parameters.TryGetValue("stateKey", out var sk) ? sk as string : null;
-      var expectedValue = node.Parameters.TryGetValue("expectedValue", out var ev) ? ev as string : null;
-      var comparisonOperator = node.Parameters.TryGetValue("comparisonOperator", out var co) ? co as string : "Equals";
-      var ignoreCase = node.Parameters.TryGetValue("ignoreCase", out var ic) && Convert.ToBoolean(ic);
+      var stateKey = GraphNodeValues.Parameter(node, "StateKey", "stateKey") as string;
+      var expectedValue = GraphNodeValues.Parameter(node, "ExpectedValue", "expectedValue") as string;
+      var comparisonOperator = GraphNodeValues.Parameter(node, "ComparisonOperator", "comparisonOperator", "Equals") as string;
+      var ignoreCase = Convert.ToBoolean(GraphNodeValues.Parameter(node, "IgnoreCase", "ignoreCase", false));
 
       if (string.IsNullOrEmpty(stateKey))
       {
@@ -45,7 +46,7 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
       }
 
       // Try to get state value
-      if (!state.TryGet<object>(stateKey, out var actualValue))
+      if (!new GraphNodeValues(graph, state, context).TryGet<object>(stateKey, out var actualValue))
       {
         log.ForMethod().Debug("GenericStateCheck: State key '{StateKey}' not found, continuing to DoesntMatch", stateKey);
         EnqueueOutputPort(graph, node, "DoesntMatch", context);
@@ -88,8 +89,8 @@ namespace MToolKit.Runtime.VisualGraphs.Executors
         // Handle numeric comparisons
         if (IsNumericType(actualType))
         {
-          var actualNum = Convert.ToDouble(actualValue);
-          var expectedNum = Convert.ToDouble(expectedValue);
+          var actualNum = Convert.ToDouble(actualValue, CultureInfo.InvariantCulture);
+          var expectedNum = double.Parse(expectedValue, NumberStyles.Float, CultureInfo.InvariantCulture);
 
           return comparisonOperator switch
           {
