@@ -12,6 +12,10 @@ not a roadmap milestone.
 
 ### Added
 
+- Shared graph-variable literal syntax supports all seven types with invariant finite numbers, escaped strings, vectors and RGBA colors; document the canonical Dirigible variables contract. (v1.3.0)
+
+### Added
+
 - Durable ES3 save contexts, awaited flush receipts, completion callbacks, and save-before-clone workflow, combined with discarded-local-restore recovery. Both coordinator save entry points retain the session boundary through flush completion and receipt notification (v1.2.0).
 - Typed provisional capture participants preserve live controller save bindings across temporary-profile captures; coordinator scopes hold the session boundary and unwind participant scopes in reverse order (v1.2.0).
 

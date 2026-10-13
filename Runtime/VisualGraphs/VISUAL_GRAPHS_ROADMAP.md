@@ -1027,6 +1027,12 @@ CropGraph:
 
 ### 9.7 Variable & Logic Text Authoring Round-Trip ⏳ **PLANNED** (Required for Dirigible parity Phase C)
 
+**2026-10-12 substrate ticket:** seven-type literal syntax and Dirigible event/quest
+`[variables]` import/export are implemented and tested, with canonical ordering,
+file/line errors, owned sub-assets, and non-destructive `asset_canonical` updates.
+General logic topology and condition/`DynamicValue` text remain outside this selected
+P3 slice. No full 9.7 closure is inferred; see the consuming task's closure record.
+
 **Goal:** Variables and logic declared in the text authoring formats (`.quest.txt` / `.events.txt`) round-trip to graph assets and back — modders and the Storyteller pipeline author variables without opening xNode
 
 **Why Critical:**
@@ -2668,4 +2674,3 @@ Those must live in services, not in graphs. **Graphs can assume invariants. They
 
 **Current:** 43 files  
 **After Roadmap:** ~130-160 files (3-4x growth)
-
