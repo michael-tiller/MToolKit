@@ -24,13 +24,23 @@ namespace MToolKit.Tests.Editor.Persistence
     public void SetUp()
     {
       previousIgnoreFailingMessages = LogAssert.ignoreFailingMessages;
-      LogAssert.ignoreFailingMessages = true;
+      LogAssert.ignoreFailingMessages = false;
     }
 
     [TearDown]
     public void TearDown()
     {
       LogAssert.ignoreFailingMessages = previousIgnoreFailingMessages;
+    }
+
+    [UnityTearDown]
+    public IEnumerator RestoreEditMode()
+    {
+      try
+      {
+        if (UnityEngine.Application.isPlaying) yield return new ExitPlayMode();
+      }
+      finally { PersistencePlayModeTestScope.RestoreSceneSetup(); }
     }
 
     [Test]
@@ -94,6 +104,7 @@ namespace MToolKit.Tests.Editor.Persistence
     {
       var es3 = new MemoryES3Service { FlushFailure = new IOException("disk flush failed") };
       var system = new ES3GameSaveSystem(Array.Empty<ISaveDomainController>(), es3);
+      using var expectedErrors = new ExpectedPersistenceErrorScope("ES3 save operation failed: disk flush failed");
 
       IOException error = Assert.Throws<IOException>(() => system.SaveWithReceiptAsync().GetAwaiter().GetResult());
 
@@ -102,18 +113,25 @@ namespace MToolKit.Tests.Editor.Persistence
     }
     [UnityTest]
     public IEnumerator SaveWithReceipt_NotifiesDurableHandlersOnlyAfterTheFlushAndIsolatesObserverFailure()
-      => UniTask.ToCoroutine(async () =>
+    {
+      PersistencePlayModeTestScope.PrepareEmptyScene();
+      yield return new EnterPlayMode();
+      yield return SaveWithReceipt_NotifiesDurableHandlersOnlyAfterTheFlushAndIsolatesObserverFailureAsync().ToCoroutine();
+    }
+
+    private static async UniTask SaveWithReceipt_NotifiesDurableHandlersOnlyAfterTheFlushAndIsolatesObserverFailureAsync()
     {
       var es3 = new MemoryES3Service();
       var handler = new DurableCompletionController(es3) { ThrowOnCompletion = true };
       var system = new ES3GameSaveSystem(new ISaveDomainController[] { handler }, es3);
+      using var expectedErrors = ExpectedPersistenceErrorScope.ForDurableCompletionFailure(TypeName(handler));
 
       ES3FlushReceipt receipt = await system.SaveWithReceiptAsync();
 
       Assert.That(handler.Receipt, Is.SameAs(receipt));
       Assert.That(handler.FlushCountWhenNotified, Is.EqualTo(1));
       Assert.That(es3.FlushCount, Is.EqualTo(1));
-    });
+    }
     [Test]
     public void FlushReceiptForcesTheSaveFileAndHashesItsReadBackBytes()
     {
@@ -169,6 +187,7 @@ namespace MToolKit.Tests.Editor.Persistence
       var first = new FirstController(calls);
       var requiredFailure = new RequiredFailureController(calls);
       var downstream = new DownstreamController(calls);
+      using var expectedErrors = ExpectedPersistenceErrorScope.ForControllerLoadFailure(TypeName(requiredFailure));
       var system = new ES3GameSaveSystem(
         new ISaveDomainController[] { downstream, requiredFailure, first },
         new MemoryES3Service());
@@ -188,6 +207,7 @@ namespace MToolKit.Tests.Editor.Persistence
       var calls = new List<string>();
       var optionalFailure = new OptionalFailureController(calls);
       var later = new LaterController(calls);
+      using var expectedErrors = ExpectedPersistenceErrorScope.ForControllerLoadFailure(TypeName(optionalFailure));
       var system = new ES3GameSaveSystem(
         new ISaveDomainController[] { later, optionalFailure }, new MemoryES3Service());
 
@@ -205,6 +225,7 @@ namespace MToolKit.Tests.Editor.Persistence
       var first = new FirstController(calls);
       var requiredFailure = new RequiredFailureController(calls);
       var downstream = new DownstreamController(calls);
+      using var expectedErrors = ExpectedPersistenceErrorScope.ForControllerLoadFailure(TypeName(requiredFailure));
       var system = new ES3GameSaveSystem(
         new ISaveDomainController[] { first, requiredFailure, downstream }, new MemoryES3Service());
       string[] order = { TypeName(first), TypeName(requiredFailure), TypeName(downstream) };

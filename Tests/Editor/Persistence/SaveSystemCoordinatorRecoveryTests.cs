@@ -29,7 +29,7 @@ namespace MToolKit.Tests.Editor.Persistence
     public void SetUp()
     {
       previousIgnoreFailingMessages = LogAssert.ignoreFailingMessages;
-      LogAssert.ignoreFailingMessages = true;
+      LogAssert.ignoreFailingMessages = false;
     }
 
     [TearDown]
@@ -38,9 +38,26 @@ namespace MToolKit.Tests.Editor.Persistence
       LogAssert.ignoreFailingMessages = previousIgnoreFailingMessages;
     }
 
+    [UnityTearDown]
+    public IEnumerator RestoreEditMode()
+    {
+      // Frame-based saves need PlayMode; teardown also exits when an assertion fails.
+      try
+      {
+        if (Application.isPlaying) yield return new ExitPlayMode();
+      }
+      finally { PersistencePlayModeTestScope.RestoreSceneSetup(); }
+    }
+
     [UnityTest]
     public IEnumerator FailedLocalRestore_AfterDiscard_CanLoadAndSaveWithFreshControllers()
-      => UniTask.ToCoroutine(async () =>
+    {
+      PersistencePlayModeTestScope.PrepareEmptyScene();
+      yield return new EnterPlayMode();
+      yield return FailedLocalRestore_AfterDiscard_CanLoadAndSaveWithFreshControllersAsync().ToCoroutine();
+    }
+
+    private static async UniTask FailedLocalRestore_AfterDiscard_CanLoadAndSaveWithFreshControllersAsync()
     {
       using var session = new Session();
       var failed = new Controller { FailLoad = true };
@@ -62,7 +79,7 @@ namespace MToolKit.Tests.Editor.Persistence
       Assert.AreEqual(0, failed.SaveCount);
       Assert.AreEqual(1, session.Es3.FlushCount,
         "The recovered session must still complete the durable save boundary.");
-    });
+    }
 
     [TestCase(false)]
     [TestCase(true)]
@@ -114,6 +131,9 @@ namespace MToolKit.Tests.Editor.Persistence
     {
       using var session = new Session();
       session.Es3.FlushFailure = new IOException("injected flush failure");
+      using var expectedErrors = new ExpectedPersistenceErrorScope(
+        "Save failed using local system: injected flush failure",
+        "ES3 save operation failed: injected flush failure");
       int notifications = 0;
       session.Coordinator.DurableSaveCompleted += _ => notifications++;
 
@@ -141,16 +161,27 @@ namespace MToolKit.Tests.Editor.Persistence
 
     [UnityTest]
     public IEnumerator CancelledControllerProfileBatch_AfterDiscard_DoesNotLeakIntoFreshSave()
-      => CancelledProfileBatch_AfterDiscard_DoesNotLeakIntoFreshSave("controller").ToCoroutine();
+    {
+      PersistencePlayModeTestScope.PrepareEmptyScene();
+      yield return new EnterPlayMode();
+      yield return CancelledProfileBatch_AfterDiscard_DoesNotLeakIntoFreshSave("controller").ToCoroutine();
+    }
 
     [UnityTest]
     public IEnumerator CancelledFlushEntryProfileBatch_AfterDiscard_DoesNotLeakIntoFreshSave()
-      => CancelledProfileBatch_AfterDiscard_DoesNotLeakIntoFreshSave("flush-entry").ToCoroutine();
+    {
+      PersistencePlayModeTestScope.PrepareEmptyScene();
+      yield return new EnterPlayMode();
+      yield return CancelledProfileBatch_AfterDiscard_DoesNotLeakIntoFreshSave("flush-entry").ToCoroutine();
+    }
 
     private static async UniTask CancelledProfileBatch_AfterDiscard_DoesNotLeakIntoFreshSave(string cancelPoint)
     {
       using var session = new Session(useProfileAwareService: true);
       using var cancellation = new CancellationTokenSource();
+      using var expectedErrors = new ExpectedPersistenceErrorScope(
+        "Save failed using local system: The operation was canceled.",
+        "ES3 save operation failed: The operation was canceled.");
       ProfileAwareES3Service service = session.ProfileAwareEs3;
       await service.SaveAsync("existing-key", "original");
       int notifications = 0;
@@ -223,6 +254,8 @@ namespace MToolKit.Tests.Editor.Persistence
       var first = new CaptureController("first", events);
       var second = new CaptureController("second", events) { ExitFailure = new IOException("cleanup failed") };
       var original = new InvalidOperationException("participant entry failed");
+      using var expectedErrors = new ExpectedPersistenceErrorScope(
+        "Provisional save participant cleanup failed: cleanup failed");
       var third = new CaptureController("third", events) { EnterFailure = original };
       session.Coordinator.RegisterLocalController(first);
       session.Coordinator.RegisterLocalController(second);
@@ -240,7 +273,13 @@ namespace MToolKit.Tests.Editor.Persistence
 
     [UnityTest]
     public IEnumerator ProvisionalCapture_RejectsAnExistingSaveBeforeEnteringParticipants()
-      => UniTask.ToCoroutine(async () =>
+    {
+      PersistencePlayModeTestScope.PrepareEmptyScene();
+      yield return new EnterPlayMode();
+      yield return ProvisionalCapture_RejectsAnExistingSaveBeforeEnteringParticipantsAsync().ToCoroutine();
+    }
+
+    private static async UniTask ProvisionalCapture_RejectsAnExistingSaveBeforeEnteringParticipantsAsync()
     {
       using var session = new Session();
       var completion = new UniTaskCompletionSource();
@@ -268,7 +307,7 @@ namespace MToolKit.Tests.Editor.Persistence
       using (session.Coordinator.BeginProvisionalSaveCapture())
         CollectionAssert.AreEqual(new[] { "enter:participant" }, events);
       CollectionAssert.AreEqual(new[] { "enter:participant", "exit:participant" }, events);
-    });
+    }
 
     [Test]
     public void FailedLocalRestore_WithOldControllers_RejectsRecovery()
@@ -341,7 +380,13 @@ namespace MToolKit.Tests.Editor.Persistence
 
     [UnityTest]
     public IEnumerator InFlightControllerSave_RejectsRecoveryWithoutInterruptingIt()
-      => UniTask.ToCoroutine(async () =>
+    {
+      PersistencePlayModeTestScope.PrepareEmptyScene();
+      yield return new EnterPlayMode();
+      yield return InFlightControllerSave_RejectsRecoveryWithoutInterruptingItAsync().ToCoroutine();
+    }
+
+    private static async UniTask InFlightControllerSave_RejectsRecoveryWithoutInterruptingItAsync()
     {
       using var session = new Session();
       var completion = new UniTaskCompletionSource();
@@ -361,7 +406,7 @@ namespace MToolKit.Tests.Editor.Persistence
         await saving;
       }
       Assert.DoesNotThrow(() => BeginAfterDiscard(session.Coordinator));
-    });
+    }
 
     [TestCase(false)]
     [TestCase(true)]
@@ -417,6 +462,7 @@ namespace MToolKit.Tests.Editor.Persistence
     public async Task FailedGlobalRestore_AfterModeSwitch_RemainsBlockedAfterLocalDiscard()
     {
       using var session = new Session();
+      using var expectedErrors = ExpectedPersistenceErrorScope.ForControllerLoadFailure(session.Global.GetType().FullName);
       var completion = new UniTaskCompletionSource();
       session.Global.PendingLoad = completion.Task;
       session.Coordinator.SwitchToGlobalSystem();
@@ -438,6 +484,7 @@ namespace MToolKit.Tests.Editor.Persistence
     public async Task QueuedGlobalRestore_AfterModeSwitch_RemainsBlockedAfterLocalDiscard()
     {
       using var session = new Session();
+      using var expectedErrors = ExpectedPersistenceErrorScope.ForControllerLoadFailure(session.Global.GetType().FullName);
       var completion = new UniTaskCompletionSource();
       var local = new Controller { PendingLoad = completion.Task };
       session.Coordinator.RegisterLocalController(local);
@@ -538,6 +585,7 @@ namespace MToolKit.Tests.Editor.Persistence
 
       public void FailRequiredLoad(Controller controller)
       {
+        using var expectedErrors = ExpectedPersistenceErrorScope.ForControllerLoadFailure(controller.GetType().FullName);
         var failures = Coordinator.LoadAsync(new[] { controller.GetType().FullName }, _ => true).GetAwaiter().GetResult();
         Assert.AreEqual(1, failures.Count);
         Assert.IsTrue(Coordinator.IsSaveBlocked.Value);

@@ -135,7 +135,9 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
           for (int i = 0; i < controllers.Count; i++)
           {
             await RunWithTimingAsync(controllers[i], i, elapsedMs, ct);
-            await UniTask.Yield();
+            // Yield can continue in a later player-loop phase of the same frame.
+            // Keep each serializer in a separate frame and honour cancellation before the next one.
+            await UniTask.NextFrame(cancellationToken: ct);
           }
 
           // Per-controller timing: Debug by default (quiet), Warning when above threshold.

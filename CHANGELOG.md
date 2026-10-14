@@ -12,6 +12,7 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Reconcile the enabled-backend bootstrap input fallback, cancellable serializer frame boundaries and quieter graph execution diagnostics with the retained VG logic, game rules and async fault handling. Preserve both reviewed source histories and public APIs (v1.6.2).
 - Preserve fault-on-await when Addressables is disabled while clearing bootstrap compiler warnings; verify private serialized graph values during export. (v1.6.1)
 
 ### Added
@@ -28,6 +29,10 @@ not a roadmap milestone.
 - Typed provisional capture participants preserve live controller save bindings across temporary-profile captures; coordinator scopes hold the session boundary and unwind participant scopes in reverse order (v1.2.0).
 
 ### Fixed
+
+- Bootstrapper fallback polls the enabled Input System backend safely when keyboard or mouse devices are absent, preserving keyboard and mouse-button readiness and configured action ownership (v1.2.1).
+- Sequential ES3 saves wait for a cancellable next-frame boundary after each controller, preserving durable receipts, aborted-batch cleanup and safe retry (v1.2.1).
+- Routine graph routing and node execution use Debug; dialogue Information messages, warnings and errors retain their existing levels (v1.2.1).
 
 - Cancelled or failed profile save batches discard cached controller writes before local-session recovery, preserve the original failure, and publish no completed receipt (v1.2.0).
 
