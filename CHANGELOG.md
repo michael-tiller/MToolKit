@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Consolidate the retained MTK histories and fetched interceptor squash on dev without changing runtime or test code; remove six trailing spaces from MessageBus metadata and retain integration provenance (v1.6.3).
+
 - Reconcile the enabled-backend bootstrap input fallback, cancellable serializer frame boundaries and quieter graph execution diagnostics with the retained VG logic, game rules and async fault handling. Preserve both reviewed source histories and public APIs (v1.6.2).
 - Preserve fault-on-await when Addressables is disabled while clearing bootstrap compiler warnings; verify private serialized graph values during export. (v1.6.1)
 
