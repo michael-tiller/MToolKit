@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Core.Interfaces;
 using MToolKit.Runtime.MessageBus;
@@ -40,6 +41,9 @@ namespace MToolKit.Runtime.Persistence
     private readonly SemaphoreSlim loadGate = new(1, 1);
     private readonly object sessionBoundaryGate = new();
     private int activePersistenceOperations;
+    private readonly List<IRequiredSavePreparationParticipant> requiredSavePreparations = new();
+    private PersistenceOperation requiredPreparationOwner;
+    private long persistenceSessionGeneration;
 
     // Auto-save functionality
     private CancellationTokenSource autoSaveCts;
@@ -144,6 +148,7 @@ namespace MToolKit.Runtime.Persistence
             applicationSaveBlocked = true;
           StopAutoSave();
           localSaveSystem = new ES3GameSaveSystem(Array.Empty<ISaveDomainController>(), es3Service);
+          persistenceSessionGeneration++;
           failedLocalRestore = false;
           IsSaveBlocked.Value = applicationSaveBlocked;
           LastLoadTruncationReport = TruncationReport.Empty;
@@ -157,6 +162,150 @@ namespace MToolKit.Runtime.Persistence
       }
     }
 
+    /// <summary>Registers required preparation for subsequent controller snapshots and saves.</summary>
+    public void RegisterRequiredSavePreparationParticipant(IRequiredSavePreparationParticipant participant)
+    {
+      if (participant == null) throw new ArgumentNullException(nameof(participant));
+      if (string.IsNullOrWhiteSpace(participant.ParticipantId))
+        throw new ArgumentException("A stable preparation participant ID is required.", nameof(participant));
+      lock (sessionBoundaryGate)
+      {
+        if (requiredSavePreparations.Contains(participant)) return;
+        if (requiredSavePreparations.Any(current => string.Equals(current.ParticipantId, participant.ParticipantId, StringComparison.Ordinal)))
+          throw new ArgumentException("A preparation participant with this ID is already registered.", nameof(participant));
+        requiredSavePreparations.Add(participant);
+      }
+    }
+
+    public void UnregisterRequiredSavePreparationParticipant(IRequiredSavePreparationParticipant participant)
+    {
+      lock (sessionBoundaryGate) requiredSavePreparations.Remove(participant);
+    }
+
+    public async UniTask<PreparedSaveCaptureScope> BeginPreparedProvisionalSaveCaptureAsync(CancellationToken ct = default)
+    {
+      ct.ThrowIfCancellationRequested();
+      PersistenceOperation operation = BeginSaveOperation(true, out var participants);
+      var context = new SavePreparationContext(sessionBoundaryGate);
+      var entered = new List<IDisposable>();
+      try
+      {
+        await PrepareForSaveAsync(context, participants, ct);
+        ct.ThrowIfCancellationRequested();
+        ValidatePreparedOperation(operation);
+        SaveDomainControllerRegistry registry = operation.WasLocal ? localRegistry : globalRegistry;
+        foreach (IProvisionalSaveCaptureParticipant participant in registry.GetControllers().OfType<IProvisionalSaveCaptureParticipant>())
+          entered.Add(participant.BeginProvisionalSaveCapture()
+            ?? throw new InvalidOperationException("A provisional save participant returned no scope."));
+        return new PreparedSaveCaptureScope(this, operation.SessionGeneration, operation, sessionBoundaryGate,
+          () => ReleasePreparedCapture(operation, context, entered));
+      }
+      catch
+      {
+        try { DisposeProvisionalParticipants(entered, throwOnFailure: false); }
+        finally
+        {
+          try { ClosePreparation(context, throwOnFailure: false); }
+          finally { operation.Dispose(); }
+        }
+        throw;
+      }
+    }
+
+    public async UniTask<ES3FlushReceipt> SavePreparedAsync(PreparedSaveCaptureScope scope, CancellationToken ct = default)
+    {
+      ct.ThrowIfCancellationRequested();
+      if (scope == null) throw new ArgumentNullException(nameof(scope));
+      PersistenceOperation operation;
+      lock (sessionBoundaryGate)
+      {
+        if (!ReferenceEquals(scope.Owner, this) || scope.SessionGeneration != persistenceSessionGeneration)
+          throw new InvalidOperationException("The prepared capture belongs to another coordinator or persistence session.");
+        operation = scope.Operation as PersistenceOperation;
+        if (!ReferenceEquals(requiredPreparationOwner, operation))
+          throw new InvalidOperationException("The prepared capture no longer owns persistence admission.");
+        if (IsSaveBlocked.Value) throw new InvalidOperationException("Save is blocked because the prior load reported severe truncation.");
+        scope.BeginWrite();
+      }
+      try { return await SaveCoreAsync(operation, requireReceipt: true, ct); }
+      finally { scope.EndWrite(); }
+    }
+
+    private PersistenceOperation BeginSaveOperation(bool preparedCapture, out IRequiredSavePreparationParticipant[] participants)
+    {
+      lock (sessionBoundaryGate)
+      {
+        participants = requiredSavePreparations.OrderBy(participant => participant.Order)
+          .ThenBy(participant => participant.ParticipantId, StringComparer.Ordinal).ToArray();
+        bool exclusive = preparedCapture || participants.Length != 0;
+        if (exclusive && activePersistenceOperations != 0)
+          throw new InvalidOperationException("Busy: persistence is active or queued.");
+        PersistenceOperation operation = BeginPersistenceOperation();
+        if (exclusive) requiredPreparationOwner = operation;
+        return operation;
+      }
+    }
+
+    private void ValidatePreparedOperation(PersistenceOperation operation)
+    {
+      lock (sessionBoundaryGate)
+      {
+        if (!ReferenceEquals(requiredPreparationOwner, operation) || operation.SessionGeneration != persistenceSessionGeneration)
+          throw new InvalidOperationException("The persistence session changed during required save preparation.");
+      }
+    }
+
+    private static async UniTask PrepareForSaveAsync(SavePreparationContext context,
+      IReadOnlyList<IRequiredSavePreparationParticipant> participants, CancellationToken ct)
+    {
+      if (participants.Count == 0) return;
+      using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+      deadline.CancelAfter(TimeSpan.FromSeconds(2));
+      Task aborted = Task.Delay(Timeout.Infinite, deadline.Token);
+      foreach (IRequiredSavePreparationParticipant participant in participants)
+      {
+        ThrowIfPreparationStopped(deadline, ct);
+        Task pending = participant.PrepareForSaveAsync(context, deadline.Token).AsTask();
+        if (await Task.WhenAny(pending, aborted) != pending)
+        {
+          // Observe an uncooperative participant's eventual failure without resuming preparation.
+          _ = pending.ContinueWith(completed => { _ = completed.Exception; }, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+          ThrowIfPreparationStopped(deadline, ct);
+        }
+        try { await pending; }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+        { ThrowIfPreparationStopped(deadline, ct); throw; }
+        ThrowIfPreparationStopped(deadline, ct);
+      }
+    }
+
+    private static void ThrowIfPreparationStopped(CancellationTokenSource deadline, CancellationToken ct)
+    {
+      ct.ThrowIfCancellationRequested();
+      if (deadline.IsCancellationRequested) throw new TimeoutException("Timeout: required save preparation exceeded its two-second wall-clock deadline.");
+    }
+
+    private static void ClosePreparation(SavePreparationContext context, bool throwOnFailure)
+    {
+      try { context?.Close(); }
+      catch (Exception failure)
+      {
+        log.ForMethod().Error(failure, "Save preparation admission cleanup failed: {Message}", failure.Message);
+        if (throwOnFailure) throw;
+      }
+    }
+
+    private static void ReleasePreparedCapture(PersistenceOperation operation, SavePreparationContext context, IReadOnlyList<IDisposable> entered)
+    {
+      try { DisposeProvisionalParticipants(entered, throwOnFailure: true); }
+      finally
+      {
+        try { ClosePreparation(context, throwOnFailure: true); }
+        finally { operation.Dispose(); }
+      }
+    }
+
     /// <summary>
     /// Pins active controllers' live save bindings until the caller restores its source profile.
     /// The scope prevents session discard but permits the nested save used to produce the capture.
@@ -166,6 +315,8 @@ namespace MToolKit.Runtime.Persistence
       PersistenceOperation operation;
       lock (sessionBoundaryGate)
       {
+        if (requiredSavePreparations.Count != 0)
+          throw new InvalidOperationException("PreparationRequired: use asynchronous prepared provisional capture.");
         if (activePersistenceOperations != 0)
           throw new InvalidOperationException("Cannot begin provisional capture while persistence is active or queued.");
         operation = BeginPersistenceOperation();
@@ -229,6 +380,8 @@ namespace MToolKit.Runtime.Persistence
     {
       lock (sessionBoundaryGate)
       {
+        if (requiredPreparationOwner != null)
+          throw new InvalidOperationException("Busy: a required save preparation or prepared capture owns persistence admission.");
         bool wasLocal = useLocalSystem;
         ES3GameSaveSystem system = wasLocal ? localSaveSystem : globalSaveSystem;
         if (system == null)
@@ -244,19 +397,25 @@ namespace MToolKit.Runtime.Persistence
       private SaveSystemCoordinator owner;
       public ES3GameSaveSystem System { get; }
       public bool WasLocal { get; }
+      public long SessionGeneration { get; }
 
       public PersistenceOperation(SaveSystemCoordinator owner, ES3GameSaveSystem system, bool wasLocal)
       {
         this.owner = owner;
         System = system;
         WasLocal = wasLocal;
+        SessionGeneration = owner.persistenceSessionGeneration;
       }
 
       public void Dispose()
       {
         SaveSystemCoordinator current = Interlocked.Exchange(ref owner, null);
         if (current == null) return;
-        lock (current.sessionBoundaryGate) current.activePersistenceOperations--;
+        lock (current.sessionBoundaryGate)
+        {
+          current.activePersistenceOperations--;
+          if (ReferenceEquals(current.requiredPreparationOwner, this)) current.requiredPreparationOwner = null;
+        }
       }
     }
 
@@ -310,6 +469,7 @@ namespace MToolKit.Runtime.Persistence
 
     public void Start()
     {
+      lock (sessionBoundaryGate) persistenceSessionGeneration++;
       // Initialize global save system
       List<ISaveDomainController> globalControllers = globalRegistry.GetControllers().ToList();
       globalSaveSystem = new ES3GameSaveSystem(globalControllers, es3Service);
@@ -345,6 +505,7 @@ namespace MToolKit.Runtime.Persistence
 
     public void Shutdown()
     {
+      lock (sessionBoundaryGate) persistenceSessionGeneration++;
       log.ForMethod().Debug("SaveSystemCoordinator shutting down");
 
       // Stop auto-save
@@ -374,6 +535,7 @@ namespace MToolKit.Runtime.Persistence
     {
       if (!useLocalSystem)
       {
+        lock (sessionBoundaryGate) persistenceSessionGeneration++;
         useLocalSystem = true;
 
         // Update local save system with current controllers
@@ -398,6 +560,7 @@ namespace MToolKit.Runtime.Persistence
     {
       if (useLocalSystem)
       {
+        lock (sessionBoundaryGate) persistenceSessionGeneration++;
         useLocalSystem = false;
 
         // Stop auto-save when switching to global system
@@ -533,8 +696,17 @@ namespace MToolKit.Runtime.Persistence
         return;
       }
 
-      using PersistenceOperation operation = BeginPersistenceOperation();
-      await SaveCoreAsync(operation, operation.System.SupportsDurableReceipts, ct);
+      using PersistenceOperation operation = BeginSaveOperation(false, out var participants);
+      var context = new SavePreparationContext(sessionBoundaryGate);
+      bool succeeded = false;
+      try
+      {
+        await PrepareForSaveAsync(context, participants, ct);
+        if (participants.Length != 0) ValidatePreparedOperation(operation);
+        await SaveCoreAsync(operation, operation.System.SupportsDurableReceipts, ct);
+        succeeded = true;
+      }
+      finally { ClosePreparation(context, throwOnFailure: succeeded); }
     }
 
     /// <summary>Returns the completed durable flush receipt; blocked saves cannot produce a receipt.</summary>
@@ -544,8 +716,18 @@ namespace MToolKit.Runtime.Persistence
       if (IsSaveBlocked.Value)
         throw new InvalidOperationException("Save is blocked because the prior load reported severe truncation.");
 
-      using PersistenceOperation operation = BeginPersistenceOperation();
-      return await SaveCoreAsync(operation, requireReceipt: true, ct);
+      using PersistenceOperation operation = BeginSaveOperation(false, out var participants);
+      var context = new SavePreparationContext(sessionBoundaryGate);
+      bool succeeded = false;
+      try
+      {
+        await PrepareForSaveAsync(context, participants, ct);
+        if (participants.Length != 0) ValidatePreparedOperation(operation);
+        ES3FlushReceipt receipt = await SaveCoreAsync(operation, requireReceipt: true, ct);
+        succeeded = true;
+        return receipt;
+      }
+      finally { ClosePreparation(context, throwOnFailure: succeeded); }
     }
 
     private async UniTask<ES3FlushReceipt> SaveCoreAsync(

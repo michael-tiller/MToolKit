@@ -17,6 +17,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Add ordered required save preparation before snapshots, owned prepared capture scopes and explicit nested durable writes. Retain admission through temporary-profile capture and clean up on cancellation, wall-clock timeout or session change; preserve legacy saves without required participants. (v1.7.0)
+
 - Add ordered, isolated GameRules, scoped state access, owned event teardown and canonical dialogue routing; preserve legacy interface implementers with default members. (v1.6.0)
 
 - Add value transforms, conditional math, typed Select, and entry-derived event graph subscriptions; apply scoped Vector3 transform operations. (v1.5.0)
