@@ -175,6 +175,9 @@ namespace MToolKit.Runtime.Settings
       GraphicsSettings?.RevertToDefaultSettings();
       GameSettings?.RevertToDefaultSettings();
       InputSettings?.RevertToDefaultSettings();
+      // A confirmed reset is already applied; persist it even though each
+      // setting has advanced its cancellation baseline to the default value.
+      Apply(autoFinish: false, gotoMenu: false);
       SetDirty(false);
     }
 

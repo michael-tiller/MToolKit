@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Persist confirmed default settings through the existing apply/save path while retaining immediate reset and cancellation baselines. (v1.7.3)
+
 - Keep unpositioned one-shot audio centered and reset spatial playback on every pooled-source checkout; explicit world positions retain 3D playback when enabled. (v1.7.2)
 
 - Isolate pending world-settings JSON and seed across profile transitions and inactive-profile saves. Preserve first-load queued values and settings supplied during new-world profile publication. (v1.7.1)
