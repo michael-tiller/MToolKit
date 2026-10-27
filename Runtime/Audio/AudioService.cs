@@ -111,6 +111,9 @@ namespace MToolKit.Runtime.Audio
       {
         // Configure audio source
         audioSource.transform.position = position ?? Vector3.zero;
+        // A supplied world position opts into spatial playback. Reset this for every
+        // checkout so a preceding world sound cannot make an unpositioned UI cue 3D.
+        audioSource.spatialBlend = config.EnableSpatialAudio && position.HasValue ? 1f : 0f;
         audioSource.outputAudioMixerGroup = GetMixerGroupForAudioType(audioType);
         audioSource.pitch = pitch;
 
