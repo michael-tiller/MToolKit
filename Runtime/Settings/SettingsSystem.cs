@@ -336,6 +336,15 @@ namespace MToolKit.Runtime.Settings
             GameSettings.AnalyticsEnabled.Value = iniService.GetValue<bool>("Game", "AnalyticsEnabled", GameSettings.AnalyticsEnabled.Default);
         }
 
+        // Input camera settings
+        if (InputSettings != null)
+        {
+          if (iniService.KeyExists("Input", "CameraPanSensitivity"))
+            InputSettings.CameraPanSensitivity.Value = iniService.GetValue<float>("Input", "CameraPanSensitivity", InputSettings.CameraPanSensitivity.Default);
+          if (iniService.KeyExists("Input", "CameraZoomSensitivity"))
+            InputSettings.CameraZoomSensitivity.Value = iniService.GetValue<float>("Input", "CameraZoomSensitivity", InputSettings.CameraZoomSensitivity.Default);
+        }
+
         // ponytail: headless builds must not blast audio
         if (Application.isBatchMode && AudioSettings != null)
           AudioSettings.MasterVolume.Value = 0f;
@@ -344,6 +353,7 @@ namespace MToolKit.Runtime.Settings
         GraphicsSettings?.Apply();
         AudioSettings?.Apply();
         GameSettings?.Apply();
+        InputSettings?.Apply();
         SetDirty(false);
 
         log.ForMethod().Verbose("Settings loaded from INI file");
@@ -391,6 +401,13 @@ namespace MToolKit.Runtime.Settings
         {
           iniService.SetValue("Game", "AutoSave", GameSettings.AutoSave.Value);
           iniService.SetValue("Game", "AnalyticsEnabled", GameSettings.AnalyticsEnabled.Value);
+        }
+
+        // Input camera settings
+        if (InputSettings != null)
+        {
+          iniService.SetValue("Input", "CameraPanSensitivity", InputSettings.CameraPanSensitivity.Value);
+          iniService.SetValue("Input", "CameraZoomSensitivity", InputSettings.CameraZoomSensitivity.Value);
         }
 
         // Save to file

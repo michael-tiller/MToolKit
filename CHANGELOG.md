@@ -10,6 +10,10 @@ not a roadmap milestone.
 
 ## [Unreleased]
 
+### Added
+
+- Add independent camera pan and zoom sensitivity settings with neutral defaults, finite 10–300% ranges, Apply/Cancel/default baselines and INI persistence. Preserve existing binding behavior and legacy files without the new keys. (v1.8.0)
+
 ### Fixed
 
 - Persist confirmed default settings through the existing apply/save path while retaining immediate reset and cancellation baselines. (v1.7.3)

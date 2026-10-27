@@ -493,8 +493,20 @@ namespace MToolKit.Runtime.Settings.Ini
           }
         }
 
-        // Input settings - if there are defaults, add them here
-        // (InputSettingsModule doesn't seem to have ReactiveSettings in the same way)
+        // Input camera settings - preserve existing values in legacy or current INI files.
+        if (settingsSystem.InputSettings != null)
+        {
+          if (!KeyExists("Input", "CameraPanSensitivity"))
+          {
+            SetValue("Input", "CameraPanSensitivity", settingsSystem.InputSettings.CameraPanSensitivity.Default);
+            anyValuesAdded = true;
+          }
+          if (!KeyExists("Input", "CameraZoomSensitivity"))
+          {
+            SetValue("Input", "CameraZoomSensitivity", settingsSystem.InputSettings.CameraZoomSensitivity.Default);
+            anyValuesAdded = true;
+          }
+        }
 
         if (anyValuesAdded)
         {
