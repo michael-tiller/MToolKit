@@ -30,6 +30,7 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     private volatile bool isDisposed;
     private int pendingWorldSeed;
     private string pendingWorldSettingsJson;
+    private string metadataProfileName = string.Empty;
     private IDisposable currentProfileSubscription;
 
     public ProfileManager(IES3Service es3Service, ES3SaveConfig config)
@@ -441,8 +442,11 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
         ProfileMetaData existingMetadata = GetProfileMetaData(profileName, ct);
         if (existingMetadata != null)
         {
-          int worldSeed = pendingWorldSeed != 0 ? pendingWorldSeed : existingMetadata.WorldSeed;
-          string worldSettingsJson = pendingWorldSettingsJson ?? existingMetadata.WorldSettingsJson;
+          bool usePendingValues = string.Equals(CurrentProfile.Value, profileName, StringComparison.Ordinal);
+          int worldSeed = usePendingValues && pendingWorldSeed != 0 ? pendingWorldSeed : existingMetadata.WorldSeed;
+          string worldSettingsJson = usePendingValues
+            ? pendingWorldSettingsJson ?? existingMetadata.WorldSettingsJson
+            : existingMetadata.WorldSettingsJson;
           ProfileMetaData updatedMetadata = new(
             existingMetadata.ProfileName,
             DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
@@ -757,6 +761,18 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
 
       try
       {
+        if (!string.Equals(metadataProfileName, profileName, StringComparison.Ordinal))
+        {
+          // Reset before publication: new-world subscribers can queue the destination's values.
+          // Preserve unbound values queued before the first profile is loaded.
+          if (!string.IsNullOrEmpty(metadataProfileName))
+          {
+            pendingWorldSeed = 0;
+            pendingWorldSettingsJson = null;
+          }
+          metadataProfileName = profileName;
+        }
+
         if (string.IsNullOrEmpty(profileName))
         {
           CurrentProfileMetadata.Value = null;

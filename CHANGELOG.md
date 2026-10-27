@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Isolate pending world-settings JSON and seed across profile transitions and inactive-profile saves. Preserve first-load queued values and settings supplied during new-world profile publication. (v1.7.1)
+
 - Reconcile the enabled-backend bootstrap input fallback, cancellable serializer frame boundaries and quieter graph execution diagnostics with the retained VG logic, game rules and async fault handling. Preserve both reviewed source histories and public APIs (v1.6.2).
 - Preserve fault-on-await when Addressables is disabled while clearing bootstrap compiler warnings; verify private serialized graph values during export. (v1.6.1)
 

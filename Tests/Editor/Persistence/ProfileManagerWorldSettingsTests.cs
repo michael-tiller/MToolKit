@@ -4,6 +4,7 @@ using System.Reflection;
 using MToolKit.Runtime.Persistence.ES3Integration;
 using MToolKit.Tests.Editor.VisualGraphs.Support;
 using NUnit.Framework;
+using R3;
 using UnityEngine;
 
 namespace MToolKit.Tests.Editor.Persistence
@@ -18,6 +19,9 @@ namespace MToolKit.Tests.Editor.Persistence
   [TestFixture]
   public class ProfileManagerWorldSettingsTests
   {
+    private const string ProfileAJson = "{\"RaidFrequencyPercent\":0,\"HostileSpawnRatePercent\":0}";
+    private const string ProfileBJson = "{\"RaidFrequencyPercent\":150,\"HostileSpawnRatePercent\":150}";
+    private const string EditedJson = "{\"RaidFrequencyPercent\":1000,\"HostileSpawnRatePercent\":200}";
     private string tempDirectory;
 
     [SetUp]
@@ -100,6 +104,158 @@ namespace MToolKit.Tests.Editor.Persistence
 
       var metadata = manager.GetProfileMetaData("TestProfile");
       Assert.AreEqual(string.Empty, metadata.WorldSettingsJson);
+    }
+
+    [Test]
+    public void SwitchingProfiles_DoesNotWritePreviousProfilesSettingsOrSeed()
+    {
+      using var manager = CreateManager();
+      CreateSavedProfiles(manager);
+      Assert.IsTrue(manager.LoadProfileAsync("A").GetAwaiter().GetResult());
+      manager.SetWorldSettingsJson(ProfileAJson);
+      manager.SetWorldSeed(111);
+      Assert.IsTrue(manager.SaveProfile("A"));
+
+      Assert.IsTrue(manager.LoadProfileAsync("B").GetAwaiter().GetResult());
+      Assert.AreEqual(ProfileBJson, manager.CurrentProfileMetadata.Value.WorldSettingsJson,
+        "The destination must initially load its own settings before the subsequent save.");
+      Assert.IsTrue(manager.SaveProfile("B"));
+
+      AssertPersisted("B", ProfileBJson, 222);
+    }
+
+    [Test]
+    public void ProfilePublicationCallback_CanQueueNewWorldSettingsAndSeed()
+    {
+      using var manager = CreateManager();
+      CreateSavedProfiles(manager);
+      Assert.IsTrue(manager.LoadProfileAsync("A").GetAwaiter().GetResult());
+      manager.SetWorldSettingsJson(ProfileAJson);
+      manager.SetWorldSeed(111);
+      Assert.IsTrue(manager.CreateProfile("NewWorld"));
+
+      // The actual new-world view model writes its draft from this notification.
+      // A transition reset performed after publishing would erase these values.
+      using var creation = manager.CurrentProfile.Subscribe(name =>
+      {
+        if (name != "NewWorld") return;
+        manager.SetWorldSettingsJson(EditedJson);
+        manager.SetWorldSeed(909);
+      });
+      Assert.IsTrue(manager.LoadProfileAsync("NewWorld").GetAwaiter().GetResult());
+      Assert.AreEqual(EditedJson, manager.CurrentProfileMetadata.Value.WorldSettingsJson);
+      Assert.AreEqual(909, manager.CurrentProfileMetadata.Value.WorldSeed);
+      Assert.IsTrue(manager.SaveProfile("NewWorld"));
+
+      AssertPersisted("NewWorld", EditedJson, 909);
+    }
+
+    [Test]
+    public void SavingAnotherProfile_DoesNotConsumeOrWriteCurrentProfilesPendingValues()
+    {
+      using var manager = CreateManager();
+      CreateSavedProfiles(manager);
+      Assert.IsTrue(manager.LoadProfileAsync("A").GetAwaiter().GetResult());
+      manager.SetWorldSettingsJson(EditedJson);
+      manager.SetWorldSeed(909);
+
+      Assert.IsTrue(manager.SaveProfile("B"));
+      AssertPersisted("B", ProfileBJson, 222);
+      Assert.AreEqual("A", manager.CurrentProfile.Value);
+      Assert.IsTrue(manager.SaveProfile("A"));
+      AssertPersisted("A", EditedJson, 909);
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void LeavingCurrentProfile_DoesNotCarryPendingValuesToNextProfile(bool deleteCurrent)
+    {
+      using var manager = CreateManager();
+      CreateSavedProfiles(manager);
+      Assert.IsTrue(manager.LoadProfileAsync("A").GetAwaiter().GetResult());
+      manager.SetWorldSettingsJson(EditedJson);
+      manager.SetWorldSeed(909);
+
+      if (deleteCurrent)
+        Assert.IsTrue(manager.DeleteProfile("A"));
+      else
+        manager.CloseCurrentProfile();
+      Assert.AreEqual(string.Empty, manager.CurrentProfile.Value);
+      Assert.IsTrue(manager.LoadProfileAsync("B").GetAwaiter().GetResult());
+      Assert.IsTrue(manager.SaveProfile("B"));
+
+      AssertPersisted("B", ProfileBJson, 222);
+    }
+
+    [Test]
+    public void FailedProfileLoad_PreservesCurrentProfilesPendingValues()
+    {
+      using var manager = CreateManager();
+      CreateSavedProfiles(manager);
+      Assert.IsTrue(manager.LoadProfileAsync("A").GetAwaiter().GetResult());
+      manager.SetWorldSettingsJson(EditedJson);
+      manager.SetWorldSeed(909);
+
+      Assert.IsFalse(manager.LoadProfileAsync("Missing").GetAwaiter().GetResult());
+      Assert.AreEqual("A", manager.CurrentProfile.Value);
+      Assert.IsTrue(manager.SaveProfile("A"));
+
+      AssertPersisted("A", EditedJson, 909);
+    }
+
+    [Test]
+    public void ReloadingCurrentProfile_PreservesItsPendingValues()
+    {
+      using var manager = CreateManager();
+      CreateSavedProfiles(manager);
+      Assert.IsTrue(manager.LoadProfileAsync("A").GetAwaiter().GetResult());
+      manager.SetWorldSettingsJson(EditedJson);
+      manager.SetWorldSeed(909);
+
+      Assert.IsTrue(manager.LoadProfileAsync("A").GetAwaiter().GetResult());
+      Assert.IsTrue(manager.SaveProfile("A"));
+
+      AssertPersisted("A", EditedJson, 909);
+    }
+
+    [Test]
+    public void ValuesQueuedBeforeFirstProfileLoad_AreSavedToThatProfile()
+    {
+      using var manager = CreateManager();
+      Assert.AreEqual(string.Empty, manager.CurrentProfile.Value);
+      manager.SetWorldSettingsJson(EditedJson);
+      manager.SetWorldSeed(909);
+
+      Assert.IsTrue(manager.CreateProfile("First"));
+      Assert.IsTrue(manager.LoadProfileAsync("First").GetAwaiter().GetResult());
+      Assert.IsTrue(manager.SaveProfile("First"));
+
+      AssertPersisted("First", EditedJson, 909);
+    }
+
+    private static void CreateSavedProfiles(ProfileManager manager)
+    {
+      Assert.IsTrue(manager.CreateProfile("A"));
+      Assert.IsTrue(manager.LoadProfileAsync("A").GetAwaiter().GetResult());
+      manager.SetWorldSettingsJson(ProfileAJson);
+      manager.SetWorldSeed(111);
+      Assert.IsTrue(manager.SaveProfile("A"));
+      Assert.IsTrue(manager.CreateProfile("B"));
+      Assert.IsTrue(manager.LoadProfileAsync("B").GetAwaiter().GetResult());
+      manager.SetWorldSettingsJson(ProfileBJson);
+      manager.SetWorldSeed(222);
+      Assert.IsTrue(manager.SaveProfile("B"));
+    }
+
+    private void AssertPersisted(string profileName, string expectedJson, int expectedSeed)
+    {
+      using var reader = CreateManager();
+      var metadata = reader.GetProfileMetaData(profileName);
+      Assert.IsNotNull(metadata);
+      Assert.AreEqual(expectedJson, metadata.WorldSettingsJson,
+        "A fresh manager must read only the target profile's world settings from disk.");
+      Assert.AreEqual(expectedSeed, metadata.WorldSeed,
+        "The pending seed must follow the same profile boundary as the settings JSON.");
     }
 
     /// <summary>Minimal reflection-backed test double, mirroring the pattern already used for ES3SaveConfig in dirigible2D's ProfileAwareES3ServiceTests.</summary>
