@@ -16,6 +16,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Persist canonical input binding overrides in INI, restore applied bindings on Cancel, and retain confirmed Defaults as the new baseline. Queue applied settings snapshots across overlapping saves; preserve per-action enablement and previous overrides during rebinding and conflict rejection. (v1.8.1)
+
 - Persist confirmed default settings through the existing apply/save path while retaining immediate reset and cancellation baselines. (v1.7.3)
 
 - Keep unpositioned one-shot audio centered and reset spatial playback on every pooled-source checkout; explicit world positions retain 3D playback when enabled. (v1.7.2)

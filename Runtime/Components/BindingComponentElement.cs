@@ -351,7 +351,7 @@ namespace MToolKit.Runtime.Components
       // Reset all slots for this component
       foreach (CompositeBindingHelper.BindingSlot slot in bindingComponent.Slots)
         if (slot.BindingIndex < action.bindings.Count)
-          action.RemoveBindingOverride(slot.BindingIndex);
+          ResetBindingOverride(action, slot.BindingIndex);
       RefreshDisplay();
     }
 
@@ -380,8 +380,14 @@ namespace MToolKit.Runtime.Components
         slot = bindingComponent.Slots[slotIndex];
 
       if (slot != null && slot.BindingIndex < action.bindings.Count)
-        action.RemoveBindingOverride(slot.BindingIndex);
+        ResetBindingOverride(action, slot.BindingIndex);
       RefreshDisplay();
+    }
+
+    private void ResetBindingOverride(InputAction action, int index)
+    {
+      if (rebinderService != null) rebinderService.RemoveBindingOverride(action, index);
+      else action.RemoveBindingOverride(index);
     }
 
     /// <summary>

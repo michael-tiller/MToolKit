@@ -340,9 +340,9 @@ namespace MToolKit.Runtime.Components
         if (action.bindings[i].isComposite)
           // It's a composite. Remove overrides from part bindings.
           for (int j = i + 1; j < action.bindings.Count && action.bindings[j].isPartOfComposite; ++j)
-            action.RemoveBindingOverride(j);
+            ResetBindingOverride(action, j);
         else
-          action.RemoveBindingOverride(i);
+          ResetBindingOverride(action, i);
       RefreshDisplay();
     }
 
@@ -361,10 +361,16 @@ namespace MToolKit.Runtime.Components
       if (action.bindings[slotIndex].isComposite)
         // It's a composite. Remove overrides from part bindings.
         for (int i = slotIndex + 1; i < action.bindings.Count && action.bindings[i].isPartOfComposite; ++i)
-          action.RemoveBindingOverride(i);
+          ResetBindingOverride(action, i);
       else
-        action.RemoveBindingOverride(slotIndex);
+        ResetBindingOverride(action, slotIndex);
       RefreshDisplay();
+    }
+
+    private void ResetBindingOverride(InputAction action, int index)
+    {
+      if (rebinderService != null) rebinderService.RemoveBindingOverride(action, index);
+      else action.RemoveBindingOverride(index);
     }
 
     /// <summary>

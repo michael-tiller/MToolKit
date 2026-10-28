@@ -7,12 +7,17 @@ using MToolKit.Runtime.Settings.Ini;
 using MToolKit.Runtime.Settings.Interfaces;
 using Serilog;
 using Sirenix.OdinInspector;
+using UnityEngine;
+using UnityEngine.InputSystem;
 using VContainer;
 
 namespace MToolKit.Runtime.Settings
 {
   public class SettingsPlugin : DomainPlugin<SettingsSystem, ISettingsSystem>
   {
+    [SerializeField]
+    private InputActionAsset inputActionAsset;
+
     [ShowInInspector]
     [ReadOnly]
     private SettingsSystem settingsSystem => GetService();
@@ -41,7 +46,7 @@ namespace MToolKit.Runtime.Settings
         log.ForGameObject(gameObject).ForMethod().Verbose("IIniService not available, SettingsSystem will work without INI integration");
       }
 
-      SettingsSystem instance = new(inputRebinderService, iniService);
+      SettingsSystem instance = new(inputRebinderService, iniService, inputActionAsset);
       log.ForGameObject(gameObject).ForMethod().Verbose("Created SettingsSystem instance with HashCode: {HashCode}", instance.GetHashCode());
       return instance;
     }

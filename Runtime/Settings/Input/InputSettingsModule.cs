@@ -20,16 +20,26 @@ namespace MToolKit.Runtime.Settings.Input
     private readonly Dictionary<string, InputAction> registeredActions = new();
     private readonly IDisposable panValidationSubscription;
     private readonly IDisposable zoomValidationSubscription;
+    private readonly IDisposable bindingSubscription;
+    private InputActionAsset inputActionAsset;
+    private bool restoringBindings;
 
-    public InputSettingsModule(InputRebinderService rebinderService, ISettingsSystem settingsController = null)
+    public InputSettingsModule(InputRebinderService rebinderService, ISettingsSystem settingsController = null,
+      InputActionAsset inputActionAsset = null)
     {
       this.rebinderService = rebinderService ?? throw new ArgumentNullException(nameof(rebinderService));
       CameraPanSensitivity = new ReactiveSetting<float>(1f, "Camera Pan Sensitivity", settingsController);
       CameraZoomSensitivity = new ReactiveSetting<float>(1f, "Camera Zoom Sensitivity", settingsController);
+      BindingOverridesJson = new ReactiveSetting<string>(string.Empty, "Binding Overrides", settingsController);
       panValidationSubscription = CameraPanSensitivity.Property.Subscribe(value =>
         NormalizeCameraSensitivity(CameraPanSensitivity, value));
       zoomValidationSubscription = CameraZoomSensitivity.Property.Subscribe(value =>
         NormalizeCameraSensitivity(CameraZoomSensitivity, value));
+      bindingSubscription = rebinderService.OnBindingChanged.Subscribe(_ =>
+      {
+        if (!restoringBindings) BindingOverridesJson.Value = CaptureBindings();
+      });
+      if (inputActionAsset != null) RegisterAsset(inputActionAsset);
     }
 
     /// <summary>Multiplier for camera panning; 1 preserves the authored speed.</summary>
@@ -37,6 +47,11 @@ namespace MToolKit.Runtime.Settings.Input
 
     /// <summary>Multiplier for camera zoom input; 1 preserves the authored speed.</summary>
     public ReactiveSetting<float> CameraZoomSensitivity { get; }
+
+    /// <summary>Current binding draft and its last applied cancellation baseline.</summary>
+    public ReactiveSetting<string> BindingOverridesJson { get; }
+
+    public InputRebinderService RebinderService => rebinderService;
 
     /// <summary>
     ///   Get all registered input actions for the settings UI
@@ -52,35 +67,43 @@ namespace MToolKit.Runtime.Settings.Input
 
     public void RevertToDefaultSettings()
     {
+      rebinderService.CancelRebinding();
       if (!CameraPanSensitivity.IsDefault) CameraPanSensitivity.OnRevertToDefault();
       if (!CameraZoomSensitivity.IsDefault) CameraZoomSensitivity.OnRevertToDefault();
-      rebinderService.ResetAllBindings();
+      RestoreBindings(string.Empty);
+      BindingOverridesJson.OnRevertToDefault();
       log.ForMethod().Verbose("Reverted all input settings to defaults");
     }
 
     public void Apply()
     {
+      rebinderService.CancelRebinding();
       if (CameraPanSensitivity.IsDirty) CameraPanSensitivity.OnApply();
       if (CameraZoomSensitivity.IsDirty) CameraZoomSensitivity.OnApply();
-      // Binding overrides retain their existing immediate application behavior.
+      BindingOverridesJson.Value = CaptureBindings();
+      BindingOverridesJson.OnApply();
       log.ForMethod().Verbose("Input settings applied");
     }
 
     public void Cancel()
     {
+      rebinderService.CancelRebinding();
       CameraPanSensitivity.OnCancel();
       CameraZoomSensitivity.OnCancel();
-      // Preserve the existing binding Cancel behavior while reverting sensitivity drafts.
-      rebinderService.ResetAllBindings();
+      RestoreBindings(BindingOverridesJson.LastValue);
+      BindingOverridesJson.OnCancel();
       log.ForMethod().Verbose("Input settings cancelled");
     }
 
     public void OnShutdown()
     {
+      rebinderService.CancelRebinding();
+      bindingSubscription.Dispose();
       panValidationSubscription.Dispose();
       zoomValidationSubscription.Dispose();
       CameraPanSensitivity.Dispose();
       CameraZoomSensitivity.Dispose();
+      BindingOverridesJson.Dispose();
       registeredActions.Clear();
       log.ForMethod().Verbose("Input settings module shutdown");
     }
@@ -102,6 +125,9 @@ namespace MToolKit.Runtime.Settings.Input
     public void RegisterAction(InputAction action)
     {
       if (action == null) return;
+
+      if (inputActionAsset == null && action.actionMap?.asset != null)
+        RegisterAsset(action.actionMap.asset);
 
       rebinderService.RegisterAction(action);
       registeredActions[GetActionKey(action)] = action;
@@ -141,6 +167,71 @@ namespace MToolKit.Runtime.Settings.Input
     private string GetActionKey(InputAction action)
     {
       return $"{action.actionMap?.name}_{action.name}";
+    }
+
+    /// <summary>Loads persisted overrides before advancing the startup applied baseline.</summary>
+    public void LoadBindingOverridesJson(string json)
+    {
+      RestoreBindings(json ?? string.Empty);
+      BindingOverridesJson.Value = CaptureBindings();
+    }
+
+    private void RegisterAsset(InputActionAsset asset)
+    {
+      inputActionAsset = asset;
+      foreach (InputActionMap map in asset.actionMaps)
+        foreach (InputAction action in map.actions)
+        {
+          rebinderService.RegisterAction(action);
+          registeredActions[GetActionKey(action)] = action;
+        }
+      string baseline = CaptureBindings();
+      BindingOverridesJson.LastProperty.Value = baseline;
+      BindingOverridesJson.Value = baseline;
+    }
+
+    private string CaptureBindings() => inputActionAsset != null
+      ? inputActionAsset.SaveBindingOverridesAsJson()
+      : string.Empty;
+
+    private void RestoreBindings(string json)
+    {
+      if (inputActionAsset == null)
+      {
+        if (!string.IsNullOrEmpty(json))
+          throw new InvalidOperationException("An InputActionAsset is required to load saved binding overrides.");
+        return;
+      }
+
+      string previousJson = CaptureBindings();
+      var previousPaths = new Dictionary<InputAction, string[]>();
+      foreach (InputActionMap map in inputActionAsset.actionMaps)
+        foreach (InputAction action in map.actions)
+        {
+          var paths = new string[action.bindings.Count];
+          for (int i = 0; i < paths.Length; i++) paths[i] = action.bindings[i].effectivePath;
+          previousPaths[action] = paths;
+        }
+
+      restoringBindings = true;
+      try
+      {
+        try { inputActionAsset.LoadBindingOverridesFromJson(json); }
+        catch
+        {
+          // Unity removes existing overrides before parsing; restore them if parsing fails.
+          inputActionAsset.LoadBindingOverridesFromJson(previousJson);
+          throw;
+        }
+
+        foreach (var entry in previousPaths)
+          for (int i = 0; i < entry.Value.Length; i++)
+          {
+            string path = entry.Key.bindings[i].effectivePath;
+            if (path != entry.Value[i]) rebinderService.OnBindingChanged.OnNext((entry.Key, i, path));
+          }
+      }
+      finally { restoringBindings = false; }
     }
   }
 }

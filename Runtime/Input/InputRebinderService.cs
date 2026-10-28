@@ -42,6 +42,8 @@ namespace MToolKit.Runtime.Input
     [ReadOnly]
     private bool isRebinding;
 
+    private List<(InputAction action, bool enabled)> capturedActionStates;
+
     [ShowInInspector]
     [ReadOnly]
     private string hash => GetHashCode().ToString();
@@ -111,13 +113,18 @@ namespace MToolKit.Runtime.Input
       currentRebindingOperation?.Cancel();
       currentRebindingOperation?.Dispose();
 
-      // Check if this is a composite binding
-      InputBinding binding = action.bindings[bindingIndex];
-      if (binding.isComposite)
-        // For composite bindings, we need to rebind each part in a sequence
-        return StartCompositeRebinding(action, bindingIndex, excludeControls);
-      // For regular bindings, use standard rebinding
-      return StartSingleBindingRebinding(action, bindingIndex, excludeControls);
+      try
+      {
+        InputBinding binding = action.bindings[bindingIndex];
+        if (binding.isComposite)
+          return StartCompositeRebinding(action, bindingIndex, excludeControls);
+        return StartSingleBindingRebinding(action, bindingIndex, excludeControls);
+      }
+      catch
+      {
+        CleanupRebindingOperation();
+        throw;
+      }
     }
 
     /// <summary>
@@ -125,16 +132,16 @@ namespace MToolKit.Runtime.Input
     /// </summary>
     private bool StartSingleBindingRebinding(InputAction action, int bindingIndex, string[] excludeControls)
     {
-      // Disable the action map to prevent interference
-      action.actionMap.Disable();
+      CaptureAndDisableActions(action);
+      InputBinding previousBinding = action.bindings[bindingIndex];
 
       // Configure the rebinding operation
       currentRebindingOperation = action.PerformInteractiveRebinding(bindingIndex)
         .OnCancel(_ =>
         {
           log.ForMethod().Information("Rebinding cancelled for {ActionName} binding {BindingIndex}", action.name, bindingIndex);
-          OnRebindingCompleted.OnNext((action, bindingIndex, false));
           CleanupRebindingOperation();
+          OnRebindingCompleted.OnNext((action, bindingIndex, false));
         })
         .OnComplete(operation =>
         {
@@ -145,8 +152,8 @@ namespace MToolKit.Runtime.Input
           {
             log.ForMethod().Warning("Binding conflict detected for {ActionName} binding {BindingIndex} with path {NewPath}",
               action.name, bindingIndex, newPath);
-            // Revert the binding
-            action.RemoveBindingOverride(bindingIndex);
+            action.ApplyBindingOverride(bindingIndex, previousBinding);
+            CleanupRebindingOperation();
             OnRebindingCompleted.OnNext((action, bindingIndex, false));
           }
           else
@@ -154,10 +161,9 @@ namespace MToolKit.Runtime.Input
             log.ForMethod().Information("Rebinding completed for {ActionName} binding {BindingIndex} to {NewPath}",
               action.name, bindingIndex, newPath);
             OnBindingChanged.OnNext((action, bindingIndex, newPath));
+            CleanupRebindingOperation();
             OnRebindingCompleted.OnNext((action, bindingIndex, true));
           }
-
-          CleanupRebindingOperation();
         });
 
       // Add exclusions if specified
@@ -198,16 +204,16 @@ namespace MToolKit.Runtime.Input
     /// </summary>
     private bool StartCompositePartRebinding(InputAction action, int partIndex, string[] excludeControls)
     {
-      // Disable the action map to prevent interference
-      action.actionMap.Disable();
+      CaptureAndDisableActions(action);
+      InputBinding previousBinding = action.bindings[partIndex];
 
       // Configure the rebinding operation for this part
       currentRebindingOperation = action.PerformInteractiveRebinding(partIndex)
         .OnCancel(_ =>
         {
           log.ForMethod().Information("Composite rebinding cancelled for {ActionName} part {PartIndex}", action.name, partIndex);
-          OnRebindingCompleted.OnNext((action, partIndex, false));
           CleanupRebindingOperation();
+          OnRebindingCompleted.OnNext((action, partIndex, false));
         })
         .OnComplete(operation =>
         {
@@ -218,10 +224,9 @@ namespace MToolKit.Runtime.Input
           {
             log.ForMethod().Warning("Binding conflict detected for {ActionName} part {PartIndex} with path {NewPath}",
               action.name, partIndex, newPath);
-            // Revert the binding
-            action.RemoveBindingOverride(partIndex);
-            OnRebindingCompleted.OnNext((action, partIndex, false));
+            action.ApplyBindingOverride(partIndex, previousBinding);
             CleanupRebindingOperation();
+            OnRebindingCompleted.OnNext((action, partIndex, false));
             return;
           }
 
@@ -233,14 +238,15 @@ namespace MToolKit.Runtime.Input
           int nextPartIndex = partIndex + 1;
           if (nextPartIndex < action.bindings.Count && action.bindings[nextPartIndex].isPartOfComposite)
           {
-            // Continue with the next part
+            currentRebindingOperation.Dispose();
+            currentRebindingOperation = null;
             StartCompositePartRebinding(action, nextPartIndex, excludeControls);
           }
           else
           {
             // All parts are done
-            OnRebindingCompleted.OnNext((action, partIndex, true));
             CleanupRebindingOperation();
+            OnRebindingCompleted.OnNext((action, partIndex, true));
           }
         });
 
@@ -315,6 +321,8 @@ namespace MToolKit.Runtime.Input
 
       // Simply remove all overrides - Unity will fall back to original bindings
       action.RemoveAllBindingOverrides();
+      for (int index = 0; index < action.bindings.Count; index++)
+        OnBindingChanged.OnNext((action, index, action.bindings[index].effectivePath));
 
       log.ForMethod().Information("Reset bindings for action {ActionName}", action.name);
     }
@@ -344,7 +352,7 @@ namespace MToolKit.Runtime.Input
 
       foreach (InputAction registeredAction in registeredActions.Values)
       {
-        if (registeredAction == action) continue;
+        if (registeredAction == action || registeredAction.actionMap != action.actionMap) continue;
 
         for (int i = 0; i < registeredAction.bindings.Count; i++)
         {
@@ -419,13 +427,33 @@ namespace MToolKit.Runtime.Input
     /// </summary>
     private void CleanupRebindingOperation()
     {
-      currentRebindingOperation?.Dispose();
+      var operation = currentRebindingOperation;
       currentRebindingOperation = null;
       isRebinding = false;
+      operation?.Dispose();
 
-      // Re-enable all action maps
-      foreach (InputAction action in registeredActions.Values)
-        action.actionMap.Enable();
+      var states = capturedActionStates;
+      capturedActionStates = null;
+      if (states == null) return;
+      foreach (var state in states)
+        if (state.enabled) state.action.Enable();
+        else state.action.Disable();
+    }
+
+    private void CaptureAndDisableActions(InputAction action)
+    {
+      if (capturedActionStates == null)
+      {
+        capturedActionStates = new List<(InputAction action, bool enabled)>();
+        if (action.actionMap != null)
+          foreach (InputAction mapAction in action.actionMap.actions)
+            capturedActionStates.Add((mapAction, mapAction.enabled));
+        else
+          capturedActionStates.Add((action, action.enabled));
+      }
+
+      if (action.actionMap != null) action.actionMap.Disable();
+      else action.Disable();
     }
 
     private string GetActionKey(InputAction action)
