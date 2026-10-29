@@ -7,6 +7,8 @@ using MToolKit.Runtime.ErrorSystem.Interface;
 using MToolKit.Runtime.ErrorSystem.Messages;
 using MToolKit.Runtime.ErrorSystem.Views;
 using MToolKit.Runtime.MessageBus;
+using MToolKit.Runtime.Settings.Interfaces;
+using MToolKit.Runtime.UI.Scaling;
 using Serilog;
 using Sirenix.OdinInspector;
 using UnityEditor;
@@ -28,7 +30,7 @@ namespace MToolKit.Runtime.ErrorSystem
 
     public IEnumerable<Type> RequiredServices => new[] { typeof(IErrorService) };
 
-    public IEnumerable<Type> OptionalServices => Array.Empty<Type>();
+    public IEnumerable<Type> OptionalServices => new[] { typeof(ISettingsSystem) };
 
     [SerializeField]
     [Required]
@@ -73,6 +75,8 @@ namespace MToolKit.Runtime.ErrorSystem
     public void PerformSetup(IObjectResolver resolver)
     {
       log.ForMethod().Verbose("Performing setup for ErrorSystemPlugin");
+      if (resolver.TryResolve<ISettingsSystem>(out var settings))
+        UserUiScaleCanvas.AttachToRoot(errorCanvasGroup, settings.GraphicsSettings.UiScale);
     }
 
     public void PerformRuntimeInitialization(IObjectResolver resolver)

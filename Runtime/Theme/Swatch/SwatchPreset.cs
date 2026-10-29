@@ -23,6 +23,7 @@ namespace MToolKit.Theme.Swatch
 
     protected override void Apply(Swatch swatch)
     {
+      if (Graphic == null) AutoWire();
       if (Graphic == null || swatch == null) return;
       if (Graphic.color != swatch.Color) Graphic.color = swatch.Color;
     }

@@ -7,6 +7,8 @@ using MToolKit.Runtime.Installer;
 using MToolKit.Runtime.Localization;
 using MToolKit.Runtime.MessageBus;
 using MToolKit.Runtime.Slog;
+using MToolKit.Runtime.Settings.Interfaces;
+using MToolKit.Runtime.UI.Scaling;
 using R3;
 using Serilog;
 using Sirenix.OdinInspector;
@@ -78,6 +80,7 @@ namespace MToolKit.Runtime.Bootstrapper
     private void Start()
     {
       log.ForGameObject(gameObject).ForMethod().Verbose("Begin bootstrapper");
+      ConfigureUiScale();
       // Intentionally NOT DontDestroyOnLoad: the target scene loads as Single,
       // so the bootstrapper is disposed with its own scene at the transition.
       progressBar.gameObject.SetActive(false);
@@ -89,6 +92,13 @@ namespace MToolKit.Runtime.Bootstrapper
 
       // Wait for localization first, then start the bootstrapper process
       WaitForLocalizationAndStartAsync().Forget();
+    }
+
+    private void ConfigureUiScale()
+    {
+      var installer = GlobalInstaller.Instance;
+      if (installer != null && installer.Container != null && installer.Container.TryResolve<ISettingsSystem>(out var settings))
+        UserUiScaleCanvas.AttachToRoot(progressText, settings.GraphicsSettings.UiScale);
     }
 
     private void LateUpdate()
@@ -239,6 +249,7 @@ namespace MToolKit.Runtime.Bootstrapper
         }
 
         nonUIDependenciesReady = true;
+        ConfigureUiScale();
         log.ForMethod().Verbose("Non-UI dependencies preloaded successfully");
         CheckIfReadyToLoad();
       }

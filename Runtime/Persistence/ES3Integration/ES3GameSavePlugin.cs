@@ -5,6 +5,8 @@ using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Core.Abstractions;
 using MToolKit.Runtime.Installer;
 using MToolKit.Runtime.Persistence.Interfaces;
+using MToolKit.Runtime.Settings.Interfaces;
+using MToolKit.Runtime.UI.Scaling;
 using R3;
 using Serilog;
 using Sirenix.OdinInspector;
@@ -49,7 +51,14 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     /// <summary>
     ///   Optional services for dependency validation.
     /// </summary>
-    public override IEnumerable<Type> OptionalServices => Array.Empty<Type>();
+    public override IEnumerable<Type> OptionalServices => new[] { typeof(ISettingsSystem) };
+
+    public override void PerformSetup(IObjectResolver resolver)
+    {
+      base.PerformSetup(resolver);
+      if (autoSaveExecutingAnimatedObject != null && resolver.TryResolve<ISettingsSystem>(out var settings))
+        UserUiScaleCanvas.AttachToRoot(autoSaveExecutingAnimatedObject.transform, settings.GraphicsSettings.UiScale);
+    }
 
     /// <summary>
     ///   Async startup method for VContainer's UniTask integration.

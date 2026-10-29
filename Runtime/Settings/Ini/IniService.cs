@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Settings.Interfaces;
+using MToolKit.Runtime.UI.Scaling;
 using R3;
 using Serilog;
 using Serilog.Core;
@@ -449,6 +450,11 @@ namespace MToolKit.Runtime.Settings.Ini
           if (!KeyExists("Graphics", "DisableBloom"))
           {
             SetValue("Graphics", "DisableBloom", settingsSystem.GraphicsSettings.DisableBloom.Default);
+            anyValuesAdded = true;
+          }
+          if (!KeyExists("Graphics", "UiScale"))
+          {
+            SetValue("Graphics", "UiScale", UiScalePolicy.Serialize(settingsSystem.GraphicsSettings.UiScale.Default));
             anyValuesAdded = true;
           }
         }

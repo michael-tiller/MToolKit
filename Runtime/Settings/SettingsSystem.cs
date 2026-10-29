@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Cysharp.Threading.Tasks;
 using MessagePipe;
 using MToolKit.Runtime.Input;
@@ -12,11 +13,13 @@ using MToolKit.Runtime.Settings.Graphics;
 using MToolKit.Runtime.Settings.Ini;
 using MToolKit.Runtime.Settings.Input;
 using MToolKit.Runtime.Settings.Interfaces;
+using MToolKit.Runtime.UI.Scaling;
 using R3;
 using Serilog;
 using Serilog.Core;
 using Sirenix.OdinInspector;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using VContainer;
 using ILogger = Serilog.ILogger;
 using Logger = Serilog.Core.Logger;
@@ -33,12 +36,22 @@ namespace MToolKit.Runtime.Settings
     private static ILogger log => logLazy.Value ?? Logger.None;
 
     private readonly IIniService iniService;
+    private readonly CancellationTokenSource lifetime = new();
+    private readonly SemaphoreSlim settingsPersistenceGate = new(1, 1);
+    private readonly InputAction recoverUiScaleAction;
     private bool isDisposed;
 
     public SettingsSystem(InputRebinderService inputRebinderService, IIniService iniService = null)
     {
       this.iniService = iniService;
       InitializeModules(inputRebinderService);
+      recoverUiScaleAction = new InputAction("Recover UI Scale", InputActionType.Button);
+      recoverUiScaleAction.AddCompositeBinding("ButtonWithTwoModifiers")
+        .With("Modifier1", "<Keyboard>/ctrl")
+        .With("Modifier2", "<Keyboard>/shift")
+        .With("Button", "<Keyboard>/0");
+      recoverUiScaleAction.performed += OnRecoverUiScale;
+      if (Application.isPlaying) recoverUiScaleAction.Enable();
       if (iniService != null)
         RunInitializationAsync().Forget();
       else
@@ -197,6 +210,43 @@ namespace MToolKit.Runtime.Settings
       IsDirty.Value = isDirty;
     }
 
+    private void OnRecoverUiScale(InputAction.CallbackContext context)
+    {
+      if (Application.isFocused && !isDisposed) RecoverUiScale().Forget();
+    }
+
+    /// <summary>
+    /// Emergency recovery is independent of UI focus and layout. It commits only the scale
+    /// preference; unrelated drafts retain their values and cancellation baselines.
+    /// </summary>
+    public async UniTask RecoverUiScale()
+    {
+      await Initialization;
+      if (isDisposed) return;
+      GraphicsSettings.UiScale.Value = 1f;
+      GraphicsSettings.UiScale.OnApply();
+      SetDirty(AudioSettings.MasterVolume.IsDirty || AudioSettings.MusicVolume.IsDirty ||
+        AudioSettings.GameVolume.IsDirty || AudioSettings.InterfaceVolume.IsDirty ||
+        GraphicsSettings.ResolutionIndex.IsDirty || GraphicsSettings.QualityIndex.IsDirty ||
+        GraphicsSettings.Fullscreen.IsDirty || GraphicsSettings.VerticalSync.IsDirty ||
+        GraphicsSettings.DisableCrt.IsDirty || GraphicsSettings.DisableBloom.IsDirty ||
+        GameSettings.AutoSave.IsDirty || GameSettings.AnalyticsEnabled.IsDirty ||
+        InputSettings.CameraPanSensitivity.IsDirty || InputSettings.CameraZoomSensitivity.IsDirty);
+      if (iniService == null) return;
+      // Serialize with Apply because IniService deliberately skips concurrent writes.
+      // A later Apply can supersede recovery while this waits; its applied baseline
+      // must persist without committing a still-newer live-preview draft.
+      await settingsPersistenceGate.WaitAsync(lifetime.Token);
+      try
+      {
+        await iniService.IsSaving.Where(saving => !saving).FirstAsync(lifetime.Token);
+        if (isDisposed) return;
+        iniService.SetValue("Graphics", "UiScale", UiScalePolicy.Serialize(GraphicsSettings.UiScale.LastValue));
+        await iniService.SaveAsync(lifetime.Token);
+      }
+      finally { settingsPersistenceGate.Release(); }
+    }
+
     private void InitializeModules(InputRebinderService inputRebinderService)
     {
       log.ForMethod().Verbose("Initializing settings modules");
@@ -312,6 +362,8 @@ namespace MToolKit.Runtime.Settings
             GraphicsSettings.DisableCrt.Value = iniService.GetValue<bool>("Graphics", "DisableCrt", GraphicsSettings.DisableCrt.Default);
           if (iniService.KeyExists("Graphics", "DisableBloom"))
             GraphicsSettings.DisableBloom.Value = iniService.GetValue<bool>("Graphics", "DisableBloom", GraphicsSettings.DisableBloom.Default);
+          if (iniService.KeyExists("Graphics", "UiScale"))
+            GraphicsSettings.UiScale.Value = iniService.GetValue<float>("Graphics", "UiScale", GraphicsSettings.UiScale.Default);
         }
 
         // Audio settings
@@ -372,58 +424,75 @@ namespace MToolKit.Runtime.Settings
         return;
       }
 
+      bool acquired = false;
       try
       {
         log.ForMethod().Verbose("Saving settings to INI file");
 
+        await settingsPersistenceGate.WaitAsync(lifetime.Token);
+        acquired = true;
+        await iniService.IsSaving.Where(saving => !saving).FirstAsync(lifetime.Token);
+        if (isDisposed) return;
+
+        // Apply advanced these baselines before requesting the write. A queued write
+        // must not persist unrelated preview changes made while another writer ran.
+
         // Graphics settings
         if (GraphicsSettings != null)
         {
-          iniService.SetValue("Graphics", "Resolution", GraphicsSettings.ResolutionIndex.Value);
-          iniService.SetValue("Graphics", "Quality", GraphicsSettings.QualityIndex.Value);
-          iniService.SetValue("Graphics", "Fullscreen", GraphicsSettings.Fullscreen.Value);
-          iniService.SetValue("Graphics", "VerticalSync", GraphicsSettings.VerticalSync.Value);
-          iniService.SetValue("Graphics", "DisableCrt", GraphicsSettings.DisableCrt.Value);
-          iniService.SetValue("Graphics", "DisableBloom", GraphicsSettings.DisableBloom.Value);
+          iniService.SetValue("Graphics", "Resolution", GraphicsSettings.ResolutionIndex.LastValue);
+          iniService.SetValue("Graphics", "Quality", GraphicsSettings.QualityIndex.LastValue);
+          iniService.SetValue("Graphics", "Fullscreen", GraphicsSettings.Fullscreen.LastValue);
+          iniService.SetValue("Graphics", "VerticalSync", GraphicsSettings.VerticalSync.LastValue);
+          iniService.SetValue("Graphics", "DisableCrt", GraphicsSettings.DisableCrt.LastValue);
+          iniService.SetValue("Graphics", "DisableBloom", GraphicsSettings.DisableBloom.LastValue);
+          iniService.SetValue("Graphics", "UiScale", UiScalePolicy.Serialize(GraphicsSettings.UiScale.LastValue));
         }
 
         // Audio settings
         if (AudioSettings != null)
         {
-          iniService.SetValue("Audio", "MasterVolume", AudioSettings.MasterVolume.Value);
-          iniService.SetValue("Audio", "MusicVolume", AudioSettings.MusicVolume.Value);
-          iniService.SetValue("Audio", "GameVolume", AudioSettings.GameVolume.Value);
-          iniService.SetValue("Audio", "InterfaceVolume", AudioSettings.InterfaceVolume.Value);
+          iniService.SetValue("Audio", "MasterVolume", AudioSettings.MasterVolume.LastValue);
+          iniService.SetValue("Audio", "MusicVolume", AudioSettings.MusicVolume.LastValue);
+          iniService.SetValue("Audio", "GameVolume", AudioSettings.GameVolume.LastValue);
+          iniService.SetValue("Audio", "InterfaceVolume", AudioSettings.InterfaceVolume.LastValue);
         }
 
         // Game settings
         if (GameSettings != null)
         {
-          iniService.SetValue("Game", "AutoSave", GameSettings.AutoSave.Value);
-          iniService.SetValue("Game", "AnalyticsEnabled", GameSettings.AnalyticsEnabled.Value);
+          iniService.SetValue("Game", "AutoSave", GameSettings.AutoSave.LastValue);
+          iniService.SetValue("Game", "AnalyticsEnabled", GameSettings.AnalyticsEnabled.LastValue);
         }
 
         // Input camera settings
         if (InputSettings != null)
         {
-          iniService.SetValue("Input", "CameraPanSensitivity", InputSettings.CameraPanSensitivity.Value);
-          iniService.SetValue("Input", "CameraZoomSensitivity", InputSettings.CameraZoomSensitivity.Value);
+          iniService.SetValue("Input", "CameraPanSensitivity", InputSettings.CameraPanSensitivity.LastValue);
+          iniService.SetValue("Input", "CameraZoomSensitivity", InputSettings.CameraZoomSensitivity.LastValue);
         }
 
         // Save to file
-        await iniService.SaveAsync();
+        await iniService.SaveAsync(lifetime.Token);
         log.ForMethod().Verbose("Settings saved to INI file");
       }
+      catch (OperationCanceledException) when (isDisposed) { }
       catch (Exception ex)
       {
         log.ForMethod().Error(ex, "Failed to save settings to INI: {Message}", ex.Message);
       }
+      finally { if (acquired) settingsPersistenceGate.Release(); }
     }
 
     public void Dispose()
     {
       if (isDisposed) return;
       isDisposed = true;
+      recoverUiScaleAction.performed -= OnRecoverUiScale;
+      recoverUiScaleAction.Disable();
+      recoverUiScaleAction.Dispose();
+      lifetime.Cancel();
+      lifetime.Dispose();
       log.ForMethod().Information("Disposing SettingsSystem");
       ShutdownModules();
       IsDirty.Dispose();

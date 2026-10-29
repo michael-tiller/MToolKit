@@ -52,32 +52,27 @@ namespace MToolKit.Editor
       EditorApplication.playModeStateChanged += OnPlayModeChanged;
     }
 
-    // Check if the test runner is currently active
-    private static bool IsTestRunnerActive()
+    private static bool TryGetActiveTestRunState(out bool active)
     {
-      // Method 1: Check if we're actually running tests by looking for test execution context
+      active = false;
       try
       {
-        // Check if we're in a test execution context
-        Type testRunnerType = Type.GetType("UnityEngine.TestTools.TestRunner.TestRunnerApi, UnityEngine.TestRunner");
-        if (testRunnerType != null)
-        {
-          PropertyInfo isRunningTestsProperty = testRunnerType.GetProperty("isRunningTests", BindingFlags.Public | BindingFlags.Static);
-          if (isRunningTestsProperty != null)
-          {
-            bool isRunningTests = (bool)isRunningTestsProperty.GetValue(null);
-            if (isRunningTests)
-            {
-              Debug.Log("[SceneAutoLoader] TestRunnerApi.isRunningTests is true");
-              return true;
-            }
-          }
-        }
+        Type api = Type.GetType("UnityEditor.TestTools.TestRunner.Api.TestRunnerApi, UnityEditor.TestRunner");
+        MethodInfo query = api?.GetMethod("IsRunActive", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+          null, Type.EmptyTypes, null);
+        if (query == null || query.ReturnType != typeof(bool)) return false;
+        active = (bool)query.Invoke(null, null);
+        return true;
       }
-      catch
-      {
-        // Ignore exceptions when checking for test runner types
-      }
+      catch { return false; }
+    }
+
+    // Check if the test runner is currently active.
+    private static bool IsTestRunnerActive()
+    {
+      // A resolved API result is authoritative, including false. Window focus and the
+      // play-mode transition call stack cannot identify runs started by TestRunnerApi.
+      if (TryGetActiveTestRunState(out bool active)) return active;
 
       // Method 2: Check for test execution in the call stack
       try

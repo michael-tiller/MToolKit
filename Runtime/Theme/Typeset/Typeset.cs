@@ -19,6 +19,14 @@ namespace MToolKit.Theme.Typeset
     [ShowIf(nameof(AutoSizeFont))]
     public float FontSizeMin { get; private set; }
 
+    /// <summary>
+    /// Optional minimum at maximum user UI scale, in authored font units. Zero
+    /// retains the ordinary minimum. This is authoring policy, never runtime state.
+    /// </summary>
+    [field: SerializeField]
+    [field: Min(0)]
+    public float AccessibleFontSizeMin { get; private set; }
+
     [field: SerializeField]
     public float FontSize { get; private set; }
 

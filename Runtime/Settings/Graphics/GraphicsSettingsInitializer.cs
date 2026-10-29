@@ -4,6 +4,7 @@ using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Settings.Interfaces;
 using MToolKit.Runtime.Settings.UI;
 using MToolKit.Runtime.Settings.UI.Abstract;
+using MToolKit.Runtime.UI.Scaling;
 using Serilog;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -43,6 +44,9 @@ namespace MToolKit.Runtime.Settings.Graphics
     [Required]
     private BoolBoundToggle disableBloomToggle;
 
+    [SerializeField]
+    private UserUiScaleSlider uiScaleSlider;
+
     [Inject]
     private ISettingsSystem settingsController;
 
@@ -57,6 +61,7 @@ namespace MToolKit.Runtime.Settings.Graphics
 
       resolutionDropdown.Bind(settingsController.GraphicsSettings.ResolutionIndex);
       qualityDropdown.Bind(settingsController.GraphicsSettings.QualityIndex);
+      if (uiScaleSlider != null) uiScaleSlider.Bind(settingsController.GraphicsSettings.UiScale);
 
       fullscreenToggle.Bind(settingsController.GraphicsSettings.Fullscreen);
       vsyncToggle.Bind(settingsController.GraphicsSettings.VerticalSync);

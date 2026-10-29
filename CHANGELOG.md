@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Add persisted 75–300% reactive UI scaling above authored CanvasScaler resolution behavior, percentage controls and focused emergency recovery. Add runtime semantic accessibility floors, late-view typography and focus-to-scroll integration. Document migration for custom `IGraphicsSettings` implementations and keep scoped development INI isolation separate from normal settings persistence. (v1.9.0)
+
 - Add independent camera pan and zoom sensitivity settings with neutral defaults, finite 10–300% ranges, Apply/Cancel/default baselines and INI persistence. Preserve existing binding behavior and legacy files without the new keys. (v1.8.0)
 
 ### Fixed

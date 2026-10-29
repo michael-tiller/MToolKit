@@ -4,6 +4,8 @@
   "references": [
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner",
+    "UnityEngine.UI",
+    "Unity.InputSystem",
     "MToolKit.Runtime",
     "MToolKit.Runtime.VisualGraphs",
     "MToolKit.Runtime.Slog",

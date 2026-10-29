@@ -103,6 +103,7 @@ namespace MToolKit.Runtime.Navigation.Services
       newView.name = newView.name.Replace("(Clone)", "");
 
       container.InjectGameObject(newView.gameObject);
+      MToolKit.Runtime.UI.ScrollIntoViewOnSelect.Install(newView.transform);
 
       stacks[canvasType].Push(newView);
       newView.Show();

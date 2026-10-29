@@ -10,5 +10,6 @@ namespace MToolKit.Runtime.Settings.Graphics
     ReactiveSetting<bool> VerticalSync { get; }
     ReactiveSetting<bool> DisableCrt { get; }
     ReactiveSetting<bool> DisableBloom { get; }
+    ReactiveSetting<float> UiScale { get; }
   }
 }

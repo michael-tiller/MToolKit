@@ -8,6 +8,8 @@ using MToolKit.Runtime.Navigation.DataStructures;
 using MToolKit.Runtime.Navigation.Enums;
 using MToolKit.Runtime.Navigation.Interfaces;
 using MToolKit.Runtime.Navigation.Services;
+using MToolKit.Runtime.Settings.Interfaces;
+using MToolKit.Runtime.UI.Scaling;
 using Serilog;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -72,6 +74,12 @@ namespace MToolKit.Runtime.Navigation
       builder.RegisterInstance(canvasConfigs);
       Dictionary<ECanvasType, Transform> canvasTransforms = new(canvasTransformsDict);
       builder.RegisterInstance(canvasTransforms);
+      builder.RegisterBuildCallback(resolver =>
+      {
+        if (!resolver.TryResolve<ISettingsSystem>(out var settings)) return;
+        foreach (var canvasTransform in canvasTransforms.Values)
+          UserUiScaleCanvas.AttachToRoot(canvasTransform, settings.GraphicsSettings.UiScale);
+      });
       log.ForGameObject(gameObject).ForMethod().Verbose("NavigationInstaller: Registered canvasConfigs.");
     }
 

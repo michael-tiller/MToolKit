@@ -2,6 +2,8 @@ using System;
 using MToolKit.Runtime.Installer;
 using MToolKit.Runtime.Settings.BoundSettings;
 using MToolKit.Runtime.Settings.Interfaces;
+using MToolKit.Runtime.UI.Scaling;
+using R3;
 using Serilog;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -15,6 +17,7 @@ namespace MToolKit.Runtime.Settings.Graphics
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<GraphicsSettingsModule>().ForFeature("Settings.Graphics"));
     private static ILogger log => logLazy.Value ?? Logger.None;
+    private readonly IDisposable uiScaleValidation;
 
     // Helper method to update the engine's resolution.
     private static int UpdateResolution(int resIndex, bool fullscreen)
@@ -50,6 +53,12 @@ namespace MToolKit.Runtime.Settings.Graphics
       VerticalSync = new ReactiveSetting<bool>(true, "Vertical Sync", settingsController);
       DisableCrt = new ReactiveSetting<bool>(false, "Disable CRT Effect", settingsController);
       DisableBloom = new ReactiveSetting<bool>(false, "Disable Bloom", settingsController);
+      UiScale = new ReactiveSetting<float>(1f, "UI Scale", settingsController);
+      uiScaleValidation = UiScale.Property.Subscribe(value =>
+      {
+        float normalized = UiScalePolicy.Normalize(value);
+        if (value != normalized) UiScale.Value = normalized;
+      });
     }
 
     [ShowInInspector]
@@ -102,9 +111,13 @@ namespace MToolKit.Runtime.Settings.Graphics
     public ReactiveSetting<bool> VerticalSync { get; }
     public ReactiveSetting<bool> DisableCrt { get; }
     public ReactiveSetting<bool> DisableBloom { get; }
+    /// <summary>User multiplier on the authored resolution-scaled baseline.</summary>
+    public ReactiveSetting<float> UiScale { get; }
 
     public void OnShutdown()
     {
+      uiScaleValidation.Dispose();
+      UiScale.Dispose();
       ResolutionIndex.Dispose();
       QualityIndex.Dispose();
       Fullscreen.Dispose();
@@ -142,6 +155,7 @@ namespace MToolKit.Runtime.Settings.Graphics
 
       if (DisableBloom.IsDirty)
         DisableBloom.OnApply();
+      if (UiScale.IsDirty) UiScale.OnApply();
     }
 
     public void RevertToDefaultSettings()
@@ -169,6 +183,7 @@ namespace MToolKit.Runtime.Settings.Graphics
 
       if (!DisableCrt.IsDefault) DisableCrt.OnRevertToDefault();
       if (!DisableBloom.IsDefault) DisableBloom.OnRevertToDefault();
+      if (!UiScale.IsDefault) UiScale.OnRevertToDefault();
     }
 
     public void Cancel()
@@ -179,6 +194,7 @@ namespace MToolKit.Runtime.Settings.Graphics
       VerticalSync.OnCancel();
       DisableCrt.OnCancel();
       DisableBloom.OnCancel();
+      UiScale.OnCancel();
     }
   }
 }
