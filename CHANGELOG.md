@@ -18,6 +18,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Keep live UI-scale dragging anchored to the pointer gesture while layout changes, preserve percentage keyboard control, localize captions through existing bindings, and reveal the scale row after deferred layout without moving unrelated settings. (v1.9.1)
+
 - Persist confirmed default settings through the existing apply/save path while retaining immediate reset and cancellation baselines. (v1.7.3)
 
 - Keep unpositioned one-shot audio centered and reset spatial playback on every pooled-source checkout; explicit world positions retain 3D playback when enabled. (v1.7.2)

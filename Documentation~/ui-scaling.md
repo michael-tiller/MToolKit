@@ -87,6 +87,20 @@ optional `label`. `Configure(Slider, TMP_Text, ReactiveSetting<float>)` supports
 creator-owned controls; `GraphicsSettingsInitializer.uiScaleSlider` supports
 authored settings prefabs.
 
+Use `StableDragSlider` for a scale control whose own track can move or resize during
+live preview. It inherits uGUI `Slider` and captures the screen-space track at pointer
+press, so one held gesture keeps a consistent value mapping while the rest of the UI
+scales and reflows. Track clicks, handle grab offsets, integer clamping and native
+keyboard/controller movement are retained. Release, disable or focus loss ends the
+capture; a display-resolution change requires a fresh press. There is no polling or
+deferred preference preview. `Configure(Slider, ...)` remains compatible with ordinary
+sliders; stable pointer geometry is an explicit control choice.
+
+Unity prefab variants do not reliably persist a script-type change on an inherited
+component. When upgrading an authored control, use supported removed/added component
+overrides, copy its serialized Slider state and retarget local component references.
+Preserve the prefab GUID and verify the resolved component after saving and reloading.
+
 Changes preview live. Apply saves the preference and advances its cancellation
 baseline. Cancel restores that baseline. `ResetToDefault()` on the slider sets a
 100% draft, so ordinary Apply/Cancel semantics still apply. The existing confirmed
