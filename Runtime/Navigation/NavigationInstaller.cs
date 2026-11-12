@@ -79,6 +79,11 @@ namespace MToolKit.Runtime.Navigation
         if (!resolver.TryResolve<ISettingsSystem>(out var settings)) return;
         foreach (var canvasTransform in canvasTransforms.Values)
           UserUiScaleCanvas.AttachToRoot(canvasTransform, settings.GraphicsSettings.UiScale);
+        // Owned non-routed UI (for example an empty-view canvas) can opt in too.
+        // Include dormant roots so their first activation uses the current preference.
+        foreach (var binding in GetComponentsInChildren<UserUiScaleCanvas>(true))
+          if (binding.GetComponent<Canvas>().isRootCanvas)
+            UserUiScaleCanvas.AttachToRoot(binding, settings.GraphicsSettings.UiScale);
       });
       log.ForGameObject(gameObject).ForMethod().Verbose("NavigationInstaller: Registered canvasConfigs.");
     }

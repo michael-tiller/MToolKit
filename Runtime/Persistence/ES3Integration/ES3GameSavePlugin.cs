@@ -53,9 +53,22 @@ namespace MToolKit.Runtime.Persistence.ES3Integration
     /// </summary>
     public override IEnumerable<Type> OptionalServices => new[] { typeof(ISettingsSystem) };
 
+    public override void Register(IContainerBuilder builder)
+    {
+      base.Register(builder);
+      // Async plugin startup does not call PerformSetup. Bind before the hidden
+      // autosave indicator can first appear, without resolving the save service.
+      builder.RegisterBuildCallback(ConfigureUiScale);
+    }
+
     public override void PerformSetup(IObjectResolver resolver)
     {
       base.PerformSetup(resolver);
+      ConfigureUiScale(resolver);
+    }
+
+    private void ConfigureUiScale(IObjectResolver resolver)
+    {
       if (autoSaveExecutingAnimatedObject != null && resolver.TryResolve<ISettingsSystem>(out var settings))
         UserUiScaleCanvas.AttachToRoot(autoSaveExecutingAnimatedObject.transform, settings.GraphicsSettings.UiScale);
     }

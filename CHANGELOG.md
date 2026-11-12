@@ -20,6 +20,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Bind explicitly opted-in non-routed navigation canvases and the async autosave indicator during their owning container setup, including initially dormant UI. Preserve nested/world-space exclusions and existing setup compatibility. Verified through consuming-game lifecycle tests and native menu smoke. (v1.10.2)
+
 - Describe constrained UI scaling in terms of the available UI layout area rather than implying a higher physical resolution necessarily increases logical capacity. Keep requested/effective behavior and configurable viewport policy unchanged. (v1.10.1)
 
 - Keep live UI-scale dragging anchored to the pointer gesture while layout changes, preserve percentage keyboard control, localize captions through existing bindings, and reveal the scale row after deferred layout without moving unrelated settings. (v1.9.1)
