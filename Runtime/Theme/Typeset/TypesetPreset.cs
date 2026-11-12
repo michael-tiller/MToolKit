@@ -9,6 +9,12 @@ namespace MToolKit.Theme.Typeset
   public class TypesetPreset : ThemePreset<Typeset>
   {
     private UserUiScaleCanvas scaleCanvas;
+    private float appliedUserScale = float.NaN;
+    private float appliedAccessibilityScale = float.NaN;
+
+    private float UserScale => scaleCanvas != null ? scaleCanvas.EffectiveUserScale : UiScalePolicy.Default;
+    private float AccessibilityScale => scaleCanvas != null
+      ? Mathf.Min(UiScalePolicy.Maximum, scaleCanvas.Capacity.MaximumSupported) : UiScalePolicy.Maximum;
 
     private void OnEnable()
     {
@@ -20,7 +26,7 @@ namespace MToolKit.Theme.Typeset
     private void OnDisable()
     {
       UserUiScaleCanvas.Attached -= OnCanvasAttached;
-      if (scaleCanvas != null) scaleCanvas.ScaleChanged -= OnScaleChanged;
+      if (scaleCanvas != null) scaleCanvas.ConstraintChanged -= OnConstraintChanged;
       scaleCanvas = null;
     }
 
@@ -44,12 +50,19 @@ namespace MToolKit.Theme.Typeset
     {
       var next = GetComponentInParent<UserUiScaleCanvas>(true);
       if (next == scaleCanvas) return;
-      if (scaleCanvas != null) scaleCanvas.ScaleChanged -= OnScaleChanged;
+      if (scaleCanvas != null) scaleCanvas.ConstraintChanged -= OnConstraintChanged;
       scaleCanvas = next;
-      if (scaleCanvas != null) scaleCanvas.ScaleChanged += OnScaleChanged;
+      if (scaleCanvas != null) scaleCanvas.ConstraintChanged += OnConstraintChanged;
     }
 
-    private void OnScaleChanged(float _) { if (Current != null) Apply(Current); }
+    private void OnConstraintChanged()
+    {
+      // A different request above an unchanged cap does not change typography or
+      // justify resetting TMP's resolved auto-size. Theme and lifecycle applies
+      // bypass this event-only guard.
+      if (Current != null && (!Mathf.Approximately(appliedUserScale, UserScale) ||
+          !Mathf.Approximately(appliedAccessibilityScale, AccessibilityScale))) Apply(Current);
+    }
     [field: SerializeField]
     [field: Required]
     public TMP_Text Text { get; private set; }
@@ -79,10 +92,11 @@ namespace MToolKit.Theme.Typeset
       if (Text == null || typeset == null) return;
 
       if (isActiveAndEnabled) BindScaleCanvas();
-      float userScale = scaleCanvas != null ? scaleCanvas.EffectiveUserScale : UiScalePolicy.Default;
+      float userScale = UserScale;
+      float accessibilityScale = AccessibilityScale;
       float minimum = AccessibleTypography.ResolveMinimum(
         typeset.AutoSizeFont ? typeset.FontSizeMin : typeset.FontSize,
-        typeset.FontSize, userScale, typeset.AccessibleFontSizeMin);
+        typeset.FontSize, userScale, typeset.AccessibleFontSizeMin, accessibilityScale);
       float maximum = Mathf.Max(typeset.FontSize, minimum);
 
       Text.font = typeset.Font; // assigning font resets to the font's default material...
@@ -99,6 +113,8 @@ namespace MToolKit.Theme.Typeset
       Text.wordSpacing = typeset.WordSpacing;
       Text.paragraphSpacing = typeset.ParagraphSpacing;
       if (useOverrideMat) Text.fontSharedMaterial = overrideMaterial; // ...so the override wins
+      appliedUserScale = userScale;
+      appliedAccessibilityScale = accessibilityScale;
     }
   }
 }

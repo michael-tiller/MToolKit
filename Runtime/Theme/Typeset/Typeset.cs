@@ -20,8 +20,9 @@ namespace MToolKit.Theme.Typeset
     public float FontSizeMin { get; private set; }
 
     /// <summary>
-    /// Optional minimum at maximum user UI scale, in authored font units. Zero
-    /// retains the ordinary minimum. This is authoring policy, never runtime state.
+    /// Optional minimum at the viewport's supported maximum user UI scale, in
+    /// authored font units. Zero retains the ordinary minimum. This is authoring
+    /// policy, never runtime state; 100% and smaller retain the authored baseline.
     /// </summary>
     [field: SerializeField]
     [field: Min(0)]
