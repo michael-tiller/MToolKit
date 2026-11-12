@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using MessagePipe;
 using MToolKit.Runtime.Input;
@@ -40,11 +41,14 @@ namespace MToolKit.Runtime.Settings
     private readonly SemaphoreSlim settingsPersistenceGate = new(1, 1);
     private readonly InputAction recoverUiScaleAction;
     private bool isDisposed;
+    private Dictionary<(string section, string key), object> pendingIniSnapshot;
+    private bool writingIni;
 
-    public SettingsSystem(InputRebinderService inputRebinderService, IIniService iniService = null)
+    public SettingsSystem(InputRebinderService inputRebinderService, IIniService iniService = null,
+      InputActionAsset inputActionAsset = null)
     {
       this.iniService = iniService;
-      InitializeModules(inputRebinderService);
+      InitializeModules(inputRebinderService, inputActionAsset);
       recoverUiScaleAction = new InputAction("Recover UI Scale", InputActionType.Button);
       recoverUiScaleAction.AddCompositeBinding("ButtonWithTwoModifiers")
         .With("Modifier1", "<Keyboard>/ctrl")
@@ -143,7 +147,7 @@ namespace MToolKit.Runtime.Settings
       // Save to INI file
       if (iniService != null)
       {
-        SaveToIniAsync().Forget();
+        QueueIniSave();
       }
       else
       {
@@ -168,7 +172,7 @@ namespace MToolKit.Runtime.Settings
         // Save to INI file
         if (iniService != null)
         {
-          SaveToIniAsync().Forget();
+          QueueIniSave();
         }
         else
         {
@@ -231,8 +235,12 @@ namespace MToolKit.Runtime.Settings
         GraphicsSettings.Fullscreen.IsDirty || GraphicsSettings.VerticalSync.IsDirty ||
         GraphicsSettings.DisableCrt.IsDirty || GraphicsSettings.DisableBloom.IsDirty ||
         GameSettings.AutoSave.IsDirty || GameSettings.AnalyticsEnabled.IsDirty ||
-        InputSettings.CameraPanSensitivity.IsDirty || InputSettings.CameraZoomSensitivity.IsDirty);
+        InputSettings.CameraPanSensitivity.IsDirty || InputSettings.CameraZoomSensitivity.IsDirty ||
+        InputSettings.BindingOverridesJson.IsDirty);
       if (iniService == null) return;
+      // Supersede only this key in an older queued Apply snapshot.
+      if (pendingIniSnapshot != null)
+        pendingIniSnapshot[("Graphics", "UiScale")] = UiScalePolicy.Serialize(GraphicsSettings.UiScale.LastValue);
       // Serialize with Apply because IniService deliberately skips concurrent writes.
       // A later Apply can supersede recovery while this waits; its applied baseline
       // must persist without committing a still-newer live-preview draft.
@@ -247,13 +255,13 @@ namespace MToolKit.Runtime.Settings
       finally { settingsPersistenceGate.Release(); }
     }
 
-    private void InitializeModules(InputRebinderService inputRebinderService)
+    private void InitializeModules(InputRebinderService inputRebinderService, InputActionAsset inputActionAsset)
     {
       log.ForMethod().Verbose("Initializing settings modules");
       AudioSettings = new AudioSettingsModule(this);
       GraphicsSettings = new GraphicsSettingsModule(this);
       GameSettings = new GameSettingsModule(this);
-      InputSettings = new InputSettingsModule(inputRebinderService, this);
+      InputSettings = new InputSettingsModule(inputRebinderService, this, inputActionAsset);
     }
 
     private void ShutdownModules()
@@ -343,6 +351,11 @@ namespace MToolKit.Runtime.Settings
       if (iniService == null)
         return;
 
+      // Binding failures must fault Initialization and preserve the persisted source.
+      // The module rolls back the asset if Unity cleared overrides before a parse error.
+      if (InputSettings != null && iniService.KeyExists("Input", "BindingOverridesJson"))
+        InputSettings.LoadBindingOverridesJson(iniService.GetValue<string>("Input", "BindingOverridesJson", string.Empty));
+
       try
       {
         log.ForMethod().Verbose("Loading settings from INI file");
@@ -416,72 +429,83 @@ namespace MToolKit.Runtime.Settings
       }
     }
 
-    private async UniTaskVoid SaveToIniAsync()
+    private void QueueIniSave()
     {
-      if (iniService == null)
+      if (iniService == null || isDisposed)
+        return;
+      if (!initializationCompleted || initializationFault != null)
       {
-        log.ForMethod().Warning("INI service is null, cannot save settings");
+        log.ForMethod().Warning("Settings persistence skipped because initialization is incomplete or faulted");
         return;
       }
 
+      // Capture now: live controls may become drafts again while an earlier write awaits disk.
+      var snapshot = new Dictionary<(string section, string key), object>();
+      if (GraphicsSettings != null)
+      {
+        snapshot[("Graphics", "Resolution")] = GraphicsSettings.ResolutionIndex.LastValue;
+        snapshot[("Graphics", "Quality")] = GraphicsSettings.QualityIndex.LastValue;
+        snapshot[("Graphics", "Fullscreen")] = GraphicsSettings.Fullscreen.LastValue;
+        snapshot[("Graphics", "VerticalSync")] = GraphicsSettings.VerticalSync.LastValue;
+        snapshot[("Graphics", "DisableCrt")] = GraphicsSettings.DisableCrt.LastValue;
+        snapshot[("Graphics", "DisableBloom")] = GraphicsSettings.DisableBloom.LastValue;
+        snapshot[("Graphics", "UiScale")] = UiScalePolicy.Serialize(GraphicsSettings.UiScale.LastValue);
+      }
+      if (AudioSettings != null)
+      {
+        snapshot[("Audio", "MasterVolume")] = AudioSettings.MasterVolume.LastValue;
+        snapshot[("Audio", "MusicVolume")] = AudioSettings.MusicVolume.LastValue;
+        snapshot[("Audio", "GameVolume")] = AudioSettings.GameVolume.LastValue;
+        snapshot[("Audio", "InterfaceVolume")] = AudioSettings.InterfaceVolume.LastValue;
+      }
+      if (GameSettings != null)
+      {
+        snapshot[("Game", "AutoSave")] = GameSettings.AutoSave.LastValue;
+        snapshot[("Game", "AnalyticsEnabled")] = GameSettings.AnalyticsEnabled.LastValue;
+      }
+      if (InputSettings != null)
+      {
+        snapshot[("Input", "CameraPanSensitivity")] = InputSettings.CameraPanSensitivity.LastValue;
+        snapshot[("Input", "CameraZoomSensitivity")] = InputSettings.CameraZoomSensitivity.LastValue;
+        snapshot[("Input", "BindingOverridesJson")] = InputSettings.BindingOverridesJson.LastValue;
+      }
+      pendingIniSnapshot = snapshot;
+      if (!writingIni) WritePendingIniSnapshotsAsync().Forget();
+    }
+
+    private async UniTaskVoid WritePendingIniSnapshotsAsync()
+    {
+      writingIni = true;
       bool acquired = false;
       try
       {
-        log.ForMethod().Verbose("Saving settings to INI file");
-
         await settingsPersistenceGate.WaitAsync(lifetime.Token);
         acquired = true;
-        await iniService.IsSaving.Where(saving => !saving).FirstAsync(lifetime.Token);
-        if (isDisposed) return;
-
-        // Apply advanced these baselines before requesting the write. A queued write
-        // must not persist unrelated preview changes made while another writer ran.
-
-        // Graphics settings
-        if (GraphicsSettings != null)
+        while (!isDisposed && pendingIniSnapshot != null)
         {
-          iniService.SetValue("Graphics", "Resolution", GraphicsSettings.ResolutionIndex.LastValue);
-          iniService.SetValue("Graphics", "Quality", GraphicsSettings.QualityIndex.LastValue);
-          iniService.SetValue("Graphics", "Fullscreen", GraphicsSettings.Fullscreen.LastValue);
-          iniService.SetValue("Graphics", "VerticalSync", GraphicsSettings.VerticalSync.LastValue);
-          iniService.SetValue("Graphics", "DisableCrt", GraphicsSettings.DisableCrt.LastValue);
-          iniService.SetValue("Graphics", "DisableBloom", GraphicsSettings.DisableBloom.LastValue);
-          iniService.SetValue("Graphics", "UiScale", UiScalePolicy.Serialize(GraphicsSettings.UiScale.LastValue));
+          // IniService drops concurrent saves and reads mutable dictionaries on a worker.
+          // Wait before SetValue as well as before SaveAsync.
+          if (iniService.IsSaving.Value)
+            await UniTask.WaitUntil(() => isDisposed || !iniService.IsSaving.Value, cancellationToken: lifetime.Token);
+          if (isDisposed) return;
+          var snapshot = pendingIniSnapshot;
+          pendingIniSnapshot = null;
+          foreach (var entry in snapshot)
+            iniService.SetValue(entry.Key.section, entry.Key.key, entry.Value);
+          await iniService.SaveAsync(lifetime.Token);
+          log.ForMethod().Verbose("Settings saved to INI file");
         }
-
-        // Audio settings
-        if (AudioSettings != null)
-        {
-          iniService.SetValue("Audio", "MasterVolume", AudioSettings.MasterVolume.LastValue);
-          iniService.SetValue("Audio", "MusicVolume", AudioSettings.MusicVolume.LastValue);
-          iniService.SetValue("Audio", "GameVolume", AudioSettings.GameVolume.LastValue);
-          iniService.SetValue("Audio", "InterfaceVolume", AudioSettings.InterfaceVolume.LastValue);
-        }
-
-        // Game settings
-        if (GameSettings != null)
-        {
-          iniService.SetValue("Game", "AutoSave", GameSettings.AutoSave.LastValue);
-          iniService.SetValue("Game", "AnalyticsEnabled", GameSettings.AnalyticsEnabled.LastValue);
-        }
-
-        // Input camera settings
-        if (InputSettings != null)
-        {
-          iniService.SetValue("Input", "CameraPanSensitivity", InputSettings.CameraPanSensitivity.LastValue);
-          iniService.SetValue("Input", "CameraZoomSensitivity", InputSettings.CameraZoomSensitivity.LastValue);
-        }
-
-        // Save to file
-        await iniService.SaveAsync(lifetime.Token);
-        log.ForMethod().Verbose("Settings saved to INI file");
       }
       catch (OperationCanceledException) when (isDisposed) { }
       catch (Exception ex)
       {
         log.ForMethod().Error(ex, "Failed to save settings to INI: {Message}", ex.Message);
       }
-      finally { if (acquired) settingsPersistenceGate.Release(); }
+      finally
+      {
+        if (acquired) settingsPersistenceGate.Release();
+        writingIni = false;
+      }
     }
 
     public void Dispose()
@@ -493,6 +517,7 @@ namespace MToolKit.Runtime.Settings
       recoverUiScaleAction.Dispose();
       lifetime.Cancel();
       lifetime.Dispose();
+      pendingIniSnapshot = null;
       log.ForMethod().Information("Disposing SettingsSystem");
       ShutdownModules();
       IsDirty.Dispose();

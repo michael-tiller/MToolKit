@@ -1,7 +1,7 @@
 # User UI scale
 
 `GraphicsSettingsModule.UiScale` is the authoritative `ReactiveSetting<float>`.
-Its multiplier defaults to `1`, accepts `0.75` through `3`, clamps out-of-range
+Its requested multiplier defaults to `1`, accepts `0.75` through `3`, clamps out-of-range
 values, and replaces non-finite values with the default. The INI key is
 `[Graphics] UiScale`; missing or malformed values use the existing settings
 initialization and persistence machinery.
@@ -48,15 +48,17 @@ binding.Configure(settings.GraphicsSettings.UiScale);
 For a `ScaleWithScreenSize` scaler:
 
 ```text
-effective reference resolution = authored reference resolution / user multiplier
-rendered scale = Unity's authored resolution scale × user multiplier
+effective reference resolution = authored reference resolution / effective user multiplier
+rendered scale = Unity's authored resolution scale × effective user multiplier
 ```
 
 Both reference axes change together. The authored match mode and width/height
 match remain intact. Unity continues calculating `Canvas.scaleFactor`; assigning
 `CanvasScaler.scaleFactor` cannot override `ScaleWithScreenSize` reliably.
 For an explicitly opted-in `ConstantPixelSize` root, the scaler's authored scale
-factor is multiplied instead. `ConstantPhysicalSize` requires an explicit
+factor is multiplied instead. Below CanvasScaler's 0.01 property floor, the binding
+temporarily represents that same absolute pixel factor through reference resolution;
+it restores the original mode/reference/factor on disable. `ConstantPhysicalSize` requires an explicit
 authoring decision and is diagnosed rather than silently reinterpreted.
 
 The component retains its original values and restores them on disable. Enabling
@@ -78,6 +80,62 @@ can queue one bounded layout operation for rendering. `Attached` is a discovery
 notification for late-added bindings, not global scale state; it resets at subsystem
 registration. Dispose subscriptions when views are disabled or destroyed.
 
+## Requested scale and viewport capacity
+
+Only `UiScale.Value` / applied `LastValue` are user preferences. Never persist
+`UserUiScaleCanvas.EffectiveUserScale`. Each opted-in root retains its authored
+resolution model and exposes `RequestedUserScale`, `EffectiveUserScale` and
+`Capacity`. Its configurable `MinimumLogicalViewport` defaults to 1024×768.
+
+`UiScalePolicy.ResolutionFactor` reproduces the authored Match Width/Height,
+Expand or Shrink model using the canvas rendering-display dimensions (including
+the selected display). Constant Pixel Size uses its captured authored factor.
+The available viewport is separately measured from physical canvas pixels and,
+on the primary real screen, intersected with `Screen.safeArea`. Camera render
+targets and secondary displays do not inherit the primary screen's safe area.
+
+```text
+maximum = min(availablePixelWidth  / baselineFactor / minimumLogicalWidth,
+              availablePixelHeight / baselineFactor / minimumLogicalHeight)
+effective = min(normalizedRequested, maximum)
+```
+
+`UiScaleCapacity.Resolve` is pure. It reports finite maximum/effective values,
+validity, support for the configured 75% minimum and constraint state. If a
+valid viewport cannot fit even 75%, it applies its actual positive capacity and
+keeps the insufficient-viewport warning visible. Unknown/invalid dimensions do
+not prove capacity: initial fallback is 75%; a previously applied value is
+retained, bounded by the new request, until valid geometry returns. Invalid or
+unrepresentable reference data uses an explicit invalid-state finite fallback.
+Tolerance affects warning presentation only; the numerical limit is still applied.
+
+Changes are driven by the existing reactive setting, Unity root dimensions,
+display notifications and regained focus. `RefreshViewport()` is the explicit
+hook for a platform safe-area provider whose change has no dimensions/display
+notification. Unity exposes no universal standalone safe-area event; such a
+provider must call that hook. There is no new Update loop or rendering callback
+that checks capacity every frame. The already scaled logical rect and mutated
+reference resolution are never inputs to the baseline calculation.
+
+`ScaleChanged` emits only when effective scale changes. `ConstraintChanged`
+also covers a changed request above an unchanged cap, without another scaler
+write or layout rebuild. Native viewport changes emit `ViewportChanged` once
+for their changed physical geometry. All callbacks/subscriptions are released
+through the existing component lifecycle.
+
+With Dirigible's 1920×1080 reference and 0.5 match, full-screen 16:9 resolutions
+1280×720, 1920×1080, 2048×1152 and 3840×2160 share a 1.40625 maximum with the
+default minimum. 4K doubles the resolution factor; it does not add logical room.
+A request of 250% therefore applies 140.625% at both 1080p and 4K. Constant
+Pixel Size, aspect ratio and safe-area changes can increase logical capacity
+and automatically restore a larger stored request. There are no 4K/DPI rules.
+
+This minimum is a global workspace constraint. It does not prove that a footer,
+popup or dense matrix fits. Those layouts still need their own responsive and
+overflow policies. Prior 300% glyph-height evidence is not default-policy text
+size evidence after introducing this cap; custom unconstrained typography stress
+tests identify their profile explicitly.
+
 ## Settings and recovery
 
 `UserUiScaleSlider` binds the same setting. Its integer slider positions are
@@ -86,6 +144,19 @@ one percentage-point steps. Serialized fields are `slider`, `percentage` and the
 optional `label`. `Configure(Slider, TMP_Text, ReactiveSetting<float>)` supports
 creator-owned controls; `GraphicsSettingsInitializer.uiScaleSlider` supports
 authored settings prefabs.
+
+The percentage/slider always show the requested value. Assign the optional
+`warning` TMP field beneath the existing row, or call `ConfigureFeedback`.
+Reserve ordinary warning space in the owning layout (Dirigible uses 64 logical
+units), retain wrapping/preferred-height growth and disable raycasts. Hidden
+feedback disables text rendering rather than its GameObject/layout reservation.
+The warning displays the actual applied percentage to one optional decimal,
+so a 141% request limited to 140.625% reads "Limited to 140.6%...". The minimum
+and unknown-viewport states have distinct localized messages. The three
+serialized `LocalizedString` fields use the existing Default String Table and
+update through `StringChanged`; locale overrides can replace those references.
+No toast, modal, rejected value or confirmation is added. Slider movement does
+not save settings; ordinary Apply/Cancel/default behavior remains authoritative.
 
 Use `StableDragSlider` for a scale control whose own track can move or resize during
 live preview. It inherits uGUI `Slider` and captures the screen-space track at pointer

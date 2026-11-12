@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Add viewport capacity limits to applied UI scale while preserving the requested 75?300% preference. Reuse existing canvas/settings bindings, localized inline feedback and selection scrolling; expose pure CanvasScaler-consistent calculations and cover invalid/subminimum viewports without polling. Retain applied rebinding persistence during integration. (v1.10.0)
+
 - Add persisted 75–300% reactive UI scaling above authored CanvasScaler resolution behavior, percentage controls and focused emergency recovery. Add runtime semantic accessibility floors, late-view typography and focus-to-scroll integration. Document migration for custom `IGraphicsSettings` implementations and keep scoped development INI isolation separate from normal settings persistence. (v1.9.0)
 
 - Add independent camera pan and zoom sensitivity settings with neutral defaults, finite 10–300% ranges, Apply/Cancel/default baselines and INI persistence. Preserve existing binding behavior and legacy files without the new keys. (v1.8.0)
@@ -19,6 +21,8 @@ not a roadmap milestone.
 ### Fixed
 
 - Keep live UI-scale dragging anchored to the pointer gesture while layout changes, preserve percentage keyboard control, localize captions through existing bindings, and reveal the scale row after deferred layout without moving unrelated settings. (v1.9.1)
+
+- Persist canonical input binding overrides in INI, restore applied bindings on Cancel, and retain confirmed Defaults as the new baseline. Queue applied settings snapshots across overlapping saves; preserve per-action enablement and previous overrides during rebinding and conflict rejection. (v1.8.1)
 
 - Persist confirmed default settings through the existing apply/save path while retaining immediate reset and cancellation baselines. (v1.7.3)
 

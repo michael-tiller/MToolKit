@@ -9,6 +9,7 @@ namespace MToolKit.Runtime.UI
   public sealed class ScrollIntoViewOnSelect : MonoBehaviour, ISelectHandler
   {
     private bool pending;
+    public RectTransform Related { get; set; }
 
     public static void Install(Transform root)
     {
@@ -27,10 +28,13 @@ namespace MToolKit.Runtime.UI
     private void Reveal()
     {
       Cancel();
-      if (isActiveAndEnabled) EnsureVisible(transform as RectTransform);
+      if (isActiveAndEnabled) EnsureVisible(transform as RectTransform, Related);
     }
 
-    public static void EnsureVisible(RectTransform selected)
+    public static void EnsureVisible(RectTransform selected) => EnsureVisible(selected, null);
+
+    /// <summary>Reveal related reading feedback with its control when both fit; otherwise retain the control.</summary>
+    public static void EnsureVisible(RectTransform selected, RectTransform related)
     {
       if (selected == null) return;
       var corners = new Vector3[4];
@@ -45,6 +49,15 @@ namespace MToolKit.Runtime.UI
         var bounds = new Bounds(viewport.InverseTransformPoint(corners[0]), Vector3.zero);
         for (int i = 1; i < corners.Length; i++) bounds.Encapsulate(viewport.InverseTransformPoint(corners[i]));
         var view = viewport.rect;
+        if (related != null && related.IsChildOf(scroll.content))
+        {
+          var combined = bounds;
+          related.GetWorldCorners(corners);
+          for (int i = 0; i < corners.Length; i++)
+            combined.Encapsulate(viewport.InverseTransformPoint(corners[i]));
+          if ((!scroll.vertical || combined.size.y <= view.height + .01f) &&
+              (!scroll.horizontal || combined.size.x <= view.width + .01f)) bounds = combined;
+        }
         Vector2 movement = Vector2.zero;
         if (scroll.horizontal)
           movement.x = bounds.size.x > view.width || bounds.min.x < view.xMin

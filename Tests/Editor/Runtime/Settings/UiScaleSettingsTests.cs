@@ -34,8 +34,10 @@ namespace MToolKit.Tests.Editor.Runtime.Settings
       for (int i = 0; i < SceneManager.sceneCount; i++)
       {
         var scene = SceneManager.GetSceneAt(i);
-        if (scene.isDirty || string.IsNullOrEmpty(scene.path) && scene.rootCount > 0)
-          throw new InvalidOperationException("Preserve unsaved scene before UI scale PlayMode proof.");
+        if (scene.isDirty || string.IsNullOrEmpty(scene.path) && scene.rootCount > 0 && !IsRunnerBootstrap(scene))
+          throw new InvalidOperationException("Preserve unsaved scene before UI scale PlayMode proof: " +
+            scene.name + "; path=" + scene.path + "; dirty=" + scene.isDirty + "; roots=" +
+            string.Join(",", scene.GetRootGameObjects().Select(root => root.name + ":" + root.hideFlags)));
       }
       var setup = EditorSceneManager.GetSceneManagerSetup();
       var state = new SavedScenes
@@ -48,6 +50,23 @@ namespace MToolKit.Tests.Editor.Runtime.Settings
       SessionState.SetString(SceneStateKey, JsonUtility.ToJson(state));
       EditorSceneManager.playModeStartScene = null;
       EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+    }
+
+    private static bool IsRunnerBootstrap(Scene scene)
+    {
+      // Unity Test Framework creates an unsaved DefaultGameObjects scene before Edit Mode tests.
+      // Match its live job's actual scene handle; never infer ownership from object names.
+      var api = typeof(UnityEditor.TestTools.TestRunner.Api.TestRunnerApi);
+      var holder = api.GetProperty("m_testJobDataHolder", BindingFlags.Static | BindingFlags.NonPublic)?.GetValue(null);
+      if (holder == null) return false;
+      var runners = (Array)holder.GetType().GetMethod("GetAllRunners").Invoke(holder, null);
+      foreach (var runner in runners)
+      {
+        var data = runner.GetType().GetMethod("GetData").Invoke(runner, null);
+        if ((bool)data.GetType().GetField("isRunning").GetValue(data) &&
+            (Scene)data.GetType().GetField("InitTestScene").GetValue(data) == scene) return true;
+      }
+      return false;
     }
 
     [UnityTearDown]
@@ -256,6 +275,8 @@ namespace MToolKit.Tests.Editor.Runtime.Settings
         scaler.referenceResolution = new Vector2(1920, 1080);
         scaler.matchWidthOrHeight = 0.5f;
         var component = (Behaviour)root.AddComponent(bindingType);
+        // Isolate multiplier/restoration behavior from the default viewport-capacity policy.
+        bindingType.GetProperty("MinimumLogicalViewport").SetValue(component, new Vector2(100, 100));
         bindingType.GetMethod("Configure").Invoke(component, new object[] { setting });
         yield return null;
         float baseline = root.GetComponent<Canvas>().scaleFactor;
@@ -348,6 +369,8 @@ namespace MToolKit.Tests.Editor.Runtime.Settings
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
         scaler.scaleFactor = 1.25f;
         var component = (Behaviour)go.AddComponent(bindingType);
+        // This fixture verifies the authored factor under an explicit unconstrained test profile.
+        bindingType.GetProperty("MinimumLogicalViewport").SetValue(component, new Vector2(100, 100));
         bindingType.GetMethod("Configure").Invoke(component, new object[] { setting });
         Assert.That(scaler.scaleFactor, Is.EqualTo(3.75f));
         setting.Value = 0.75f;
