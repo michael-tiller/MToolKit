@@ -52,6 +52,7 @@ namespace MToolKit.Tests.Editor.Runtime.Settings
       Assert.That(fixture.Text(fixture.Percentage), Is.EqualTo("250%"));
       Assert.That(((Behaviour)fixture.Warning).enabled, Is.True);
       StringAssert.Contains("140%", fixture.Text(fixture.Warning));
+      StringAssert.Contains("available UI layout area", fixture.Text(fixture.Warning));
       Assert.That(fixture.Warning.gameObject.activeSelf, Is.True,
         "Hiding a warning must not collapse its reserved layout or move the slider.");
 

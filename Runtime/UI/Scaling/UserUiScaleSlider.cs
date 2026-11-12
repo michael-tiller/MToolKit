@@ -21,7 +21,7 @@ namespace MToolKit.Runtime.UI.Scaling
     [SerializeField] private TMP_Text label;
     [SerializeField] private TMP_Text warning;
     [SerializeField] private LocalizedString limitedWarning = new("Default String Table",
-      "Limited to {0}% by the current screen resolution.");
+      "Limited to {0}% by the available UI layout area.");
     [SerializeField] private LocalizedString insufficientWarning = new("Default String Table",
       "Applied {0}%. The current screen is smaller than the minimum supported UI viewport.");
     [SerializeField] private LocalizedString invalidViewportWarning = new("Default String Table",

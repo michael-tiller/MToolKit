@@ -20,6 +20,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Describe constrained UI scaling in terms of the available UI layout area rather than implying a higher physical resolution necessarily increases logical capacity. Keep requested/effective behavior and configurable viewport policy unchanged. (v1.10.1)
+
 - Keep live UI-scale dragging anchored to the pointer gesture while layout changes, preserve percentage keyboard control, localize captions through existing bindings, and reveal the scale row after deferred layout without moving unrelated settings. (v1.9.1)
 
 - Persist canonical input binding overrides in INI, restore applied bindings on Cancel, and retain confirmed Defaults as the new baseline. Queue applied settings snapshots across overlapping saves; preserve per-action enablement and previous overrides during rebinding and conflict rejection. (v1.8.1)
