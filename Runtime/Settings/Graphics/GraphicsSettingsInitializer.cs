@@ -16,7 +16,6 @@ namespace MToolKit.Runtime.Settings.Graphics
 {
   public class GraphicsSettingsInitializer : AbstractSettingsInitializer
   {
-    private const double MAX_TOLERANCE = 0.001f;
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<GraphicsSettingsInitializer>().ForFeature("Settings.Graphics"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 
@@ -59,6 +58,15 @@ namespace MToolKit.Runtime.Settings.Graphics
         return;
       }
 
+      // Set options before binding: opening the view must not turn the current
+      // desktop mode into a new, potentially persisted window resolution.
+      Resolution[] resolutions = Screen.resolutions;
+      List<string> resolutionOptions = new();
+      foreach (Resolution res in resolutions)
+        resolutionOptions.Add($"{res.width}x{res.height} @ {res.refreshRateRatio}Hz");
+      resolutionDropdown.SetOptions(resolutionOptions);
+      qualityDropdown.SetOptions(QualitySettings.names);
+
       resolutionDropdown.Bind(settingsController.GraphicsSettings.ResolutionIndex);
       qualityDropdown.Bind(settingsController.GraphicsSettings.QualityIndex);
       if (uiScaleSlider != null) uiScaleSlider.Bind(settingsController.GraphicsSettings.UiScale);
@@ -77,34 +85,6 @@ namespace MToolKit.Runtime.Settings.Graphics
         disableBloomToggle.Bind(settingsController.GraphicsSettings.DisableBloom);
       else
         log.ForGameObject(gameObject).ForMethod().Warning("disableBloomToggle is not wired; Disable Bloom toggle will not bind");
-
-      fullscreenToggle.Value = Screen.fullScreen;
-      vsyncToggle.Value = QualitySettings.vSyncCount > 0;
-
-      // Populate resolution dropdown options
-      Resolution[] resolutions = Screen.resolutions;
-      List<string> resolutionOptions = new();
-      int currentResolutionIndex = 0;
-      for (int i = 0; i < resolutions.Length; i++)
-      {
-        Resolution res = resolutions[i];
-        string option = $"{res.width}x{res.height} @ {res.refreshRateRatio}Hz";
-        resolutionOptions.Add(option);
-        // Find the currently active resolution.
-        if (res.width == Screen.currentResolution.width &&
-            res.height == Screen.currentResolution.height &&
-            Math.Abs(res.refreshRateRatio.value - Screen.currentResolution.refreshRateRatio.value) < MAX_TOLERANCE)
-          currentResolutionIndex = i;
-      }
-      resolutionDropdown.SetOptions(resolutionOptions);
-      resolutionDropdown.Value = currentResolutionIndex;
-
-      // Populate quality dropdown options
-      string[] qualityNames = QualitySettings.names;
-      List<string> qualityOptions = new(qualityNames);
-      int currentQualityIndex = QualitySettings.GetQualityLevel();
-      qualityDropdown.SetOptions(qualityOptions);
-      qualityDropdown.Value = currentQualityIndex;
 
       await UniTask.CompletedTask;
     }

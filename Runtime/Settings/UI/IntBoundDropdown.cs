@@ -92,9 +92,13 @@ namespace MToolKit.Runtime.Settings.UI
         return;
       }
 
-      IntBoundReactiveSetting.Bind(reactiveSetting);
+      reactiveSubscription?.Dispose();
+      if (Dropdown != null)
+        Dropdown.onValueChanged.RemoveListener(OnDropdownValueChanged);
 
-      ConfigureDropdown(IntBoundReactiveSetting.Setting.Name, IntBoundReactiveSetting.Setting.Value);
+      IntBoundReactiveSetting.Bind(reactiveSetting);
+      Name = IntBoundReactiveSetting.Setting.Name;
+      Dropdown.SetValueWithoutNotify(IntBoundReactiveSetting.Setting.Value);
       previousSelectedIndex = Dropdown.value;
 
       // Check if the property is disposed before subscribing
@@ -102,8 +106,9 @@ namespace MToolKit.Runtime.Settings.UI
       {
         reactiveSubscription = IntBoundReactiveSetting.Setting.Property.Subscribe(newValue =>
         {
-          if (Dropdown != null && Dropdown.value != newValue)
-            Dropdown.value = newValue;
+          if (Dropdown == null) return;
+          Dropdown.SetValueWithoutNotify(newValue);
+          previousSelectedIndex = Dropdown.value;
         });
       }
       else

@@ -20,6 +20,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Keep hydrated graphics settings intact when controls initialize; update bound dropdowns silently while retaining user input and safe rebinding. (v1.10.4)
+
 - Reach semantic accessibility font floors at the viewport-supported scale endpoint, preserving ordinary75–100% typography and existing policy overloads. Reapply for capacity changes while suppressing redundant request-only updates; retain theme/lifecycle refresh and subscription cleanup. Add endpoint and binding regression coverage. (v1.10.3)
 
 - Bind explicitly opted-in non-routed navigation canvases and the async autosave indicator during their owning container setup, including initially dormant UI. Preserve nested/world-space exclusions and existing setup compatibility. Verified through consuming-game lifecycle tests and native menu smoke. (v1.10.2)

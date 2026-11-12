@@ -5,6 +5,7 @@
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner",
     "UnityEngine.UI",
+    "Unity.TextMeshPro",
     "Unity.InputSystem",
     "MToolKit.Runtime",
     "MToolKit.Runtime.VisualGraphs",
