@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using MToolKit.Runtime.Components;
 using MToolKit.Runtime.Input;
+using MToolKit.Runtime.Input.Prompts;
 using MToolKit.Runtime.Settings.Interfaces;
 using MToolKit.Runtime.Settings.UI.Abstract;
 using Serilog;
@@ -36,13 +37,26 @@ namespace MToolKit.Runtime.Settings.Input
     [Required]
     private InputActionAsset inputActionAsset;
 
+    [SerializeField]
+    [Tooltip("Optional standalone configuration when no IInputPromptService is registered in VContainer.")]
+    private InputPromptSettings inputPromptSettings;
+
     private readonly List<BindingComponentElement> bindingComponentElements = new();
 
     private readonly List<KeybindListElement> keybindListElements = new();
     private InputRebinderService inputRebinderService;
+    private IInputPromptService inputPrompts;
+    private InputPromptService ownedPrompts;
+    private readonly List<InputActionReference> ownedActionReferences = new();
 
     [Inject]
     private ISettingsSystem settingsController;
+
+    [Inject]
+    private void BindInputPrompts(IObjectResolver resolver)
+    {
+      resolver.TryResolve<IInputPromptService>(out inputPrompts);
+    }
 
     public override UniTask ConfigureAsync()
     {
@@ -52,8 +66,16 @@ namespace MToolKit.Runtime.Settings.Input
         return UniTask.CompletedTask;
       }
 
-      // Create the InputRebinderService instance
+      ClearElements();
+      DisposeOwnedServices();
+
+      // Keep the explicitly configured execution/rebinding asset. Projects using an
+      // InputService clone should supply that runtime asset explicitly.
       inputRebinderService = new InputRebinderService();
+      if (inputPrompts == null)
+        ownedPrompts = new InputPromptService(inputPromptSettings, bindingChanges: inputRebinderService,
+          actions: inputActionAsset);
+      var prompts = inputPrompts ?? ownedPrompts;
 
       // Log control schemes for debugging
       List<string> controlSchemes = CompositeBindingHelper.GetControlSchemeNames(inputActionAsset);
@@ -67,17 +89,6 @@ namespace MToolKit.Runtime.Settings.Input
           inputRebinderService.RegisterAction(action);
           log.ForGameObject(gameObject).ForMethod().Verbose("Registered action {ActionName} from {ActionMap}", action.name, actionMap.name);
         }
-
-      // Clear existing elements
-      foreach (KeybindListElement element in keybindListElements)
-        if (element != null)
-          DestroyImmediate(element.gameObject);
-      keybindListElements.Clear();
-
-      foreach (BindingComponentElement element in bindingComponentElements)
-        if (element != null)
-          DestroyImmediate(element.gameObject);
-      bindingComponentElements.Clear();
 
       // Create keybind elements for each registered action
       foreach (InputAction action in inputRebinderService.RegisteredActions)
@@ -93,7 +104,7 @@ namespace MToolKit.Runtime.Settings.Input
             element.gameObject.SetActive(true);
             bindingComponentElements.Add(element);
 
-            element.Initialize(component, inputRebinderService);
+            element.Initialize(component, inputRebinderService, prompts);
             log.ForGameObject(gameObject).ForMethod().Verbose("Created binding component element for {ActionName}.{ComponentName}",
               action.name, component.DisplayName);
           }
@@ -109,7 +120,9 @@ namespace MToolKit.Runtime.Settings.Input
           InputAction actionReference = inputActionAsset.FindAction(action.name);
           if (actionReference != null)
           {
-            element.Initialize(InputActionReference.Create(action), inputRebinderService);
+            var reference = InputActionReference.Create(action);
+            ownedActionReferences.Add(reference);
+            element.Initialize(reference, inputRebinderService, prompts);
             log.ForGameObject(gameObject).ForMethod().Debug("Created keybind element for action {ActionName}", action.name);
           }
           else
@@ -122,6 +135,38 @@ namespace MToolKit.Runtime.Settings.Input
         "Configured {KeybindCount} keybind elements and {ComponentCount} binding component elements from {ActionMaps} action maps",
         keybindListElements.Count, bindingComponentElements.Count, inputActionAsset.actionMaps.Count);
       return UniTask.CompletedTask;
+    }
+
+    private void ClearElements()
+    {
+      foreach (var element in keybindListElements)
+        if (element != null) DestroyImmediate(element.gameObject);
+      keybindListElements.Clear();
+      foreach (var element in bindingComponentElements)
+        if (element != null) DestroyImmediate(element.gameObject);
+      bindingComponentElements.Clear();
+      ReleaseActionReferences();
+    }
+
+    private void ReleaseActionReferences()
+    {
+      foreach (var reference in ownedActionReferences)
+        if (reference != null) DestroyImmediate(reference);
+      ownedActionReferences.Clear();
+    }
+
+    private void DisposeOwnedServices()
+    {
+      ownedPrompts?.Dispose();
+      ownedPrompts = null;
+      inputRebinderService?.Dispose();
+      inputRebinderService = null;
+    }
+
+    private void OnDestroy()
+    {
+      DisposeOwnedServices();
+      ReleaseActionReferences();
     }
   }
 }

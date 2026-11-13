@@ -1,4 +1,5 @@
 using System;
+using MToolKit.Runtime.Input.Prompts;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Serialization;
@@ -11,6 +12,23 @@ namespace MToolKit.Runtime.Input.Config
   [CreateAssetMenu(fileName = "GamepadIconsData", menuName = "MToolKit/Input/Gamepad Icons Data")]
   public class GamepadIconsData : ScriptableObject
   {
+    [SerializeField] private InputGlyphCatalog catalog;
+    /// <summary>Optional generalized source, including native TMP and Image sprites.</summary>
+    public InputGlyphCatalog Catalog => catalog;
+    public void SetCatalog(InputGlyphCatalog value) => catalog = value;
+
+    public Sprite GetIcon(InputGlyphFamily family, string controlPath)
+    {
+      var sprite = catalog != null ? catalog.GetSprite(family, controlPath) : null;
+      if (sprite != null) return sprite;
+      return family switch
+      {
+        InputGlyphFamily.Xbox => XboxIcons.GetSprite(controlPath),
+        InputGlyphFamily.PlayStation => Ps4Icons.GetSprite(controlPath),
+        _ => null
+      };
+    }
+
     [Header("Xbox Controller Icons")]
     [field: FormerlySerializedAs("<xboxIcons>k__BackingField")]
     [field: SerializeField]
@@ -31,6 +49,11 @@ namespace MToolKit.Runtime.Input.Config
     {
       if (string.IsNullOrEmpty(deviceLayoutName) || string.IsNullOrEmpty(controlPath))
         return null;
+
+      // Keep the legacy fallback below for serialized consumers without a new catalog.
+      var family = catalog != null ? catalog.ResolveFamily(deviceLayoutName) : InputGlyphCatalog.FamilyForLayout(deviceLayoutName);
+      var mapped = catalog != null ? catalog.GetSprite(family, controlPath) : null;
+      if (mapped != null) return mapped;
 
       if (InputSystem.IsFirstLayoutBasedOnSecond(deviceLayoutName, "DualShockGamepad"))
         return Ps4Icons.GetSprite(controlPath);

@@ -21,6 +21,7 @@ using MToolKit.Runtime.ErrorSystem;
 using MToolKit.Runtime.ErrorSystem.Messages;
 using MToolKit.Runtime.Input;
 using MToolKit.Runtime.Input.Interfaces;
+using MToolKit.Runtime.Input.Prompts;
 using MToolKit.Runtime.Localization;
 using MToolKit.Runtime.MessageBus;
 using MToolKit.Runtime.MessageBus.Events;
@@ -429,7 +430,7 @@ namespace MToolKit.Runtime.Installer
       // Register Input Service globally
       if (inputActionAsset != null)
       {
-        builder.Register<IInputService, InputService>(Lifetime.Singleton);
+        builder.Register<InputService>(Lifetime.Singleton).As<IInputService>().As<IInputActionSource>();
         builder.RegisterInstance(inputActionAsset);
 
         // Initialize and enable InputService after container is built
@@ -510,6 +511,12 @@ namespace MToolKit.Runtime.Installer
         });
         log.ForGameObject(gameObject).ForMethod().Warning("InputActionAsset not assigned in GlobalInstaller, using NullInputService (no-op implementation)");
       }
+
+      builder.Register(resolver => new InputPromptService(
+          GlobalConstantsHelper.Instance?.GlobalConstantsConfig?.InputPrompts,
+          resolver.Resolve<IInputService>() as IInputActionSource,
+          resolver.Resolve<ILocalizationService>()), Lifetime.Singleton)
+        .As<IInputPromptService>();
 
       // Register global plugins if config is provided
       if (globalPluginConfig != null)

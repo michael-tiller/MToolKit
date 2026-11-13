@@ -1,28 +1,36 @@
 using System;
 using System.Linq;
 using MToolKit.Runtime.Input.Interfaces;
+using MToolKit.Runtime.Input.Prompts;
 using Serilog;
 using Serilog.Core;
 using ILogger = Serilog.ILogger;
 using Object = UnityEngine.Object;
 using Vector2 = UnityEngine.Vector2;
-#if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
-
-#endif
 
 namespace MToolKit.Runtime.Input
 {
   /// <summary>
   ///   Concrete implementation of IInputService using Unity's Input System
   /// </summary>
-  public class InputService : IInputService, IDisposable
+  public class InputService : IInputService, IInputActionSource, IDisposable
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<InputService>().ForFeature("Core.Services.InputService"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 
     public event Action OnPausePressed;
     public event Action OnAnyKeyPressed;
+
+    private InputActionAsset sourceInputActionAsset;
+    public InputActionAsset RuntimeActions => inputActionAsset as InputActionAsset;
+
+    /// <summary>Map authored references into this service's clone; foreign execution actions retain their identity.</summary>
+    public InputAction ResolveRuntimeAction(InputAction action)
+    {
+      if (action == null || RuntimeActions == null || action.actionMap?.asset != sourceInputActionAsset) return action;
+      return RuntimeActions.FindAction(action.id) ?? action;
+    }
 
 #if ENABLE_INPUT_SYSTEM
     private InputActionAsset inputActionAsset;
@@ -84,6 +92,7 @@ namespace MToolKit.Runtime.Input
       }
 
       // Create our own clone - InputService owns and manages all input actions
+      sourceInputActionAsset = sourceAsset;
       inputActionAsset = Object.Instantiate(sourceAsset);
       log.ForMethod().Verbose("InputService: Created InputActionAsset clone (name: {0}). InputService is the single entry point for input.", inputActionAsset.name);
 
@@ -382,8 +391,14 @@ namespace MToolKit.Runtime.Input
         if (anyKeyAction != null)
           anyKeyAction.performed -= OnAnyKeyActionPerformed;
 
-        if (inputActionAsset != null && isEnabled)
+        if (inputActionAsset != null)
+        {
           inputActionAsset.Disable();
+          if (UnityEngine.Application.isPlaying) Object.Destroy(inputActionAsset);
+          else Object.DestroyImmediate(inputActionAsset);
+          inputActionAsset = null;
+        }
+        sourceInputActionAsset = null;
 #endif
 
         isInitialized = false;

@@ -1,0 +1,7 @@
+{
+  "name": "MToolKit.Editor.Input",
+  "rootNamespace": "MToolKit.Editor.Input",
+  "references": ["MToolKit.Runtime", "Unity.TextMeshPro", "Unity.InputSystem"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}

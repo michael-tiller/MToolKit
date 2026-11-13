@@ -1,4 +1,5 @@
 using MToolKit.Runtime.AssetLoader;
+using MToolKit.Runtime.Input.Prompts;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -8,6 +9,10 @@ namespace MToolKit.Runtime.Core.Config
   [InlineEditor]
   public class GlobalConstantsConfigAsset : ScriptableObject
   {
+    [TabGroup("Input Prompts")]
+    [field: SerializeField]
+    public InputPromptSettings InputPrompts { get; private set; }
+
     [TabGroup("Bootstrapper Settings")]
     [Min(0.01f)]
     [field: SerializeField]

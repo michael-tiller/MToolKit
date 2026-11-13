@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using MToolKit.Runtime.Input.Interfaces;
+using MToolKit.Runtime.Input.Prompts;
 using R3;
 using Serilog;
 using Serilog.Core;
@@ -15,12 +16,13 @@ namespace MToolKit.Runtime.Input
   ///   Provides conflict detection and binding management with proper interactive rebinding
   /// </summary>
   [Serializable]
-  public class InputRebinderService : IDisposable, IInputRebinderService
+  public class InputRebinderService : IDisposable, IInputRebinderService, IInputBindingChangeSource
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<InputRebinderService>().ForFeature("Core.Services.InputRebinderService"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 
     public Subject<(InputAction action, int bindingIndex, string newPath)> OnBindingChanged { get; } = new();
+    public Observable<(InputAction action, int bindingIndex, string newPath)> BindingChanges => OnBindingChanged;
     public Subject<string> OnBindingConflictDetected { get; } = new();
     public Subject<(InputAction action, int bindingIndex)> OnRebindingStarted { get; } = new();
     public Subject<(InputAction action, int bindingIndex, bool completed)> OnRebindingCompleted { get; } = new();

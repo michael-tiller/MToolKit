@@ -9,6 +9,13 @@ namespace MToolKit.Runtime.Localization
 {
   public static class LocalizationHelper
   {
+    /// <summary>Formats a translated or fallback template with native SmartFormat, including named dictionary arguments.</summary>
+    public static string FormatSmartString(string template, params object[] arguments)
+    {
+      if (arguments == null || arguments.Length == 0) return template ?? string.Empty;
+      return UnityEngine.Localization.SmartFormat.Smart.Format(template ?? string.Empty, arguments);
+    }
+
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext(typeof(LocalizationHelper)).ForFeature("Localization"));
     private static ILogger log => logLazy.Value ?? Logger.None;
 

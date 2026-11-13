@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Resolve effective input bindings into localized native TMP prompts with explicit device families and presentation styles, asset-driven glyphs, independent player contexts, live input/locale/rebinding updates, safe named composition and a lifecycle-owned TMP component. Preserve typed legacy Image icons and migrate settings labels; add native sprite authoring, focused regression coverage and configuration/migration examples. (v1.11.0)
+
 - Add viewport capacity limits to applied UI scale while preserving the requested 75?300% preference. Reuse existing canvas/settings bindings, localized inline feedback and selection scrolling; expose pure CanvasScaler-consistent calculations and cover invalid/subminimum viewports without polling. Retain applied rebinding persistence during integration. (v1.10.0)
 
 - Add persisted 75–300% reactive UI scaling above authored CanvasScaler resolution behavior, percentage controls and focused emergency recovery. Add runtime semantic accessibility floors, late-view typography and focus-to-scroll integration. Document migration for custom `IGraphicsSettings` implementations and keep scoped development INI isolation separate from normal settings persistence. (v1.9.0)

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using MToolKit.Runtime.Input;
 using MToolKit.Runtime.Input.Config;
+using MToolKit.Runtime.Input.Prompts;
 using MToolKit.Runtime.Localization;
 using R3;
 using Serilog;
@@ -92,6 +93,12 @@ namespace MToolKit.Runtime.Components
 
     private InputRebinderService rebinderService;
     private IDisposable rebindingSubscription;
+    private IInputPromptService suppliedPrompts;
+    private IInputPromptService prompts;
+    private InputPromptService ownedPrompts;
+    private IDisposable promptSubscription;
+    private bool initialized;
+    private bool refreshing;
 
     // When the action system re-resolves bindings, we want to update our UI in response
     private static void OnActionChange(object obj, InputActionChange change)
@@ -126,7 +133,7 @@ namespace MToolKit.Runtime.Components
       ButtonAlt.onClick.AddListener(() => StartRebinding(1));
       ButtonGamepad.onClick.AddListener(() => StartRebinding(2));
 
-      if (InputActionReference != null) Initialize(InputActionReference, rebinderService);
+      if (!initialized && InputActionReference != null) Initialize(InputActionReference, rebinderService);
     }
 
     protected void OnEnable()
@@ -135,10 +142,13 @@ namespace MToolKit.Runtime.Components
       keybindListElements.Add(this);
       if (keybindListElements.Count == 1)
         InputSystem.onActionChange += OnActionChange;
+      if (initialized) { AttachPrompts(); RefreshDisplay(); }
     }
 
     protected void OnDisable()
     {
+      ReleasePrompts();
+      if (keybindListElements == null) return;
       keybindListElements.Remove(this);
       if (keybindListElements.Count != 0) return;
       keybindListElements = null;
@@ -149,16 +159,41 @@ namespace MToolKit.Runtime.Components
     {
       rebindingSubscription?.Dispose();
       rebindingSubscription = null;
+      ReleasePrompts();
       OnBindingChanged?.Dispose();
       OnRebindingStarted?.Dispose();
       OnRebindingCompleted?.Dispose();
     }
 
-    public void Initialize(InputActionReference inputActionReference, InputRebinderService rebinderService = null)
+    public void Initialize(InputActionReference inputActionReference, InputRebinderService rebinderService = null,
+      IInputPromptService inputPrompts = null)
     {
+      ReleasePrompts();
       InputActionReference = inputActionReference;
       this.rebinderService = rebinderService;
+      suppliedPrompts = inputPrompts;
+      prompts = inputPrompts;
+      initialized = true;
+      AttachPrompts();
       RefreshDisplay();
+    }
+
+    private void AttachPrompts()
+    {
+      promptSubscription?.Dispose();
+      if (prompts == null)
+        prompts = ownedPrompts = new InputPromptService(actions: InputActionReference?.action?.actionMap?.asset,
+          bindingChanges: rebinderService);
+      if (isActiveAndEnabled) promptSubscription = prompts.Changed.Subscribe(_ => RefreshDisplay());
+    }
+
+    private void ReleasePrompts()
+    {
+      promptSubscription?.Dispose();
+      promptSubscription = null;
+      ownedPrompts?.Dispose();
+      ownedPrompts = null;
+      prompts = suppliedPrompts;
     }
 
     /// <summary>
@@ -181,17 +216,22 @@ namespace MToolKit.Runtime.Components
 
     public void RefreshDisplay()
     {
-      if (InputActionReference?.action == null) return;
+      if (refreshing || InputActionReference?.action == null) return;
+      refreshing = true;
+      try
+      {
+        InputAction action = InputActionReference.action;
 
-      InputAction action = InputActionReference.action;
+        // Update main display
+        if (TextKeybind != null) TextKeybind.text = prompts != null
+          ? prompts.Localize(action.name, action.name) : LocalizationHelper.GetLocalizedString(action.name);
 
-      // Update main display
-      TextKeybind.text = LocalizationHelper.GetLocalizedString(action.name);
-
-      // Update individual binding displays with icons when available
-      UpdateBindingDisplayWithIcons(0, TextButton, IconButton);
-      UpdateBindingDisplayWithIcons(1, TextButtonAlt, IconButtonAlt);
-      UpdateBindingDisplayWithIcons(2, TextButtonGamepad, IconButtonGamepad);
+        // Update individual binding displays with icons when available
+        UpdateBindingDisplayWithIcons(0, TextButton, IconButton);
+        UpdateBindingDisplayWithIcons(1, TextButtonAlt, IconButtonAlt);
+        UpdateBindingDisplayWithIcons(2, TextButtonGamepad, IconButtonGamepad);
+      }
+      finally { refreshing = false; }
     }
 
     private void UpdateBindingDisplay(int bindingIndex, TextMeshProUGUI textComponent)
@@ -205,7 +245,9 @@ namespace MToolKit.Runtime.Components
         return;
       }
 
-      string displayString = action.GetBindingDisplayString(bindingIndex, DisplayStringOptions);
+      string displayString = InputPromptBindingDisplay.Resolve(prompts, action, bindingIndex,
+        DisplayStringOptions, textComponent.font, GamepadIconsData);
+      textComponent.richText = true;
       textComponent.text = displayString;
     }
 
@@ -217,28 +259,28 @@ namespace MToolKit.Runtime.Components
     /// <param name="iconComponent">The icon component to update</param>
     private void UpdateBindingDisplayWithIcons(int bindingIndex, TextMeshProUGUI textComponent, Image iconComponent)
     {
-      if (textComponent == null || iconComponent == null) return;
+      if (textComponent == null) return;
 
       InputAction action = InputActionReference?.action;
       if (action == null || bindingIndex >= action.bindings.Count)
       {
         textComponent.text = EMPTY_BINDING_DISPLAY;
         textComponent.gameObject.SetActive(true);
-        iconComponent.gameObject.SetActive(false);
+        if (iconComponent != null) iconComponent.gameObject.SetActive(false);
         return;
       }
 
-      InputBinding binding = action.bindings[bindingIndex];
-      string displayString = action.GetBindingDisplayString(bindingIndex, DisplayStringOptions);
+      string displayString = InputPromptBindingDisplay.Resolve(prompts, action, bindingIndex,
+        DisplayStringOptions, textComponent.font, GamepadIconsData);
+      textComponent.richText = true;
 
       // Extract device layout and control path for icon lookup
-      string deviceLayoutName = binding.effectivePath?.Split('/')[0];
-      string controlPath = binding.effectivePath?.Split('/').LastOrDefault();
+      action.GetBindingDisplayString(bindingIndex, out string deviceLayoutName, out string controlPath, DisplayStringOptions);
 
       // Try to get gamepad icon
-      Sprite icon = GetGamepadIcon(deviceLayoutName, controlPath);
+      Sprite icon = InputPromptBindingDisplay.Icon(prompts, GamepadIconsData, deviceLayoutName, controlPath);
 
-      if (icon != null)
+      if (icon != null && iconComponent != null)
       {
         // Hide text and show icon
         textComponent.gameObject.SetActive(false);
@@ -250,7 +292,7 @@ namespace MToolKit.Runtime.Components
         // Show text and hide icon
         textComponent.text = displayString;
         textComponent.gameObject.SetActive(true);
-        iconComponent.gameObject.SetActive(false);
+        if (iconComponent != null) iconComponent.gameObject.SetActive(false);
       }
     }
 
@@ -503,13 +545,7 @@ namespace MToolKit.Runtime.Components
       if (GamepadIconsData == null || string.IsNullOrEmpty(deviceLayoutName) || string.IsNullOrEmpty(controlPath))
         return null;
 
-      // Use the appropriate icon set based on device layout
-      if (InputSystem.IsFirstLayoutBasedOnSecond(deviceLayoutName, "DualShockGamepad"))
-        return GamepadIconsData.Ps4Icons.GetSprite(controlPath);
-      if (InputSystem.IsFirstLayoutBasedOnSecond(deviceLayoutName, "Gamepad"))
-        return GamepadIconsData.XboxIcons.GetSprite(controlPath);
-
-      return null;
+      return GamepadIconsData.GetIcon(deviceLayoutName, controlPath);
     }
   }
 }
