@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Add the optional typed named-action display source so UI adapters can request an explicit style without changing shared configuration. Document independent TMP prompt instances and verify shared-service style changes and subscription cleanup. (v1.17.0)
+
 - Implement actual-device prompts through the optional shared service, native layout inheritance and isolated device catalog rows. Add complete saved recipe roundtrips, native sprite renaming that preserves references, and configurable source RGBA tint without double tinting imported atlases. Verify 27 focused runtime/editor cases in Dirigible. (v1.16.0)
 
 - Checkpoint optional device-prompt/catalog contracts, native five-button mouse guards and focused red specifications for identity selection, source-recipe metadata and reference-preserving sprite renaming. The optional 2D editor module and device selection remain scaffolds pending implementation; this is an explicitly requested in-progress retention commit. (v1.15.0)

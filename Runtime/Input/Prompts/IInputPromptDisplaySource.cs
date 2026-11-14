@@ -1,0 +1,10 @@
+namespace MToolKit.Runtime.Input.Prompts
+{
+  /// <summary>Scoped adapter for views that identify runtime actions by name.</summary>
+  /// <remarks>The provider preserves its own player/action context; explicit styles override shared defaults.</remarks>
+  public interface IInputPromptDisplaySource
+  {
+    /// <summary>Returns the named action's TMP-compatible presentation in the requested style.</summary>
+    string GetDisplayString(string actionName, InputPromptStyle style);
+  }
+}

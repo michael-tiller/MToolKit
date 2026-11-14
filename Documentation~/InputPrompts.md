@@ -12,6 +12,8 @@ Presentation styles have stable serialized values: `Auto = 0`, `Character = 1`, 
 
 `Auto` uses printable keyboard text and available special-key/controller glyphs. `Glyph` falls back to a readable name when no authored glyph is available. `GlyphAndName` combines the native sprite/symbol and localized name. `Character` retains compact mouse labels such as `LMB`; `LocalizedName` uses full names. A font-aware binding checks configured symbols against the target font and its native fallbacks.
 
+The settings asset supplies a default: `Auto` follows that default, while an explicit style overrides it for that resolve call or UI instance. Choose `Glyph` for a compact hotbar, `LocalizedName` for a label, or `GlyphAndName` for an explanatory hint. Changing one view's style does not change shared settings or another view's style.
+
 Configure a Unity Localization collection name on the settings asset. MTK does not assume a game-specific table. `InputPromptSettings.Configure(...)`, `NotifyChanged()`, and catalog setters publish changes. Inspector changes also refresh live bindings. The optional preview binding group explicitly selects bindings; a family override changes only their appearance. For example, a Gamepad group plus PlayStation family can preview the configured controller binding without changing gameplay routing.
 
 ## Direct resolution and composition
@@ -64,6 +66,28 @@ prompts.Dispose();
 `Bind` updates the existing `TMP_Text` in place and passes its font to symbol fallback selection. It does not toggle the GameObject or force layout rebuilds. TMP retains normal wrapping, sizing, fallback fonts and accessibility scaling. Sprite assets use semantic names and native metrics.
 
 Alternatively, add `TMPInputPrompt` to an existing TMP text object. Assign an `InputActionReference`, style, optional native `LocalizedString` sentence, and named argument (default `input`). The component receives `IInputPromptService` through VContainer. Without injection it owns a standalone service using its optional settings. `Configure`, `ConfigureSentence`, and `Construct` also support runtime setup. It releases its input and localization bindings on disable and refreshes on re-enable. Each component owns its `LocalizedString` instance; do not share one mutable instance between components.
+
+Two components can use the same service with different presentations:
+
+```csharp
+hotbarPrompt.Configure(confirmReference, InputPromptStyle.Glyph);
+instructionPrompt.Configure(confirmReference, InputPromptStyle.GlyphAndName);
+hotbarPrompt.Construct(sharedPrompts);
+instructionPrompt.Construct(sharedPrompts);
+
+// Reconfigure this instance alone; the hotbar stays glyph-only.
+instructionPrompt.Configure(confirmReference, InputPromptStyle.LocalizedName);
+```
+
+Adapters that identify their own runtime actions by name can optionally implement `IInputPromptDisplaySource.GetDisplayString(string actionName, InputPromptStyle style)`. Forward the requested style to the shared resolver while preserving the adapter's player/action context, for example:
+
+```csharp
+public string GetDisplayString(string actionName, InputPromptStyle style)
+    => prompts.Resolve(runtimeMap.FindAction(actionName, throwIfNotFound: false),
+        style, playerContext);
+```
+
+This optional interface adds no members to existing action or hotkey interfaces. Consumers can use it when available and retain their existing adapter otherwise. It is a display seam; the owning service/view still manages `Bind` or `Changed` subscriptions and cleanup.
 
 ## Runtime action identity and independent players
 

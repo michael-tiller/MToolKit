@@ -14,6 +14,69 @@ namespace MToolKit.Tests.Editor.Runtime.Input
   public sealed class InputPromptServiceTests
   {
     [Test]
+    public void TmpPromptInstancesKeepIndependentExplicitStylesWhenSharedDefaultsChange()
+    {
+      var asset = ScriptableObject.CreateInstance<InputActionAsset>();
+      var action = asset.AddActionMap("Player").AddAction("Confirm", binding: "<Keyboard>/enter");
+      var reference = InputActionReference.Create(action);
+      var catalog = ScriptableObject.CreateInstance<InputGlyphCatalog>();
+      var settings = ScriptableObject.CreateInstance<InputPromptSettings>();
+      catalog.SetEntries(new InputGlyphCatalog.Entry
+        { ControlPath = "enter", Symbol = "[ENTER]", DisplayName = "Enter" });
+      settings.Configure(catalog, InputPromptStyle.Character);
+      var glyphHost = new GameObject("Glyph-only prompt", typeof(RectTransform));
+      var labelHost = new GameObject("Label prompt", typeof(RectTransform));
+      var glyphText = glyphHost.AddComponent<TextMeshProUGUI>();
+      var labelText = labelHost.AddComponent<TextMeshProUGUI>();
+      var glyphPrompt = glyphHost.AddComponent<TMPInputPrompt>();
+      var labelPrompt = labelHost.AddComponent<TMPInputPrompt>();
+      var service = new InputPromptService(settings, actions: asset);
+      try
+      {
+        glyphPrompt.Configure(reference, InputPromptStyle.Glyph);
+        labelPrompt.Configure(reference, InputPromptStyle.LocalizedName);
+        glyphPrompt.Construct(service);
+        labelPrompt.Construct(service);
+        Assert.That(glyphText.text, Is.EqualTo("[ENTER]"));
+        Assert.That(labelText.text, Is.EqualTo("Enter"));
+
+        settings.Configure(catalog, InputPromptStyle.GlyphAndName);
+        Assert.That(glyphText.text, Is.EqualTo("[ENTER]"), "Explicit glyph-only UI ignores the global default style.");
+        Assert.That(labelText.text, Is.EqualTo("Enter"));
+        labelPrompt.Configure(reference, InputPromptStyle.GlyphAndName);
+        Assert.That(labelText.text, Is.EqualTo("[ENTER] Enter"));
+        Assert.That(glyphText.text, Is.EqualTo("[ENTER]"), "Reconfiguring one instance does not change its sibling.");
+        settings.Configure(catalog, InputPromptStyle.LocalizedName);
+        Assert.That(glyphText.text, Is.EqualTo("[ENTER]"));
+        Assert.That(labelText.text, Is.EqualTo("[ENTER] Enter"));
+
+        labelPrompt.enabled = false;
+        // Ordinary MonoBehaviours need explicit lifecycle simulation in synchronous EditMode fixtures.
+        typeof(TMPInputPrompt).GetMethod("OnDisable", System.Reflection.BindingFlags.Instance
+          | System.Reflection.BindingFlags.NonPublic).Invoke(labelPrompt, null);
+        catalog.SetEntries(new InputGlyphCatalog.Entry
+          { ControlPath = "enter", Symbol = "[RETURN]", DisplayName = "Return" });
+        Assert.That(glyphText.text, Is.EqualTo("[RETURN]"), "The remaining instance retains its shared-service subscription.");
+        Assert.That(labelText.text, Is.EqualTo("[ENTER] Enter"), "A disabled instance releases its binding.");
+        Object.DestroyImmediate(labelHost);
+        labelHost = null;
+        Assert.DoesNotThrow(() => settings.Configure(catalog, InputPromptStyle.Character));
+        Assert.That(glyphText.text, Is.EqualTo("[RETURN]"));
+        Assert.That(action.enabled, Is.False);
+      }
+      finally
+      {
+        Object.DestroyImmediate(glyphHost);
+        if (labelHost != null) Object.DestroyImmediate(labelHost);
+        service.Dispose();
+        Object.DestroyImmediate(reference);
+        Object.DestroyImmediate(asset);
+        Object.DestroyImmediate(settings);
+        Object.DestroyImmediate(catalog);
+      }
+    }
+
+    [Test]
     public void DisposingBindingReleasesItsRetiredForeignAction()
     {
       using var service = new InputPromptService();
