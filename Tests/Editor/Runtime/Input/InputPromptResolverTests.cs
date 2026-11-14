@@ -544,7 +544,8 @@ namespace MToolKit.Tests.Editor.Runtime.Input
       asset.material = Own(new Material(Shader.Find("TextMeshPro/Sprite")));
       asset.material.mainTexture = texture;
       var sprite = Own(Sprite.Create(texture, new Rect(0, 0, 2, 2), Vector2.zero));
-      var glyph = new TMP_SpriteGlyph { index = 0, sprite = sprite };
+      var glyph = new TMP_SpriteGlyph(0, new UnityEngine.TextCore.GlyphMetrics(2, 2, 0, 2, 2),
+        new UnityEngine.TextCore.GlyphRect(0, 0, 2, 2), 1, 0, sprite);
       asset.spriteGlyphTable.Add(glyph);
       asset.spriteCharacterTable.Add(new TMP_SpriteCharacter(0xfffe, glyph) { name = "keyboard-enter" });
       asset.UpdateLookupTables();

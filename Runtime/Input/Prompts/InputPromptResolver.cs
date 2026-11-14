@@ -142,6 +142,10 @@ namespace MToolKit.Runtime.Input.Prompts
         return style == InputPromptStyle.GlyphAndName ? keycap + " " + name : keycap;
       }
       string glyph = Glyph(entry, context);
+      if (string.IsNullOrEmpty(glyph) && catalog != null && family != InputGlyphFamily.KeyboardAndMouse
+        && family != InputGlyphFamily.Generic
+        && catalog.TryGetEntry(InputGlyphFamily.Generic, control.ControlPath, locale, platform, out var generic))
+        glyph = Glyph(generic, context);
       if (style == InputPromptStyle.GlyphAndName) return string.IsNullOrEmpty(glyph) ? name : glyph + " " + name;
       if (style == InputPromptStyle.Glyph) return string.IsNullOrEmpty(glyph) ? name : glyph;
       if (family == InputGlyphFamily.KeyboardAndMouse && !string.IsNullOrEmpty(control.Character))
@@ -178,7 +182,7 @@ namespace MToolKit.Runtime.Input.Prompts
       if (entry == null) return null;
       var asset = entry.SpriteAsset;
       if (asset != null && SafeTagName(asset.name) && SafeTagName(entry.SpriteName)
-        && asset.material != null && asset.spriteSheet != null && asset.GetSpriteIndexFromName(entry.SpriteName) >= 0
+        && InputGlyphCatalog.HasUsableTmpSprite(entry)
         && (SpriteAvailable == null || SpriteAvailable(asset)))
         return "<sprite=\"" + asset.name + "\" name=\"" + entry.SpriteName + "\">";
       if (!allowSymbol || string.IsNullOrEmpty(entry.Symbol)) return null;

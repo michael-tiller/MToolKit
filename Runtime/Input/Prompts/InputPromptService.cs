@@ -64,7 +64,7 @@ namespace MToolKit.Runtime.Input.Prompts
       if (bindingChanges != null)
         subscriptions.Add(bindingChanges.BindingChanges.Subscribe(value =>
         {
-          if (IsRelevant(value.action)) NotifyChanged();
+          if (IsBindingRelevant(value.action)) NotifyChanged();
         }));
       RefreshPlayerContext();
     }
@@ -240,36 +240,40 @@ namespace MToolKit.Runtime.Input.Prompts
 
     private InputActionAsset RelevantAsset => playerInput != null ? playerInput.actions : actions ?? actionSource?.RuntimeActions;
 
-    private bool IsRelevant(InputAction action)
+    private bool IsActivityRelevant(InputAction action)
     {
       if (action == null) return false;
       var owner = RelevantAsset;
-      if (actions != null || playerInput != null) return owner != null && action.actionMap?.asset == owner;
+      if (owner != null || actions != null || playerInput != null)
+        return owner != null && action.actionMap?.asset == owner;
       return watchedActions.ContainsKey(action) || owner != null && action.actionMap?.asset == owner
         || actionSource != null && !ReferenceEquals(actionSource.ResolveRuntimeAction(action), action);
     }
 
-    private bool IsRelevant(object value)
+    private bool IsBindingRelevant(InputAction action)
+      => action != null && (watchedActions.ContainsKey(action) || IsActivityRelevant(action));
+
+    private bool IsBindingRelevant(object value)
     {
-      if (value is InputAction action) return IsRelevant(action);
+      if (value is InputAction action) return IsBindingRelevant(action);
       if (value is InputActionMap map)
       {
         if (RelevantAsset != null && map.asset == RelevantAsset) return true;
+        foreach (var watched in watchedActions.Keys) if (watched.actionMap == map) return true;
         if (actions != null || playerInput != null) return false;
         if (actionSource != null)
           foreach (var candidate in map.actions)
             if (!ReferenceEquals(actionSource.ResolveRuntimeAction(candidate), candidate)) return true;
-        foreach (var watched in watchedActions.Keys) if (watched.actionMap == map) return true;
       }
       if (value is InputActionAsset asset)
       {
         if (asset == null) return false;
         if (asset == RelevantAsset) return true;
+        foreach (var watched in watchedActions.Keys) if (watched.actionMap?.asset == asset) return true;
         if (actions != null || playerInput != null) return false;
         if (actionSource != null)
           foreach (var candidate in asset)
             if (!ReferenceEquals(actionSource.ResolveRuntimeAction(candidate), candidate)) return true;
-        foreach (var watched in watchedActions.Keys) if (watched.actionMap?.asset == asset) return true;
       }
       return false;
     }
@@ -307,15 +311,16 @@ namespace MToolKit.Runtime.Input.Prompts
       if (asset != null)
         foreach (var action in asset) if (UsesControl(action)) return true;
       foreach (var action in watchedActions.Keys)
-        if (IsRelevant(action) && UsesControl(action)) return true;
+        if (IsActivityRelevant(action) && UsesControl(action)) return true;
       return false;
     }
 
     private void OnActionChange(object value, InputActionChange change)
     {
-      if (disposed || resolving != 0 || !IsRelevant(value)) return;
+      if (disposed || resolving != 0) return;
       if (change == InputActionChange.ActionPerformed && value is InputAction action)
       {
+        if (!IsActivityRelevant(action)) return;
         var device = action.activeControl?.device;
         if (device == null || !device.added) return;
         bool deviceChanged = activeDevice != device;
@@ -326,7 +331,9 @@ namespace MToolKit.Runtime.Input.Prompts
       else if (change == InputActionChange.BoundControlsChanged || change == InputActionChange.ActionEnabled
         || change == InputActionChange.ActionDisabled || change == InputActionChange.ActionMapEnabled
         || change == InputActionChange.ActionMapDisabled)
-        NotifyChanged();
+      {
+        if (IsBindingRelevant(value)) NotifyChanged();
+      }
     }
 
     private void OnDeviceChange(InputDevice device, InputDeviceChange change)

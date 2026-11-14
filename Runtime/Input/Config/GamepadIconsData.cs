@@ -1,7 +1,6 @@
 using System;
 using MToolKit.Runtime.Input.Prompts;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.Serialization;
 
 namespace MToolKit.Runtime.Input.Config
@@ -19,14 +18,18 @@ namespace MToolKit.Runtime.Input.Config
 
     public Sprite GetIcon(InputGlyphFamily family, string controlPath)
     {
-      var sprite = catalog != null ? catalog.GetSprite(family, controlPath) : null;
+      var sprite = catalog != null ? catalog.GetOriginalSprite(family, controlPath, InputGlyphPlatform.Any) : null;
       if (sprite != null) return sprite;
-      return family switch
+      sprite = family switch
       {
         InputGlyphFamily.Xbox => XboxIcons.GetSprite(controlPath),
         InputGlyphFamily.PlayStation => Ps4Icons.GetSprite(controlPath),
         _ => null
       };
+      if (sprite != null) return sprite;
+      // Image rendering ends at null; prompt callers retain the original family's localized name.
+      return family != InputGlyphFamily.KeyboardAndMouse && family != InputGlyphFamily.Generic && catalog != null
+        ? catalog.GetOriginalSprite(InputGlyphFamily.Generic, controlPath, InputGlyphPlatform.Any) : null;
     }
 
     [Header("Xbox Controller Icons")]
@@ -50,17 +53,8 @@ namespace MToolKit.Runtime.Input.Config
       if (string.IsNullOrEmpty(deviceLayoutName) || string.IsNullOrEmpty(controlPath))
         return null;
 
-      // Keep the legacy fallback below for serialized consumers without a new catalog.
       var family = catalog != null ? catalog.ResolveFamily(deviceLayoutName) : InputGlyphCatalog.FamilyForLayout(deviceLayoutName);
-      var mapped = catalog != null ? catalog.GetSprite(family, controlPath) : null;
-      if (mapped != null) return mapped;
-
-      if (InputSystem.IsFirstLayoutBasedOnSecond(deviceLayoutName, "DualShockGamepad"))
-        return Ps4Icons.GetSprite(controlPath);
-      if (InputSystem.IsFirstLayoutBasedOnSecond(deviceLayoutName, "Gamepad"))
-        return XboxIcons.GetSprite(controlPath);
-
-      return null;
+      return GetIcon(family, controlPath);
     }
   }
 

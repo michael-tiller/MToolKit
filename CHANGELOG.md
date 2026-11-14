@@ -36,6 +36,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Prefer the selected desktop device's bindings while preserving mixed chords and documented first-eligible composite representatives. Observe foreign binding changes without letting them change an owned player's device. Use valid family artwork, then Generic artwork for the same control, then the original localized name; retain native Image compatibility without borrowing Xbox art for unknown controllers. Verify 189 consuming-project input cases and align the stale VERSION companion with the package version. (v1.18.1)
+
 - Preserve configured keycap color bytes in Linear projects by converting native UGUI/TMP preview vertex RGB before rendering, while retaining alpha and source artwork. Verify exact baked theme pixels and all affected authoring cases in Dirigible. (v1.16.1)
 
 - Keep hydrated graphics settings intact when controls initialize; update bound dropdowns silently while retaining user input and safe rebinding. (v1.10.4)

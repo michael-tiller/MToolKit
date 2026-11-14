@@ -194,7 +194,9 @@ namespace MToolKit.Tests.Editor.Runtime.Input
         serialized.ApplyModifiedPropertiesWithoutUndo();
         asset.spriteSheet = Texture2D.whiteTexture;
         asset.material = asset == first ? firstMaterial : secondMaterial;
-        var glyph = new TMP_SpriteGlyph { index = 0 };
+        var glyph = new TMP_SpriteGlyph { index = 0,
+          metrics = new UnityEngine.TextCore.GlyphMetrics(1, 1, 0, 1, 1),
+          glyphRect = new UnityEngine.TextCore.GlyphRect(0, 0, 1, 1) };
         asset.spriteGlyphTable.Add(glyph);
         asset.spriteCharacterTable.Add(new TMP_SpriteCharacter(0xfffe, glyph) { name = "keyboard-enter" });
         asset.UpdateLookupTables();

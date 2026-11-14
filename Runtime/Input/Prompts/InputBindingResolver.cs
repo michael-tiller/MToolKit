@@ -52,7 +52,15 @@ namespace MToolKit.Runtime.Input.Prompts
         if (!candidate.IsBound) continue;
         if (desktopOnly && !AllControlsAreKeyboardOrMouse(candidate.Controls)) continue;
         int score = 0;
-        if (context.Device == null && string.IsNullOrEmpty(group))
+        if (context.Device != null)
+        {
+          // Keep desktop companions eligible, while preferring controls on the
+          // requested device over a keyboard/mouse binding authored earlier.
+          foreach (var control in candidate.Controls)
+            if (string.Equals(control.DeviceLayout, context.Device.layout, StringComparison.OrdinalIgnoreCase))
+            { score = 1; break; }
+        }
+        else if (string.IsNullOrEmpty(group))
           score = IsKeyboardOrMouse(candidate.Controls[0].DeviceLayout) ? 1 : 0;
         if (selected == null || score > selectedScore)
         {
@@ -84,6 +92,8 @@ namespace MToolKit.Runtime.Input.Prompts
         var grouped = binding;
         if (string.IsNullOrEmpty(grouped.groups)) grouped.groups = root.groups;
         if (!GroupMatches(grouped.groups, group) || !Eligible(action, binding, context, null)) continue;
+        // A prompt uses the first eligible authored alternative for each role.
+        // Skip masked/unbound parts before reserving their representative slot.
         if (!roles.Add(binding.name ?? string.Empty)) continue;
         controls.Add(Control(binding.effectivePath, FindDevice(action, binding.effectivePath, context.Device), binding.name));
       }

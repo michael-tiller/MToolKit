@@ -280,7 +280,9 @@ namespace MToolKit.Tests.Editor.Runtime.Input
       serialized.ApplyModifiedPropertiesWithoutUndo();
       asset.spriteSheet = texture;
       asset.material = material;
-      var glyph = new TMP_SpriteGlyph { index = 0 };
+      var glyph = new TMP_SpriteGlyph { index = 0,
+        metrics = new UnityEngine.TextCore.GlyphMetrics(2, 2, 0, 2, 2),
+        glyphRect = new UnityEngine.TextCore.GlyphRect(0, 0, 2, 2) };
       asset.spriteGlyphTable.Add(glyph);
       asset.spriteCharacterTable.Add(new TMP_SpriteCharacter(0xfffe, glyph) { name = "controller" });
       asset.UpdateLookupTables();

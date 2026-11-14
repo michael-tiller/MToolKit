@@ -219,12 +219,35 @@ namespace MToolKit.Runtime.Input.Prompts
 
     /// <summary>Shared authoring supports native TMP and consumers that still render a UI Image.</summary>
     public Sprite GetSprite(InputGlyphFamily family, string controlPath, InputGlyphPlatform platform)
+      => GetOriginalSprite(family, controlPath, platform)
+        ?? (family != InputGlyphFamily.KeyboardAndMouse && family != InputGlyphFamily.Generic
+          ? GetOriginalSprite(InputGlyphFamily.Generic, controlPath, platform) : null);
+
+    // Legacy adapters can insert their still-valid original-family artwork before the Generic stage.
+    internal Sprite GetOriginalSprite(InputGlyphFamily family, string controlPath, InputGlyphPlatform platform)
     {
       if (!TryGetEntry(family, controlPath, null, platform, out var entry)) return null;
       if (entry.ImageSprite != null) return entry.ImageSprite;
       if (entry.SpriteAsset == null || string.IsNullOrEmpty(entry.SpriteName)) return null;
       int index = entry.SpriteAsset.GetSpriteIndexFromName(entry.SpriteName);
-      return index < 0 ? null : (entry.SpriteAsset.spriteCharacterTable[index].glyph as TMP_SpriteGlyph)?.sprite;
+      return index < 0 || index >= entry.SpriteAsset.spriteCharacterTable.Count ? null
+        : (entry.SpriteAsset.spriteCharacterTable[index]?.glyph as TMP_SpriteGlyph)?.sprite;
+    }
+
+    internal static bool HasUsableTmpSprite(Entry entry)
+    {
+      var asset = entry?.SpriteAsset;
+      if (asset == null || asset.material == null || asset.spriteSheet == null
+        || asset.material.mainTexture != asset.spriteSheet || string.IsNullOrEmpty(entry.SpriteName)) return false;
+      int index = asset.GetSpriteIndexFromName(entry.SpriteName);
+      if (index < 0 || index >= asset.spriteCharacterTable.Count) return false;
+      var character = asset.spriteCharacterTable[index];
+      var glyph = character?.glyph as TMP_SpriteGlyph;
+      if (glyph == null || glyph.index != character.glyphIndex || !asset.spriteGlyphTable.Contains(glyph)) return false;
+      var rect = glyph.glyphRect;
+      return rect.width > 0 && rect.height > 0 && rect.x >= 0 && rect.y >= 0
+        && rect.x + rect.width <= asset.spriteSheet.width && rect.y + rect.height <= asset.spriteSheet.height
+        && glyph.metrics.width > 0 && glyph.metrics.height > 0;
     }
 
     public Sprite GetSprite(InputGlyphFamily family, string controlPath)
