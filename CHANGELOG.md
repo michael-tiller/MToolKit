@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Configure keycap caption color independently from artwork and select a native TMP font-material preset in saved profiles and the Atlas Wizard. Validate atlas compatibility consistently in previews and saved bakes; isolate and release temporary material copies while retaining existing tint behavior by default. Verify 38 native authoring cases in Dirigible. (v1.19.0)
+
 - Add explicit unbound-prompt policies for localized Unbound, configured keyboard/mouse fallback, or hidden text. Preserve effective overrides, composite topology, native masks, player restrictions and binding indices; retain valid controller bindings and readable missing-art names. Expose per-instance TMP configuration and an optional compatible named-action adapter. (v1.18.0)
 
 - Add the optional typed named-action display source so UI adapters can request an explicit style without changing shared configuration. Document independent TMP prompt instances and verify shared-service style changes and subscription cleanup. (v1.17.0)

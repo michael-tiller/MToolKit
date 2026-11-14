@@ -59,6 +59,7 @@ namespace MToolKit.Editor.Input
     {
       if (profile == null || profile.Catalog == null) throw new InvalidOperationException("Choose a keycap profile and runtime catalog.");
       if (profile.Keys == null || profile.Keys.Length == 0) throw new InvalidOperationException("Add at least one keycap row.");
+      ValidateFontMaterial(profile);
       string[] localeCodes = GetLocaleCodes(profile);
       var issues = new List<string>();
       var groups = new SortedDictionary<string, List<InputGlyphAtlasSource.Glyph>>(StringComparer.Ordinal);
@@ -172,6 +173,12 @@ namespace MToolKit.Editor.Input
     }
 
     public static string LastRenderDiagnostics { get; private set; }
+    private static void ValidateFontMaterial(InputKeycapBakeProfile profile)
+    {
+      if (profile.FontMaterial != null && (profile.Font == null || profile.FontMaterial.mainTexture != profile.Font.atlasTexture))
+        throw new InvalidOperationException("The keycap font material must reference the configured font's atlas texture.");
+    }
+
     public static Texture2D Render(InputKeycapBakeProfile profile, string label, int fixedWidth = 0)
       => RenderContent(profile, label, fixedWidth, null, Vector2.zero);
 
@@ -191,6 +198,7 @@ namespace MToolKit.Editor.Input
       bool needsText = contentSprite == null || includeLabel;
       var font = localeFont != null ? localeFont : profile != null ? profile.Font : null;
       if (profile == null || (needsText && font == null)) throw new InvalidOperationException("Choose a TMP font for text keycaps.");
+      ValidateFontMaterial(profile);
       if (profile.BackgroundPrefab != null && profile.BackgroundPrefab.GetComponent<RectTransform>() == null)
         throw new InvalidOperationException("Background prefab must have a RectTransform.");
       if (profile.BackgroundPrefab != null && (profile.BackgroundPrefab.GetComponentsInChildren<Mask>(true).Length > 0
@@ -215,6 +223,7 @@ namespace MToolKit.Editor.Input
       PreviewRenderUtility preview = null;
       GameObject root = null;
       Texture2D result = null;
+      Material captionMaterial = null;
       RenderTexture exact = null;
       var previewMeshes = new List<Mesh>();
       bool begun = false;
@@ -268,8 +277,13 @@ namespace MToolKit.Editor.Input
         textHost.transform.SetParent(cap.transform, false);
         text = textHost.GetComponent<TextMeshProUGUI>();
         text.font = font;
+        if (profile.FontMaterial != null && font == profile.Font)
+        {
+          captionMaterial = new Material(profile.FontMaterial) { hideFlags = HideFlags.HideAndDontSave };
+          text.fontSharedMaterial = captionMaterial;
+        }
         text.fontSize = profile.FontSize;
-        text.color = profile.TextColor;
+        text.color = profile.OverrideFontColor ? profile.FontColor : profile.TextColor;
         text.richText = false;
         text.parseCtrlCharacters = false;
         text.enableAutoSizing = false;
@@ -376,6 +390,7 @@ namespace MToolKit.Editor.Input
           {
             foreach (var mesh in previewMeshes) if (mesh != null) Object.DestroyImmediate(mesh);
             if (root != null) Object.DestroyImmediate(root);
+            if (captionMaterial != null) Object.DestroyImmediate(captionMaterial);
           }
         }
       }

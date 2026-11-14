@@ -47,6 +47,8 @@ namespace MToolKit.Editor.Input
     public StringTableCollection LocalizationCollection;
     public string SpriteAssetPath = "Assets/InputGlyphs/MTK_KeyboardKeycaps.asset";
     public TMP_FontAsset Font;
+    [Tooltip("Optional native TMP material for Font, such as an outline preset. Must reference that font's atlas; locale font overrides retain their own material.")]
+    public Material FontMaterial;
     [Min(1)] public int FontSize = 32;
     [Min(1)] public int SharedHeight = 64;
     [Min(1)] public int MinimumWidth = 64;
@@ -63,7 +65,11 @@ namespace MToolKit.Editor.Input
     public GameObject BackgroundPrefab;
     public Color32 BackgroundColor = new(28, 32, 40, 255);
     public Color32 BorderColor = new(112, 124, 144, 255);
+    [Tooltip("Central artwork tint. Also tints captions unless Override Font Color is enabled.")]
     public Color32 TextColor = new(255, 255, 255, 255);
+    [Tooltip("Use a separate caption color while retaining the central artwork tint. Disabled preserves existing profiles.")]
+    public bool OverrideFontColor;
+    public Color32 FontColor = new(255, 255, 255, 255);
     public bool UniformCharacters = true;
     [Tooltip("ProjectEnabled follows Unity Localization's enabled project locales. ProfileLocales uses only the manual list.")]
     public InputKeycapLocaleSource LocaleSource;

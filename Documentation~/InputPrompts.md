@@ -160,6 +160,10 @@ The native Mouse's five button paths remain `leftButton`, `rightButton`, `middle
 
 ### Saved atlas recipes and generated keycaps
 
+`InputKeycapBakeProfile.TextColor` tints artwork and, by default, captions. Enable `OverrideFontColor` and select `FontColor` to give captions an independent color without changing existing profiles. For example, set `FontColor` to white while retaining a configured artwork tint. Both settings are exposed in the saved-profile Inspector and Atlas Wizard.
+
+Assign the optional `FontMaterial` to use a native TMP outline preset for the profile's `Font`. It must reference that font's atlas; validation rejects mismatched atlases before baking. The baker uses and releases a temporary material copy so native TMP calculations cannot alter the authored preset. A locale font override uses its own native material. Material choice, font padding and output size affect small outlines; inspect the actual saved cap at its intended display size.
+
 Open **Tools / MToolKit / Input Glyphs / Atlas Wizard** to author glyph artwork. A saved atlas recipe records its destination, catalog mappings, semantic sprite names and source Sprites. Replace a source Sprite and rebuild from the recipe to update the native TMP atlas without editing consumer strings. Add new logical controls to the recipe rather than encoding numeric atlas indices in localization content.
 
 Each `InputGlyphAtlasSource.Glyph.Tint` defaults to `Color.white`. Baking multiplies the source RGBA pixels by this tint before packing the native atlas, leaving original artwork and import settings unchanged. This supports, for example, baking white source icons as black. `ImportFromCatalog` treats generated pixels as already tinted and initializes the imported recipe's tint to white. Rebuilding from destination-backed generated artwork also resets its tint to white after applying it, so repeated bakes do not compound the tint. The lower-level editor `NamedSprite(name, sprite, tint)` overload provides the same behavior.
