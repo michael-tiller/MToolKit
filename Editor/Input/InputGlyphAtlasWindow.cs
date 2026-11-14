@@ -74,7 +74,14 @@ namespace MToolKit.Editor.Input
       }
       else if (profile is InputKeycapBakeProfile keycaps)
       {
-        EditorGUILayout.HelpBox("Single characters share the standard key width. FitLabel uses native ContentSizeFitter; Fixed supports wider Enter, Backspace, Shift and Space rules. Localized labels are baked per configured locale. Fonts, padding and fixed widths must fit without clipping.", MessageType.Info);
+        EditorGUILayout.HelpBox("Import translations with Unity Localization/Google Sheets first, then select the native collection and locales here. Validate saved caps, review stale labels, explicitly rebuild, and preview. Moving an existing collection or table preserves its Unity reference; select the new collection if an import creates a replacement.", MessageType.Info);
+        EditorGUILayout.HelpBox("Single characters and symbols share the standard key width. Sprite mode centers assigned artwork; unassigned artwork keeps a readable localized label. FitLabel uses native ContentSizeFitter; Fixed supports wider special keys. Fonts, padding and content sizes must fit without clipping.", MessageType.Info);
+        if (GUILayout.Button("Validate saved keycaps against imported tables")) Execute(() => {
+          var issues = InputKeycapBaker.ValidateBakedContent(keycaps);
+          failed = issues.Length > 0;
+          message = issues.Length == 0 ? "Saved keycap entries match the imported labels and expected content modes. Rebuild after changing artwork or styling."
+            : string.Join("\n", issues);
+        });
         if (keycaps.Keys != null && keycaps.Keys.Length > 0)
         {
           previewKey = Mathf.Clamp(previewKey, 0, keycaps.Keys.Length - 1);
@@ -84,8 +91,7 @@ namespace MToolKit.Editor.Input
           previewLocale = EditorGUILayout.Popup("Preview locale", previewLocale, locales);
           if (GUILayout.Button("Render native keycap preview")) Execute(() => {
             var key = keycaps.Keys[previewKey];
-            var next = InputKeycapBaker.Render(keycaps, InputKeycapBaker.ResolveLabel(keycaps, key, locales[previewLocale]),
-              key.WidthRule == InputKeycapWidthRule.Fixed ? key.FixedWidth : 0);
+            var next = InputKeycapBaker.RenderKey(keycaps, key, locales[previewLocale]);
             if (preview != null) DestroyImmediate(preview);
             preview = next;
             message = "Native UGUI/TMP preview rendered. Rebuild to save the atlas and catalog mappings.";

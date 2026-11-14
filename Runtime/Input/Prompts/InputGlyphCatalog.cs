@@ -24,6 +24,7 @@ namespace MToolKit.Runtime.Input.Prompts
       public string LocaleCode;
       [Tooltip("Exact literal label baked into a generated keyboard cap. Empty for authored glyphs.")]
       public string BakedLabel;
+      public InputKeycapContentMode KeycapContent;
     }
 
     [Serializable]
@@ -64,9 +65,15 @@ namespace MToolKit.Runtime.Input.Prompts
       return FindEntry(family, controlPath, localeCode, null, out entry);
     }
 
-    /// <summary>Finds a generated cap only when its baked text still matches the displayed key.</summary>
+    /// <summary>Prefers shared icon caps, then text caps whose baked label still matches the displayed key.</summary>
     public bool TryGetKeycapEntry(string controlPath, string localeCode, string bakedLabel, out Entry entry)
     {
+      foreach (var candidate in entries)
+        if (candidate != null && candidate.Family == InputGlyphFamily.KeyboardAndMouse
+          && candidate.KeycapContent == InputKeycapContentMode.Sprite
+          && string.Equals(candidate.ControlPath, controlPath, StringComparison.OrdinalIgnoreCase)
+          && NormalizeLocale(candidate.LocaleCode).Length == 0)
+        { entry = candidate; return true; }
       if (!string.IsNullOrWhiteSpace(bakedLabel))
         return FindEntry(InputGlyphFamily.KeyboardAndMouse, controlPath, localeCode, bakedLabel, out entry);
       entry = null;
@@ -105,6 +112,7 @@ namespace MToolKit.Runtime.Input.Prompts
       foreach (string locale in LocaleFallbacks(localeCode))
         foreach (var candidate in entries)
           if (candidate != null && candidate.Family == family
+            && candidate.KeycapContent == InputKeycapContentMode.Label
             && string.Equals(candidate.ControlPath, controlPath, StringComparison.OrdinalIgnoreCase)
             && string.Equals(NormalizeLocale(candidate.LocaleCode), locale, StringComparison.OrdinalIgnoreCase)
             && (bakedLabel == null ? string.IsNullOrEmpty(candidate.BakedLabel)

@@ -16,21 +16,36 @@ namespace MToolKit.Editor.Input
   {
     public static string LastRenderDiagnostics { get; private set; }
     public static Texture2D Render(InputKeycapBakeProfile profile, string label, int fixedWidth = 0)
+      => RenderContent(profile, label, fixedWidth, null, Vector2.zero);
+
+    /// <summary>Previews the exact key row used by Bake, including readable fallback for unassigned artwork.</summary>
+    public static Texture2D RenderKey(InputKeycapBakeProfile profile, InputKeycapBakeProfile.Key key, string locale = null)
     {
-      if (profile == null || profile.Font == null) throw new InvalidOperationException("Choose a TMP font for the keycaps.");
+      if (key == null) throw new InvalidOperationException("Choose a keycap row.");
+      ValidateContentMode(key);
+      var sprite = HasSprite(key) ? key.ContentSprite : null;
+      return RenderContent(profile, ResolveLabel(profile, key, locale), FixedWidth(key), sprite, key.SpriteSize);
+    }
+
+    private static Texture2D RenderContent(InputKeycapBakeProfile profile, string label, int fixedWidth,
+      Sprite contentSprite, Vector2 spriteSize)
+    {
+      if (profile == null || (contentSprite == null && profile.Font == null)) throw new InvalidOperationException("Choose a TMP font for text keycaps.");
       if (profile.BackgroundPrefab != null && profile.BackgroundPrefab.GetComponent<RectTransform>() == null)
         throw new InvalidOperationException("Background prefab must have a RectTransform.");
       if (profile.BackgroundPrefab != null && (profile.BackgroundPrefab.GetComponentsInChildren<Mask>(true).Length > 0
           || profile.BackgroundPrefab.GetComponentsInChildren<RectMask2D>(true).Length > 0))
         throw new InvalidOperationException("Background prefab clipping masks are unsupported by isolated preview baking. Supply unmasked native UGUI graphics.");
-      if (string.IsNullOrEmpty(label) || label.IndexOfAny(new[] { '\r', '\n', '\t' }) >= 0)
+      if (contentSprite == null && (string.IsNullOrEmpty(label) || label.IndexOfAny(new[] { '\r', '\n', '\t' }) >= 0))
         throw new InvalidOperationException("Keycap labels must contain one nonempty line of literal text.");
       if (profile.SharedHeight < 8 || profile.SharedHeight > 1024 || profile.MinimumWidth < 8 || profile.MinimumWidth > 4096
         || profile.FontSize < 1 || profile.HorizontalPadding < 0 || profile.VerticalPadding < 0 || profile.BorderWidth < 0)
         throw new InvalidOperationException("Keycap dimensions, font size and padding are outside supported bounds.");
-      if (!profile.Font.HasCharacters(label, out uint[] missing, true, false))
+      if (contentSprite != null && (!ValidSize(spriteSize.x) || !ValidSize(spriteSize.y)))
+        throw new InvalidOperationException("Central sprite size must contain finite positive pixel dimensions.");
+      if (contentSprite == null && !profile.Font.HasCharacters(label, out uint[] missing, true, false))
         throw new InvalidOperationException("The selected font/fallbacks lack label glyphs: " + string.Join(", ", missing.Select(value => "U+" + value.ToString("X4"))));
-      bool uniform = profile.UniformCharacters && new StringInfo(label).LengthInTextElements == 1;
+      bool uniform = contentSprite != null || (profile.UniformCharacters && new StringInfo(label).LengthInTextElements == 1);
       int requestedWidth = fixedWidth > 0 ? fixedWidth : uniform ? Math.Max(profile.MinimumWidth, profile.SharedHeight) : 0;
       if (requestedWidth > 4096 || (requestedWidth > 0 && requestedWidth < profile.MinimumWidth))
         throw new InvalidOperationException("Fixed keycap width must fit the configured minimum and atlas size.");
@@ -74,9 +89,23 @@ namespace MToolKit.Editor.Input
         fillRect.offsetMin = new Vector2(profile.BorderWidth, profile.BorderWidth);
         fillRect.offsetMax = -fillRect.offsetMin;
         ConfigureImage(background.GetComponent<Image>(), profile.BackgroundSprite, profile.BackgroundColor, profile.BackgroundImageMode);
+        TextMeshProUGUI text = null;
+        if (contentSprite != null)
+        {
+          var icon = new GameObject("Central sprite", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+          icon.transform.SetParent(cap.transform, false);
+          var image = icon.GetComponent<Image>();
+          ConfigureImage(image, contentSprite, profile.TextColor, InputKeycapImageMode.Simple);
+          image.preserveAspect = true;
+          var element = icon.GetComponent<LayoutElement>();
+          element.minWidth = element.preferredWidth = spriteSize.x;
+          element.minHeight = element.preferredHeight = spriteSize.y;
+        }
+        else
+        {
         var textHost = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
         textHost.transform.SetParent(cap.transform, false);
-        var text = textHost.GetComponent<TextMeshProUGUI>();
+        text = textHost.GetComponent<TextMeshProUGUI>();
         text.font = profile.Font;
         text.fontSize = profile.FontSize;
         text.color = profile.TextColor;
@@ -92,11 +121,12 @@ namespace MToolKit.Editor.Input
         text.alignment = TextAlignmentOptions.Center;
         text.raycastTarget = false;
         text.text = label;
+        }
         var layout = cap.GetComponent<HorizontalLayoutGroup>();
         layout.padding = new RectOffset(profile.HorizontalPadding + profile.BorderWidth, profile.HorizontalPadding + profile.BorderWidth,
           profile.VerticalPadding + profile.BorderWidth, profile.VerticalPadding + profile.BorderWidth);
         layout.childControlWidth = layout.childControlHeight = true;
-        layout.childForceExpandWidth = layout.childForceExpandHeight = true;
+        layout.childForceExpandWidth = layout.childForceExpandHeight = contentSprite == null;
         layout.childAlignment = TextAnchor.MiddleCenter;
         cap.GetComponent<LayoutElement>().minWidth = profile.MinimumWidth;
         var fitter = cap.GetComponent<ContentSizeFitter>();
@@ -131,13 +161,13 @@ namespace MToolKit.Editor.Input
         begun = true;
         Canvas.ForceUpdateCanvases();
         LayoutRebuilder.ForceRebuildLayoutImmediate(rect);
-        text.ForceMeshUpdate();
-        var preferred = text.GetPreferredValues(label);
+        if (text != null) text.ForceMeshUpdate();
+        var preferred = text != null ? text.GetPreferredValues(label) : spriteSize;
         float availableWidth = width - layout.padding.horizontal;
         float availableHeight = profile.SharedHeight - layout.padding.vertical;
         if (availableWidth <= 0 || availableHeight <= 0 || preferred.x > availableWidth + .5f || preferred.y > availableHeight + .5f
-          || text.isTextOverflowing || text.textBounds.size.x > availableWidth + .5f || text.textBounds.size.y > availableHeight + .5f)
-          throw new InvalidOperationException("Label '" + label + "' does not fit. Increase width/height or reduce font size/padding.");
+          || (text != null && (text.isTextOverflowing || text.textBounds.size.x > availableWidth + .5f || text.textBounds.size.y > availableHeight + .5f)))
+          throw new InvalidOperationException("Central content '" + label + "' does not fit. Increase width/height or reduce content size/padding.");
         var borderRenderer = cap.GetComponent<Image>().canvasRenderer;
         var corners = new Vector3[4];
         rect.GetWorldCorners(corners);
@@ -150,8 +180,8 @@ namespace MToolKit.Editor.Input
           + " borderCull=" + borderRenderer.cull + " borderDepth=" + borderRenderer.absoluteDepth
           + " borderVerts=" + borderRenderer.GetMesh()?.vertexCount + " borderMats=" + borderRenderer.materialCount
           + " borderShader=" + (borderRenderer.materialCount > 0 ? borderRenderer.GetMaterial(0)?.shader.name : "none")
-          + " textCull=" + text.canvasRenderer.cull + " textDepth=" + text.canvasRenderer.absoluteDepth
-          + " textVerts=" + text.canvasRenderer.GetMesh()?.vertexCount + " textMats=" + text.canvasRenderer.materialCount
+          + " textCull=" + text?.canvasRenderer.cull + " textDepth=" + text?.canvasRenderer.absoluteDepth
+          + " textVerts=" + text?.canvasRenderer.GetMesh()?.vertexCount + " textMats=" + text?.canvasRenderer.materialCount
           + " pixelsPerPoint=" + EditorGUIUtility.pixelsPerPoint;
         SubmitNativeGraphics(preview, root, previewMeshes);
         preview.Render(false, false);
@@ -201,7 +231,9 @@ namespace MToolKit.Editor.Input
         foreach (var key in profile.Keys)
         {
           if (key == null) throw new InvalidOperationException("Remove empty keycap rows.");
-          bool localized = !string.IsNullOrEmpty(key.LocalizationKey);
+          ValidateContentMode(key);
+          bool symbol = HasSprite(key);
+          bool localized = !symbol && !string.IsNullOrEmpty(key.LocalizationKey);
           var locales = localized ? profile.Locales : new[] { "" };
           if (locales == null || locales.Length == 0) throw new InvalidOperationException("Configure locales for localized labels.");
           foreach (string locale in locales)
@@ -209,15 +241,15 @@ namespace MToolKit.Editor.Input
             string code = (locale ?? "").Replace('_', '-').ToLowerInvariant();
             string label = localized ? localize?.Invoke(key.LocalizationKey, code) ?? ResolveLocalizedLabel(profile, key.LocalizationKey, code) : key.Label;
             if (string.IsNullOrEmpty(label)) label = key.Label;
-            int fixedWidth = key.WidthRule == InputKeycapWidthRule.Fixed ? key.FixedWidth : 0;
-            if (key.WidthRule == InputKeycapWidthRule.Fixed && fixedWidth <= 0) throw new InvalidOperationException("Fixed width must be positive: " + key.ControlPath);
-            var texture = Render(profile, label, fixedWidth);
+            var texture = RenderContent(profile, label, FixedWidth(key), symbol ? key.ContentSprite : null, key.SpriteSize);
             textures.Add(texture);
             var sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(.5f, .5f));
             sprites.Add(sprite);
             rows.Add(new InputGlyphAtlasSource.Glyph { ControlPath = key.ControlPath,
               SpriteName = key.SpriteName + (string.IsNullOrEmpty(code) ? "" : "-" + code), SourceSprite = sprite,
-              LocaleCode = code, BakedLabel = label, DisplayName = key.Label, LocalizationKey = key.LocalizationKey });
+              LocaleCode = code, BakedLabel = symbol ? null : label,
+              KeycapContent = symbol ? InputKeycapContentMode.Sprite : InputKeycapContentMode.Label,
+              DisplayName = key.Label, LocalizationKey = key.LocalizationKey });
           }
         }
         source.Glyphs = rows.ToArray();
@@ -233,6 +265,67 @@ namespace MToolKit.Editor.Input
 
     public static string ResolveLabel(InputKeycapBakeProfile profile, InputKeycapBakeProfile.Key key, string locale)
       => string.IsNullOrEmpty(key.LocalizationKey) ? key.Label : ResolveLocalizedLabel(profile, key.LocalizationKey, locale) ?? key.Label;
+
+    /// <summary>Read-only comparison against the currently imported native tables. Rebuild explicitly after reviewing stale rows.</summary>
+    public static string[] ValidateBakedContent(InputKeycapBakeProfile profile)
+    {
+      var issues = new List<string>();
+      if (profile == null || profile.Catalog == null) return new[] { "Choose a bake profile and runtime catalog." };
+      if (profile.Keys == null || profile.Keys.Length == 0) return new[] { "Add at least one keycap row." };
+      var asset = AssetDatabase.LoadAssetAtPath<TMP_SpriteAsset>(profile.SpriteAssetPath);
+      foreach (var key in profile.Keys)
+      {
+        if (key == null) { issues.Add("Remove empty keycap rows."); continue; }
+        if (!Enum.IsDefined(typeof(InputKeycapContentMode), key.ContentMode))
+        { issues.Add("Select a known content mode: " + key.ControlPath); continue; }
+        bool symbol = HasSprite(key);
+        bool localized = !symbol && !string.IsNullOrEmpty(key.LocalizationKey);
+        var locales = localized ? profile.Locales : new[] { "" };
+        if (locales == null || locales.Length == 0) { issues.Add("Configure locales for " + key.ControlPath); continue; }
+        foreach (string locale in locales)
+        {
+          string code = (locale ?? "").Trim().Replace('_', '-').ToLowerInvariant();
+          string label = ResolveLabel(profile, key, code);
+          string identity = key.ControlPath + " [" + (code.Length == 0 ? "neutral" : code) + "]";
+          if (localized && profile.LocalizationCollection != null && ResolveLocalizedLabel(profile, key.LocalizationKey, code) == null)
+            issues.Add("Missing imported translation for " + identity + ": " + key.LocalizationKey + ". Using readable fallback '" + label + "'.");
+          var content = symbol ? InputKeycapContentMode.Sprite : InputKeycapContentMode.Label;
+          string name = key.SpriteName + (code.Length == 0 ? "" : "-" + code);
+          var entry = profile.Catalog.Entries.FirstOrDefault(candidate => candidate != null
+            && candidate.Family == InputGlyphFamily.KeyboardAndMouse
+            && string.Equals(candidate.ControlPath, key.ControlPath, StringComparison.OrdinalIgnoreCase)
+            && string.Equals((candidate.LocaleCode ?? "").Trim().Replace('_', '-'), code, StringComparison.OrdinalIgnoreCase)
+            && candidate.KeycapContent == content && candidate.SpriteAsset == asset
+            && string.Equals(candidate.SpriteName, name, StringComparison.Ordinal));
+          if (entry == null || (!symbol && !string.Equals(entry.BakedLabel, label, StringComparison.Ordinal)))
+            issues.Add("Rebake " + identity + ": expected " + (symbol ? "a locale-neutral Sprite entry" : "current label '" + label + "'") + ".");
+          else if (asset == null || asset.spriteSheet == null || asset.material == null || asset.GetSpriteIndexFromName(name) < 0)
+            issues.Add("Missing native sprite resource for " + identity + ": " + name);
+        }
+      }
+      return issues.ToArray();
+    }
+
+    private static bool HasSprite(InputKeycapBakeProfile.Key key)
+      => key.ContentMode == InputKeycapContentMode.Sprite && key.ContentSprite != null;
+
+    private static bool ValidSize(float value) => !float.IsNaN(value) && !float.IsInfinity(value) && value > 0 && value <= 4096;
+
+    private static void ValidateContentMode(InputKeycapBakeProfile.Key key)
+    {
+      if (!Enum.IsDefined(typeof(InputKeycapContentMode), key.ContentMode))
+        throw new InvalidOperationException("Select a known keycap content mode: " + key.ControlPath);
+    }
+
+    private static int FixedWidth(InputKeycapBakeProfile.Key key)
+    {
+      if (!Enum.IsDefined(typeof(InputKeycapWidthRule), key.WidthRule))
+        throw new InvalidOperationException("Select a known width rule: " + key.ControlPath);
+      int width = key.WidthRule == InputKeycapWidthRule.Fixed ? key.FixedWidth : 0;
+      if (key.WidthRule == InputKeycapWidthRule.Fixed && width <= 0)
+        throw new InvalidOperationException("Fixed width must be positive: " + key.ControlPath);
+      return width;
+    }
     private static string ResolveLocalizedLabel(InputKeycapBakeProfile profile, string key, string locale)
     {
       if (profile.LocalizationCollection == null) return null;

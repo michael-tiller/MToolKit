@@ -92,8 +92,7 @@ namespace MToolKit.Runtime.Input.Prompts
         string keycap = catalog.TryGetKeycapEntry(control.ControlPath, locale, label, out var cap)
           ? Glyph(cap, context, allowSymbol: false) : null;
         if (string.IsNullOrEmpty(keycap)) return name;
-        return style == InputPromptStyle.GlyphAndName && !string.Equals(label, rawName, StringComparison.Ordinal)
-          ? keycap + " " + name : keycap;
+        return style == InputPromptStyle.GlyphAndName ? keycap + " " + name : keycap;
       }
       string glyph = Glyph(entry, context);
       if (style == InputPromptStyle.GlyphAndName) return string.IsNullOrEmpty(glyph) ? name : glyph + " " + name;
@@ -178,8 +177,8 @@ namespace MToolKit.Runtime.Input.Prompts
         return path.ToLowerInvariant() switch
         {
           "enter" => "Enter", "numpadenter" => "Numpad Enter", "space" => "Space", "escape" => "Escape",
-          "tab" => "Tab", "leftctrl" => "Ctrl", "rightctrl" => "Ctrl", "leftshift" => "Shift", "rightshift" => "Shift",
-          "leftalt" => "Alt", "rightalt" => "Alt", "backspace" => "Backspace",
+          "tab" => "Tab", "leftctrl" => "LCtrl", "rightctrl" => "RCtrl", "leftshift" => "LShift", "rightshift" => "RShift",
+          "leftalt" => "LAlt", "rightalt" => "RAlt", "backspace" => "Backspace",
           _ => control.Character ?? control.DisplayName ?? InputBindingResolver.Humanize(path)
         };
       if (InputGlyphCatalog.IsLayout(control.DeviceLayout, "Mouse"))

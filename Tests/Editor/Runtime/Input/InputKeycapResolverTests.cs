@@ -35,13 +35,14 @@ namespace MToolKit.Tests.Editor.Runtime.Input
     [TestCase(InputPromptStyle.Auto)]
     [TestCase(InputPromptStyle.Glyph)]
     [TestCase(InputPromptStyle.GlyphAndName)]
-    public void GeneratedPrintableCap_UsesNativeSpriteWithoutDuplicatingItsLabel(InputPromptStyle style)
+    public void GeneratedPrintableCap_UsesNativeSpriteAndPreservesTheRequestedName(InputPromptStyle style)
     {
       var cap = Cap("e", "E");
       catalog.SetEntries(cap);
       catalog.ConfigureKeyboardGlyphs(InputKeyboardGlyphMode.GeneratedKeycaps);
       using var action = new InputAction("Interact", binding: "<Keyboard>/e");
-      Assert.That(resolver.Resolve(action, style), Is.EqualTo(Tag(cap)));
+      Assert.That(resolver.Resolve(action, style),
+        Is.EqualTo(Tag(cap) + (style == InputPromptStyle.GlyphAndName ? " E" : string.Empty)));
       Assert.That(action.enabled, Is.False, "Presentation must not enable the execution action.");
       Assert.That(resolver.Resolve(action, InputPromptStyle.Character), Is.EqualTo("E"));
       Assert.That(resolver.Resolve(action, InputPromptStyle.LocalizedName), Is.EqualTo("E"));
@@ -142,7 +143,8 @@ namespace MToolKit.Tests.Editor.Runtime.Input
       catalog.ConfigureKeyboardGlyphs(InputKeyboardGlyphMode.GeneratedKeycaps);
       names.LocaleCode = "fr";
       names.Values["input.key.enter"] = literalLabel;
-      Assert.That(resolver.ResolvePath("<Keyboard>/enter", InputPromptStyle.GlyphAndName), Is.EqualTo(Tag(cap)));
+      Assert.That(resolver.ResolvePath("<Keyboard>/enter", InputPromptStyle.GlyphAndName),
+        Is.EqualTo(Tag(cap) + " " + InputPromptRichText.Escape(literalLabel)));
       cap.BakedLabel = "different label";
       Assert.That(resolver.ResolvePath("<Keyboard>/enter", InputPromptStyle.GlyphAndName),
         Is.EqualTo(InputPromptRichText.Escape(literalLabel)));
@@ -155,6 +157,48 @@ namespace MToolKit.Tests.Editor.Runtime.Input
       catalog.SetEntries(cap);
       catalog.ConfigureKeyboardGlyphs(InputKeyboardGlyphMode.GeneratedKeycaps);
       Assert.That(resolver.ResolvePath("<Keyboard>/backslash"), Is.EqualTo(Tag(cap)));
+    }
+
+    [TestCase("leftCtrl", "LCtrl")]
+    [TestCase("rightCtrl", "RCtrl")]
+    [TestCase("leftShift", "LShift")]
+    [TestCase("rightShift", "RShift")]
+    [TestCase("leftAlt", "LAlt")]
+    [TestCase("rightAlt", "RAlt")]
+    public void ModifierNames_RetainCompactSideIdentity(string control, string expected)
+    {
+      Assert.That(resolver.ResolvePath("<Keyboard>/" + control, InputPromptStyle.LocalizedName), Is.EqualTo(expected));
+      Assert.That(resolver.ResolvePath("<Keyboard>/" + control, InputPromptStyle.Character), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void NeutralSpriteCap_ReusesItsArtworkAndKeepsLocalizedNamesOutsideTheCap()
+    {
+      var cap = Cap("leftShift", null);
+      cap.KeycapContent = InputKeycapContentMode.Sprite;
+      catalog.SetEntries(cap);
+      catalog.ConfigureKeyboardGlyphs(InputKeyboardGlyphMode.GeneratedKeycaps);
+      names.LocaleCode = "fr";
+      names.Values["input.key.leftShift"] = "Maj G";
+      Assert.That(resolver.ResolvePath("<Keyboard>/leftShift", InputPromptStyle.GlyphAndName), Is.EqualTo(Tag(cap) + " Maj G"));
+      Assert.That(resolver.ResolvePath("<Keyboard>/leftShift", InputPromptStyle.Glyph), Is.EqualTo(Tag(cap)));
+      names.LocaleCode = "en";
+      names.Values["input.key.leftShift"] = "LShift";
+      Assert.That(resolver.ResolvePath("<Keyboard>/leftShift", InputPromptStyle.GlyphAndName), Is.EqualTo(Tag(cap) + " LShift"));
+      Assert.That(resolver.ResolvePath("<Keyboard>/leftShift", InputPromptStyle.Auto), Is.EqualTo(Tag(cap)));
+    }
+
+    [Test]
+    public void GeneratedSpriteCap_DoesNotReplaceLegacyAuthoredGlyphsOrImageReferences()
+    {
+      var cap = Cap("enter", null);
+      cap.KeycapContent = InputKeycapContentMode.Sprite;
+      catalog.SetEntries(cap);
+      Assert.That(catalog.TryGetEntry(InputGlyphFamily.KeyboardAndMouse, "enter", out _), Is.False);
+      Assert.That(catalog.GetSprite(InputGlyphFamily.KeyboardAndMouse, "enter"), Is.Null);
+      Assert.That(resolver.ResolvePath("<Keyboard>/enter", InputPromptStyle.Glyph), Is.EqualTo("Enter"));
+      catalog.ConfigureKeyboardGlyphs(InputKeyboardGlyphMode.GeneratedKeycaps);
+      Assert.That(resolver.ResolvePath("<Keyboard>/enter", InputPromptStyle.Glyph), Is.EqualTo(Tag(cap)));
     }
 
     [Test]

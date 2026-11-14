@@ -128,8 +128,8 @@ namespace MToolKit.Tests.Editor.Runtime.Input
       Assert.That(resolver.Resolve(action), Is.EqualTo("E"));
     }
 
-    [TestCase("OneModifier", "Ctrl + E")]
-    [TestCase("TwoModifiers", "Ctrl + Shift + E")]
+    [TestCase("OneModifier", "LCtrl + E")]
+    [TestCase("TwoModifiers", "LCtrl + LShift + E")]
     public void ModifierComposites_KeepChordTopology(string composite, string expected)
     {
       using var action = new InputAction("Chord");
@@ -232,8 +232,8 @@ namespace MToolKit.Tests.Editor.Runtime.Input
       {
         using var action = new InputAction("Modified click");
         action.AddCompositeBinding("OneModifier").With("Modifier", "<Keyboard>/leftCtrl").With("Binding", "<Mouse>/leftButton");
-        Assert.That(resolver.Resolve(action, context: new InputPromptContext(device: keyboard)), Is.EqualTo("Ctrl + Left Click"));
-        Assert.That(resolver.Resolve(action, context: new InputPromptContext(device: mouse)), Is.EqualTo("Ctrl + Left Click"));
+        Assert.That(resolver.Resolve(action, context: new InputPromptContext(device: keyboard)), Is.EqualTo("LCtrl + Left Click"));
+        Assert.That(resolver.Resolve(action, context: new InputPromptContext(device: mouse)), Is.EqualTo("LCtrl + Left Click"));
       }
       finally { InputSystem.RemoveDevice(mouse); InputSystem.RemoveDevice(keyboard); }
     }

@@ -94,7 +94,8 @@ namespace MToolKit.Editor.Input
         AssetDatabase.CreateAsset(catalog, catalogPath);
       }
       // Starter controller regeneration must retain keyboard caps authored by saved bake profiles.
-      entries.AddRange(catalog.Entries.Where(entry => entry != null && !string.IsNullOrEmpty(entry.BakedLabel)));
+      entries.AddRange(catalog.Entries.Where(entry => entry != null
+        && (entry.KeycapContent == InputKeycapContentMode.Sprite || !string.IsNullOrEmpty(entry.BakedLabel))));
       catalog.SetEntries(entries.ToArray());
       catalog.SetLayoutRules(
         new InputGlyphCatalog.LayoutRule { Layout = "DualShockGamepad", Family = InputGlyphFamily.PlayStation },

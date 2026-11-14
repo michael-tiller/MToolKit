@@ -15,6 +15,7 @@ namespace MToolKit.Editor.Input
       public Sprite SourceSprite;
       public string LocaleCode;
       public string BakedLabel;
+      public InputKeycapContentMode KeycapContent;
       public string Symbol;
       public string LocalizationKey;
       public string DisplayName;

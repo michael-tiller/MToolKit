@@ -20,6 +20,11 @@ namespace MToolKit.Editor.Input
       public string SpriteName;
       public string Label;
       public string LocalizationKey;
+      public InputKeycapContentMode ContentMode;
+      [Tooltip("Optional central artwork. Sprite mode keeps a readable label until artwork is assigned.")]
+      public Sprite ContentSprite;
+      [Tooltip("Maximum central artwork size in baked pixels. Native Image preserves the sprite aspect ratio.")]
+      public Vector2 SpriteSize = new(32, 32);
       public InputKeycapWidthRule WidthRule;
       public int FixedWidth;
     }
@@ -53,10 +58,10 @@ namespace MToolKit.Editor.Input
       for (char c = 'a'; c <= 'z'; c++) keys.Add(new Key { ControlPath = c.ToString(), SpriteName = "keycap-" + c, Label = char.ToUpperInvariant(c).ToString() });
       for (char c = '0'; c <= '9'; c++) keys.Add(new Key { ControlPath = c.ToString(), SpriteName = "keycap-" + c, Label = c.ToString() });
       Add("enter", "Enter", 112); Add("backspace", "Backspace", 0); Add("space", "Space", 160);
-      Add("leftShift", "Shift", 112); Add("rightShift", "Shift", 112);
+      Add("leftShift", "LShift", 112); Add("rightShift", "RShift", 112);
       Add("tab", "Tab", 96); Add("escape", "Escape", 0);
-      Add("leftCtrl", "Ctrl", 96); Add("rightCtrl", "Ctrl", 96);
-      Add("leftAlt", "Alt", 96); Add("rightAlt", "Alt", 96);
+      Add("leftCtrl", "LCtrl", 96); Add("rightCtrl", "RCtrl", 96);
+      Add("leftAlt", "LAlt", 96); Add("rightAlt", "RAlt", 96);
       Add("upArrow", "Up Arrow", 0); Add("downArrow", "Down Arrow", 0);
       Add("leftArrow", "Left Arrow", 0); Add("rightArrow", "Right Arrow", 0);
       return keys.ToArray();

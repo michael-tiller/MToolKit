@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Add per-key source artwork and locale-neutral symbol caps to saved keycap profiles, plus explicit imported-table validation and rebake guidance. Keep the localized name visible in GlyphAndName, preserve compact left/right modifier identity and retain native atlas/Image compatibility. Verify actual central-sprite rendering, moved localization assets and resource cleanup. (v1.13.0)
+
 - Add a saved glyph-atlas wizard and configurable UGUI/TMP keycap bake profiles with fonts, static or nine-sliced border/background images, optional authored procedural prefabs, shared sizing and per-key width rules. Resolve generated localized caps with stale-label fallbacks, preserve native Sprite/material references during rebuilds, and verify real glyph pixels, locale switching and resource cleanup. (v1.12.0)
 
 - Resolve effective input bindings into localized native TMP prompts with explicit device families and presentation styles, asset-driven glyphs, independent player contexts, live input/locale/rebinding updates, safe named composition and a lifecycle-owned TMP component. Preserve typed legacy Image icons and migrate settings labels; add native sprite authoring, focused regression coverage and configuration/migration examples. (v1.11.0)

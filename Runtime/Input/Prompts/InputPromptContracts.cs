@@ -28,6 +28,12 @@ namespace MToolKit.Runtime.Input.Prompts
     GeneratedKeycaps = 1
   }
 
+  public enum InputKeycapContentMode
+  {
+    Label = 0,
+    Sprite = 1
+  }
+
   /// <summary>A caller's binding selection and independent presentation preference.</summary>
   public readonly struct InputPromptContext
   {
