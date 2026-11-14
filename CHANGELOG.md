@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Add separate keyboard cap sheets for every configured Unity locale, per-locale fonts, configurable icon-plus-localized-label caps and direct wizard editing. Complete the installed physical-key layout additively, retain distinct numpad identities and configured fallback names, and select typed Windows/macOS/Linux variants with constructor-safe cached Unity OS detection. Preserve legacy authored/Image APIs and native resource identities; report translation/font coverage explicitly. (v1.14.0)
+
 - Add per-key source artwork and locale-neutral symbol caps to saved keycap profiles, plus explicit imported-table validation and rebake guidance. Keep the localized name visible in GlyphAndName, preserve compact left/right modifier identity and retain native atlas/Image compatibility. Verify actual central-sprite rendering, moved localization assets and resource cleanup. (v1.13.0)
 
 - Add a saved glyph-atlas wizard and configurable UGUI/TMP keycap bake profiles with fonts, static or nine-sliced border/background images, optional authored procedural prefabs, shared sizing and per-key width rules. Resolve generated localized caps with stale-label fallbacks, preserve native Sprite/material references during rebuilds, and verify real glyph pixels, locale switching and resource cleanup. (v1.12.0)

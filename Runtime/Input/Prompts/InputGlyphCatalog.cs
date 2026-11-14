@@ -25,6 +25,7 @@ namespace MToolKit.Runtime.Input.Prompts
       [Tooltip("Exact literal label baked into a generated keyboard cap. Empty for authored glyphs.")]
       public string BakedLabel;
       public InputKeycapContentMode KeycapContent;
+      public InputGlyphPlatform Platform;
     }
 
     [Serializable]
@@ -61,21 +62,63 @@ namespace MToolKit.Runtime.Input.Prompts
     }
 
     public bool TryGetEntry(InputGlyphFamily family, string controlPath, string localeCode, out Entry entry)
+      => TryGetEntry(family, controlPath, localeCode, InputGlyphPlatform.Any, out entry);
+
+    public bool TryGetEntry(InputGlyphFamily family, string controlPath, string localeCode, InputGlyphPlatform platform, out Entry entry)
     {
-      return FindEntry(family, controlPath, localeCode, null, out entry);
+      foreach (var candidatePlatform in PlatformFallbacks(platform))
+        if (FindEntry(family, controlPath, localeCode, null, candidatePlatform, out entry)) return true;
+      entry = null;
+      return false;
+    }
+
+    public bool TryGetKeycapEntry(string controlPath, string localeCode, string bakedLabel, InputGlyphPlatform platform, out Entry entry)
+    {
+      foreach (var candidatePlatform in PlatformFallbacks(platform))
+      {
+        if (TryGetNeutralSprite(controlPath, candidatePlatform, out entry)) return true;
+        if (!string.IsNullOrWhiteSpace(bakedLabel)
+          && FindEntry(InputGlyphFamily.KeyboardAndMouse, controlPath, localeCode, bakedLabel, candidatePlatform, out entry))
+          return true;
+      }
+      entry = null;
+      return false;
+    }
+
+    internal bool TryGetKeycapDefinition(string controlPath, string localeCode, InputGlyphPlatform platform, out Entry entry)
+    {
+      foreach (var candidatePlatform in PlatformFallbacks(platform))
+      {
+        if (TryGetNeutralSprite(controlPath, candidatePlatform, out entry)) return true;
+        foreach (string locale in LocaleFallbacks(localeCode))
+          foreach (var candidate in entries)
+            if (candidate != null && candidate.Family == InputGlyphFamily.KeyboardAndMouse
+              && candidate.Platform == candidatePlatform
+              && string.Equals(candidate.ControlPath, controlPath, StringComparison.OrdinalIgnoreCase)
+              && string.Equals(NormalizeLocale(candidate.LocaleCode), locale, StringComparison.OrdinalIgnoreCase)
+              && (candidate.KeycapContent == InputKeycapContentMode.SpriteAndLabel
+                || candidate.KeycapContent == InputKeycapContentMode.Label && !string.IsNullOrEmpty(candidate.BakedLabel)))
+            { entry = candidate; return true; }
+      }
+      entry = null;
+      return false;
     }
 
     /// <summary>Prefers shared icon caps, then text caps whose baked label still matches the displayed key.</summary>
     public bool TryGetKeycapEntry(string controlPath, string localeCode, string bakedLabel, out Entry entry)
+      => TryGetKeycapEntry(controlPath, localeCode, bakedLabel, InputGlyphPlatform.Any, out entry);
+
+    internal bool TryGetKeycapDefinition(string controlPath, string localeCode, out Entry entry)
+      => TryGetKeycapDefinition(controlPath, localeCode, InputGlyphPlatform.Any, out entry);
+
+    private bool TryGetNeutralSprite(string controlPath, InputGlyphPlatform platform, out Entry entry)
     {
       foreach (var candidate in entries)
-        if (candidate != null && candidate.Family == InputGlyphFamily.KeyboardAndMouse
+        if (candidate != null && candidate.Family == InputGlyphFamily.KeyboardAndMouse && candidate.Platform == platform
           && candidate.KeycapContent == InputKeycapContentMode.Sprite
           && string.Equals(candidate.ControlPath, controlPath, StringComparison.OrdinalIgnoreCase)
           && NormalizeLocale(candidate.LocaleCode).Length == 0)
         { entry = candidate; return true; }
-      if (!string.IsNullOrWhiteSpace(bakedLabel))
-        return FindEntry(InputGlyphFamily.KeyboardAndMouse, controlPath, localeCode, bakedLabel, out entry);
       entry = null;
       return false;
     }
@@ -99,6 +142,14 @@ namespace MToolKit.Runtime.Input.Prompts
       return InputGlyphFamily.Generic;
     }
 
+    public static InputGlyphPlatform PlatformForOperatingSystem(OperatingSystemFamily family) => family switch
+    {
+      OperatingSystemFamily.Windows => InputGlyphPlatform.Windows,
+      OperatingSystemFamily.MacOSX => InputGlyphPlatform.MacOS,
+      OperatingSystemFamily.Linux => InputGlyphPlatform.Linux,
+      _ => InputGlyphPlatform.Any
+    };
+
     internal static bool IsLayout(string actual, string parent) => !string.IsNullOrEmpty(actual)
       && !string.IsNullOrEmpty(parent) && (string.Equals(actual, parent, StringComparison.OrdinalIgnoreCase)
         || InputSystem.IsFirstLayoutBasedOnSecond(actual, parent));
@@ -106,17 +157,19 @@ namespace MToolKit.Runtime.Input.Prompts
     public bool TryGetEntry(InputGlyphFamily family, string controlPath, out Entry entry)
       => TryGetEntry(family, controlPath, null, out entry);
 
-    private bool FindEntry(InputGlyphFamily family, string controlPath, string localeCode, string bakedLabel,
+    private bool FindEntry(InputGlyphFamily family, string controlPath, string localeCode, string bakedLabel, InputGlyphPlatform platform,
       out Entry entry)
     {
       foreach (string locale in LocaleFallbacks(localeCode))
         foreach (var candidate in entries)
-          if (candidate != null && candidate.Family == family
-            && candidate.KeycapContent == InputKeycapContentMode.Label
+          if (candidate != null && candidate.Family == family && candidate.Platform == platform
             && string.Equals(candidate.ControlPath, controlPath, StringComparison.OrdinalIgnoreCase)
             && string.Equals(NormalizeLocale(candidate.LocaleCode), locale, StringComparison.OrdinalIgnoreCase)
-            && (bakedLabel == null ? string.IsNullOrEmpty(candidate.BakedLabel)
-              : string.Equals(candidate.BakedLabel, bakedLabel, StringComparison.Ordinal)))
+            && (bakedLabel == null
+              ? candidate.KeycapContent == InputKeycapContentMode.Label && string.IsNullOrEmpty(candidate.BakedLabel)
+              : (candidate.KeycapContent == InputKeycapContentMode.Label
+                  || candidate.KeycapContent == InputKeycapContentMode.SpriteAndLabel)
+                && string.Equals(candidate.BakedLabel, bakedLabel, StringComparison.Ordinal)))
           { entry = candidate; return true; }
       entry = null;
       return false;
@@ -134,16 +187,26 @@ namespace MToolKit.Runtime.Input.Prompts
       yield return string.Empty;
     }
 
+    private static IEnumerable<InputGlyphPlatform> PlatformFallbacks(InputGlyphPlatform platform)
+    {
+      if (platform == InputGlyphPlatform.Windows || platform == InputGlyphPlatform.MacOS || platform == InputGlyphPlatform.Linux)
+        yield return platform;
+      yield return InputGlyphPlatform.Any;
+    }
+
     private static string NormalizeLocale(string localeCode) => (localeCode ?? string.Empty).Trim().Replace('_', '-');
 
     /// <summary>Shared authoring supports native TMP and consumers that still render a UI Image.</summary>
-    public Sprite GetSprite(InputGlyphFamily family, string controlPath)
+    public Sprite GetSprite(InputGlyphFamily family, string controlPath, InputGlyphPlatform platform)
     {
-      if (!TryGetEntry(family, controlPath, out var entry)) return null;
+      if (!TryGetEntry(family, controlPath, null, platform, out var entry)) return null;
       if (entry.ImageSprite != null) return entry.ImageSprite;
       if (entry.SpriteAsset == null || string.IsNullOrEmpty(entry.SpriteName)) return null;
       int index = entry.SpriteAsset.GetSpriteIndexFromName(entry.SpriteName);
       return index < 0 ? null : (entry.SpriteAsset.spriteCharacterTable[index].glyph as TMP_SpriteGlyph)?.sprite;
     }
+
+    public Sprite GetSprite(InputGlyphFamily family, string controlPath)
+      => GetSprite(family, controlPath, InputGlyphPlatform.Any);
   }
 }

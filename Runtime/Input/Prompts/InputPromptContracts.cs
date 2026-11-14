@@ -31,7 +31,16 @@ namespace MToolKit.Runtime.Input.Prompts
   public enum InputKeycapContentMode
   {
     Label = 0,
-    Sprite = 1
+    Sprite = 1,
+    SpriteAndLabel = 2
+  }
+
+  public enum InputGlyphPlatform
+  {
+    Any = 0,
+    Windows = 1,
+    MacOS = 2,
+    Linux = 3
   }
 
   /// <summary>A caller's binding selection and independent presentation preference.</summary>
@@ -39,16 +48,21 @@ namespace MToolKit.Runtime.Input.Prompts
   {
     public InputPromptContext(InputDevice device = null, string bindingGroup = null,
       InputGlyphFamily? familyOverride = null, int? bindingIndex = null)
-      : this(device, bindingGroup, familyOverride, bindingIndex, null) { }
+      : this(device, bindingGroup, familyOverride, bindingIndex, null, null) { }
 
     public InputPromptContext(InputDevice device, string bindingGroup,
       InputGlyphFamily? familyOverride, int? bindingIndex, TMP_FontAsset fontAsset)
+      : this(device, bindingGroup, familyOverride, bindingIndex, fontAsset, null) { }
+
+    public InputPromptContext(InputDevice device, string bindingGroup,
+      InputGlyphFamily? familyOverride, int? bindingIndex, TMP_FontAsset fontAsset, InputGlyphPlatform? platformOverride)
     {
       Device = device;
       BindingGroup = bindingGroup;
       FamilyOverride = familyOverride;
       BindingIndex = bindingIndex;
       FontAsset = fontAsset;
+      PlatformOverride = platformOverride;
     }
 
     public InputDevice Device { get; }
@@ -56,6 +70,10 @@ namespace MToolKit.Runtime.Input.Prompts
     public InputGlyphFamily? FamilyOverride { get; }
     public int? BindingIndex { get; }
     public TMP_FontAsset FontAsset { get; }
+    public InputGlyphPlatform? PlatformOverride { get; }
+
+    public InputPromptContext WithPlatform(InputGlyphPlatform? platform)
+      => new InputPromptContext(Device, BindingGroup, FamilyOverride, BindingIndex, FontAsset, platform);
   }
 
   public readonly struct InputPromptControl

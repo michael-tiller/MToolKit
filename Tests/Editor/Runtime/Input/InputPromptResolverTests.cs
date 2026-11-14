@@ -428,6 +428,48 @@ namespace MToolKit.Tests.Editor.Runtime.Input
       Assert.That(resolver.ResolvePath("<Mouse>/leftButton", InputPromptStyle.LocalizedName), Is.EqualTo("Left Click"));
     }
 
+    [TestCase("numpad0", "Numpad 0")]
+    [TestCase("numpad9", "Numpad 9")]
+    [TestCase("numpadDivide", "Numpad /")]
+    [TestCase("numpadEquals", "Numpad =")]
+    [TestCase("pause", "Pause/Break")]
+    [TestCase("leftMeta", "Left System")]
+    [TestCase("rightMeta", "Right System")]
+    [TestCase("f1", "F1")]
+    [TestCase("f24", "F24")]
+    public void FullKeyboardNames_UseReadableNativeMetadataWithoutAConnectedDevice(string control, string expected)
+    {
+      string path = "<Keyboard>/" + control;
+      Assert.That(resolver.ResolvePath(path, InputPromptStyle.LocalizedName), Is.EqualTo(expected));
+      names.Values["input.key." + control] = "Localized " + control;
+      Assert.That(resolver.ResolvePath(path, InputPromptStyle.LocalizedName), Is.EqualTo("Localized " + control),
+        "Every dedicated key keeps its semantic Unity Localization path.");
+    }
+
+    [TestCase("oem1", "OEM1")]
+    [TestCase("oem5", "OEM5")]
+    public void KeyboardSemanticKeys_UseNativeCanonicalCasingWithAndWithoutADevice(string pathName, string canonical)
+    {
+      var previousKeyboard = Keyboard.current;
+      var keyboard = InputSystem.AddDevice<Keyboard>();
+      try
+      {
+        string path = "<Keyboard>/" + pathName;
+        string expected = "Localized " + canonical;
+        names.Values["input.key." + canonical] = expected;
+        using var action = new InputAction("Canonical OEM prompt", binding: path);
+        Assert.That(resolver.Resolve(action, InputPromptStyle.LocalizedName, new InputPromptContext(device: keyboard)), Is.EqualTo(expected));
+        Assert.That(resolver.ResolvePath(path, InputPromptStyle.LocalizedName), Is.EqualTo(expected),
+          "Input System paths ignore case; semantic localization keys must still use the native canonical control name.");
+        Assert.That(action.enabled, Is.False);
+      }
+      finally
+      {
+        InputSystem.RemoveDevice(keyboard);
+        if (previousKeyboard != null && previousKeyboard.added) previousKeyboard.MakeCurrent();
+      }
+    }
+
     [TestCase(InputPromptStyle.Character, false, "Q")]
     [TestCase(InputPromptStyle.GlyphAndName, false, "Q")]
     [TestCase(InputPromptStyle.GlyphAndName, true, "[Q] Q")]

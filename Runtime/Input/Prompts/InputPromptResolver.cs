@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using TMPro;
+using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace MToolKit.Runtime.Input.Prompts
@@ -10,6 +11,7 @@ namespace MToolKit.Runtime.Input.Prompts
     private readonly InputGlyphCatalog catalog;
     private readonly IInputPromptLocalizer localizer;
     private readonly InputBindingResolver bindings;
+    private InputGlyphPlatform? hostPlatform;
     internal Func<TMP_SpriteAsset, bool> SpriteAvailable { get; set; }
 
     public InputPromptResolver(InputGlyphCatalog catalog = null, IInputPromptLocalizer localizer = null,
@@ -66,10 +68,18 @@ namespace MToolKit.Runtime.Input.Prompts
       var family = actualFamily == InputGlyphFamily.KeyboardAndMouse ? actualFamily
         : context.FamilyOverride ?? actualFamily;
       string locale = (localizer as IInputPromptLocaleProvider)?.LocaleCode;
+      var platform = context.PlatformOverride ?? GetHostPlatform();
       InputGlyphCatalog.Entry entry = null;
-      if (catalog != null) catalog.TryGetEntry(family, control.ControlPath, locale, out entry);
+      if (catalog != null) catalog.TryGetEntry(family, control.ControlPath, locale, platform, out entry);
       string fallback = !string.IsNullOrEmpty(entry?.DisplayName) ? entry.DisplayName : DefaultName(control, family);
       string key = !string.IsNullOrEmpty(entry?.LocalizationKey) ? entry.LocalizationKey : LocalizationKey(control, family);
+      bool generatedKeyboard = catalog != null && catalog.KeyboardGlyphMode == InputKeyboardGlyphMode.GeneratedKeycaps
+        && InputGlyphCatalog.IsLayout(control.DeviceLayout, "Keyboard");
+      if (generatedKeyboard && catalog.TryGetKeycapDefinition(control.ControlPath, locale, platform, out var definition))
+      {
+        if (!string.IsNullOrEmpty(definition.DisplayName)) fallback = definition.DisplayName;
+        if (!string.IsNullOrEmpty(definition.LocalizationKey)) key = definition.LocalizationKey;
+      }
       string rawName = LocalizedName(key, fallback);
       string name = InputPromptRichText.Escape(rawName);
       if (style == InputPromptStyle.LocalizedName) return name;
@@ -83,13 +93,12 @@ namespace MToolKit.Runtime.Input.Prompts
         }
         return !string.IsNullOrEmpty(control.Character) ? InputPromptRichText.Escape(control.Character) : name;
       }
-      if (catalog != null && catalog.KeyboardGlyphMode == InputKeyboardGlyphMode.GeneratedKeycaps
-        && InputGlyphCatalog.IsLayout(control.DeviceLayout, "Keyboard"))
+      if (generatedKeyboard)
       {
         // A baked label is literal image content. Match before rich-text escaping so
         // punctuation and labels that resemble markup keep their actual identity.
         string label = !string.IsNullOrEmpty(control.Character) ? control.Character : rawName;
-        string keycap = catalog.TryGetKeycapEntry(control.ControlPath, locale, label, out var cap)
+        string keycap = catalog.TryGetKeycapEntry(control.ControlPath, locale, label, platform, out var cap)
           ? Glyph(cap, context, allowSymbol: false) : null;
         if (string.IsNullOrEmpty(keycap)) return name;
         return style == InputPromptStyle.GlyphAndName ? keycap + " " + name : keycap;
@@ -102,9 +111,17 @@ namespace MToolKit.Runtime.Input.Prompts
       return string.IsNullOrEmpty(glyph) ? name : glyph;
     }
 
+    private InputGlyphPlatform GetHostPlatform()
+    {
+      if (!hostPlatform.HasValue)
+        hostPlatform = InputGlyphCatalog.PlatformForOperatingSystem(SystemInfo.operatingSystemFamily);
+      return hostPlatform.Value;
+    }
+
     private static InputPromptControl PrintedKeyboardIdentity(InputPromptControl control)
     {
-      if (!InputGlyphCatalog.IsLayout(control.DeviceLayout, "Keyboard") || string.IsNullOrEmpty(control.Character))
+      if (!InputGlyphCatalog.IsLayout(control.DeviceLayout, "Keyboard") || string.IsNullOrEmpty(control.Character)
+        || !InputBindingResolver.IsMainPrintableKey(control.ControlPath))
         return control;
       // Input System key paths are physical locations. Artwork and key names must follow
       // the native printed character (for example Q on the physical A key on AZERTY).
@@ -179,7 +196,7 @@ namespace MToolKit.Runtime.Input.Prompts
           "enter" => "Enter", "numpadenter" => "Numpad Enter", "space" => "Space", "escape" => "Escape",
           "tab" => "Tab", "leftctrl" => "LCtrl", "rightctrl" => "RCtrl", "leftshift" => "LShift", "rightshift" => "RShift",
           "leftalt" => "LAlt", "rightalt" => "RAlt", "backspace" => "Backspace",
-          _ => control.Character ?? control.DisplayName ?? InputBindingResolver.Humanize(path)
+          _ => control.Character ?? KeyboardName(control)
         };
       if (InputGlyphCatalog.IsLayout(control.DeviceLayout, "Mouse"))
         return path.ToLowerInvariant() switch
@@ -211,5 +228,17 @@ namespace MToolKit.Runtime.Input.Prompts
         InputGlyphFamily.Xbox => xbox, InputGlyphFamily.PlayStation => playStation,
         InputGlyphFamily.Nintendo => nintendo, _ => generic
       };
+
+    private static string KeyboardName(InputPromptControl control)
+    {
+      // Special keys retain their dedicated identity even if an OS reports a single
+      // printed character (for example numpad0). Native base-layout metadata also
+      // supplies readable names when no keyboard is connected.
+      string path = "<Keyboard>/" + control.ControlPath;
+      string name = InputControlPath.ToHumanReadableString(path, InputControlPath.HumanReadableStringOptions.OmitDevice);
+      return !string.IsNullOrEmpty(name) && !string.Equals(name, path, StringComparison.Ordinal)
+        && !string.Equals(name, control.ControlPath, StringComparison.Ordinal)
+        ? name : control.DisplayName ?? InputBindingResolver.Humanize(control.ControlPath);
+    }
   }
 }

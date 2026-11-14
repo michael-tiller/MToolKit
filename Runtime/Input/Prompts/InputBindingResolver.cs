@@ -181,9 +181,17 @@ namespace MToolKit.Runtime.Input.Prompts
         layout = device.layout;
         controlPath = control.path.Substring(device.path.Length).TrimStart('/');
       }
+      else if (InputGlyphCatalog.IsLayout(layout, "Keyboard"))
+      {
+        // Binding paths ignore case, while semantic localization keys do not.
+        // Native layout metadata supplies the same canonical name without a device.
+        InputControlPath.ToHumanReadableString(path, out _, out string canonicalPath,
+          InputControlPath.HumanReadableStringOptions.OmitDevice);
+        if (!string.IsNullOrEmpty(canonicalPath)) controlPath = canonicalPath;
+      }
       string displayName = control?.displayName;
       string character = null;
-      if (InputGlyphCatalog.IsLayout(layout, "Keyboard"))
+      if (InputGlyphCatalog.IsLayout(layout, "Keyboard") && IsMainPrintableKey(controlPath))
       {
         if (!string.IsNullOrWhiteSpace(displayName) && StringInfo.ParseCombiningCharacters(displayName).Length == 1)
           character = displayName;
@@ -191,6 +199,8 @@ namespace MToolKit.Runtime.Input.Prompts
       }
       return new InputPromptControl(layout, controlPath, displayName, character, partName);
     }
+
+    internal static bool IsMainPrintableKey(string path) => !string.IsNullOrEmpty(PrintableCharacter(path));
 
     private static string PrintableCharacter(string path)
     {

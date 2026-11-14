@@ -28,10 +28,7 @@ namespace MToolKit.Editor.Input
     /// </summary>
     public static TMP_SpriteAsset Bake(string assetPath, IReadOnlyList<NamedSprite> sources)
     {
-      if (string.IsNullOrEmpty(assetPath) || !assetPath.StartsWith("Assets/", StringComparison.Ordinal)
-          || !assetPath.EndsWith(".asset", StringComparison.OrdinalIgnoreCase)
-          || assetPath.IndexOf('\\') >= 0 || assetPath.Split('/').Any(part => part == ".." || part == "."))
-        throw new ArgumentException("Choose a project Assets/.../*.asset destination.", nameof(assetPath));
+      ValidateDestination(assetPath);
       if (sources == null || sources.Count == 0)
         throw new ArgumentException("At least one named sprite is required.", nameof(sources));
       var ordered = sources.OrderBy(item => item.Name, StringComparer.Ordinal).ToArray();
@@ -46,15 +43,7 @@ namespace MToolKit.Editor.Input
       string directory = Path.GetDirectoryName(assetPath)?.Replace('\\', '/');
       EnsureFolder(directory);
       var previous = AssetDatabase.LoadMainAssetAtPath(assetPath);
-      if (previous != null && !(previous is TMP_SpriteAsset))
-        throw new InvalidOperationException("The destination already contains a different asset type: " + assetPath);
-      if (previous is TMP_SpriteAsset existing && existing.material != null
-          && AssetDatabase.GetAssetPath(existing.material) != assetPath)
-        throw new InvalidOperationException("The TMP material is shared outside this generated asset. Choose a dedicated output: " + assetPath);
       string atlasPath = Path.ChangeExtension(assetPath, ".png").Replace('\\', '/');
-      if (File.Exists(PhysicalPath(atlasPath)) && (!(previous is TMP_SpriteAsset owned)
-          || owned.spriteSheet == null || AssetDatabase.GetAssetPath(owned.spriteSheet) != atlasPath))
-        throw new InvalidOperationException("The atlas sidecar is existing artwork not owned by this TMP asset: " + atlasPath);
       var existingSprites = previous == null ? new Dictionary<string, Sprite>(StringComparer.Ordinal)
         : AssetDatabase.LoadAllAssetsAtPath(assetPath).OfType<Sprite>().ToDictionary(sprite => sprite.name, StringComparer.Ordinal);
       var shader = Shader.Find("TextMeshPro/Sprite");
@@ -150,6 +139,27 @@ namespace MToolKit.Editor.Input
         foreach (var texture in textures) Object.DestroyImmediate(texture);
         if (atlas != null) Object.DestroyImmediate(atlas);
       }
+    }
+
+    /// <summary>Checks existing destination ownership without creating folders or writing assets.</summary>
+    public static void ValidateDestination(string assetPath)
+    {
+      if (string.IsNullOrEmpty(assetPath) || !assetPath.StartsWith("Assets/", StringComparison.Ordinal)
+          || !assetPath.EndsWith(".asset", StringComparison.OrdinalIgnoreCase)
+          || assetPath.IndexOf('\\') >= 0 || assetPath.Split('/').Any(part => part == ".." || part == "."))
+        throw new ArgumentException("Choose a project Assets/.../*.asset destination.", nameof(assetPath));
+      var previous = AssetDatabase.LoadMainAssetAtPath(assetPath);
+      if (previous != null && !(previous is TMP_SpriteAsset))
+        throw new InvalidOperationException("The destination already contains a different asset type: " + assetPath);
+      if (previous is TMP_SpriteAsset existing && existing.material != null
+          && AssetDatabase.GetAssetPath(existing.material) != assetPath)
+        throw new InvalidOperationException("The TMP material is shared outside this generated asset. Choose a dedicated output: " + assetPath);
+      string atlasPath = Path.ChangeExtension(assetPath, ".png").Replace('\\', '/');
+      if (File.Exists(PhysicalPath(atlasPath)) && (!(previous is TMP_SpriteAsset owned)
+          || owned.spriteSheet == null || AssetDatabase.GetAssetPath(owned.spriteSheet) != atlasPath))
+        throw new InvalidOperationException("The atlas sidecar is existing artwork not owned by this TMP asset: " + atlasPath);
+      if (Shader.Find("TextMeshPro/Sprite") == null)
+        throw new InvalidOperationException("Import TMP Essential Resources before authoring glyphs.");
     }
 
     public static Sprite GetSprite(TMP_SpriteAsset asset, string semanticName)

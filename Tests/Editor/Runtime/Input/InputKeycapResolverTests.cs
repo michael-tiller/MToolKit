@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using MToolKit.Runtime.Input.Prompts;
 using NUnit.Framework;
 using TMPro;
@@ -103,6 +104,29 @@ namespace MToolKit.Tests.Editor.Runtime.Input
     }
 
     [Test]
+    public void SeparateLocaleAssets_ResolveAlongsideSharedNeutralCaps()
+    {
+      var english = Cap("enter", "Enter", "en");
+      var french = Cap("enter", "Entrée", "fr");
+      var japanese = Cap("enter", "決定", "ja");
+      var neutral = Cap("e", "E");
+      catalog.SetEntries(english, french, japanese, neutral);
+      catalog.ConfigureKeyboardGlyphs(InputKeyboardGlyphMode.GeneratedKeycaps);
+      Assert.That(resolver.SpriteAssets.Count, Is.EqualTo(4));
+      foreach (var pair in new[] { ("en", "Enter", english), ("fr", "Entrée", french), ("ja", "決定", japanese) })
+      {
+        names.LocaleCode = pair.Item1;
+        names.Values["input.key.enter"] = pair.Item2;
+        Assert.That(resolver.ResolvePath("<Keyboard>/enter", InputPromptStyle.GlyphAndName),
+          Is.EqualTo(Tag(pair.Item3) + " " + pair.Item2));
+        Assert.That(resolver.ResolvePath("<Keyboard>/e", InputPromptStyle.Glyph), Is.EqualTo(Tag(neutral)));
+      }
+      names.LocaleCode = "de";
+      names.Values["input.key.enter"] = "Eingabe";
+      Assert.That(resolver.ResolvePath("<Keyboard>/enter", InputPromptStyle.GlyphAndName), Is.EqualTo("Eingabe"));
+    }
+
+    [Test]
     public void LocalizedAuthoredLookup_IsAdditiveAndDoesNotExposeGeneratedCaps()
     {
       var french = new InputGlyphCatalog.Entry
@@ -201,6 +225,113 @@ namespace MToolKit.Tests.Editor.Runtime.Input
       Assert.That(resolver.ResolvePath("<Keyboard>/enter", InputPromptStyle.Glyph), Is.EqualTo(Tag(cap)));
     }
 
+    [TestCase("en", "LShift")]
+    [TestCase("fr", "Maj G")]
+    public void SpriteAndLabelCap_UsesItsLocalizedBakedTextAndKeepsCallerStyleSemantics(string locale, string label)
+    {
+      var english = Cap("leftShift", "LShift", "en");
+      var french = Cap("leftShift", "Maj G", "fr");
+      english.KeycapContent = french.KeycapContent = InputKeycapContentMode.SpriteAndLabel;
+      catalog.SetEntries(english, french);
+      catalog.ConfigureKeyboardGlyphs(InputKeyboardGlyphMode.GeneratedKeycaps);
+      names.LocaleCode = locale;
+      names.Values["input.key.leftShift"] = label;
+      var expected = locale == "en" ? english : french;
+      Assert.That(resolver.ResolvePath("<Keyboard>/leftShift", InputPromptStyle.Glyph), Is.EqualTo(Tag(expected)),
+        "The icon and localized label are already inside this one native sprite.");
+      Assert.That(resolver.ResolvePath("<Keyboard>/leftShift", InputPromptStyle.GlyphAndName),
+        Is.EqualTo(Tag(expected) + " " + label), "The explicitly requested external name remains part of GlyphAndName.");
+    }
+
+    [Test]
+    public void SpriteAndLabelCap_StaleTextFallsBackAndLegacyLookupsStayAuthored()
+    {
+      var cap = Cap("leftShift", "Old label", "fr");
+      cap.KeycapContent = InputKeycapContentMode.SpriteAndLabel;
+      catalog.SetEntries(cap);
+      catalog.ConfigureKeyboardGlyphs(InputKeyboardGlyphMode.GeneratedKeycaps);
+      names.LocaleCode = "fr";
+      names.Values["input.key.leftShift"] = "Maj G";
+      Assert.That(resolver.ResolvePath("<Keyboard>/leftShift", InputPromptStyle.Glyph), Is.EqualTo("Maj G"));
+      Assert.That(catalog.TryGetEntry(InputGlyphFamily.KeyboardAndMouse, "leftShift", "fr", out _), Is.False);
+      Assert.That(catalog.GetSprite(InputGlyphFamily.KeyboardAndMouse, "leftShift"), Is.Null);
+      cap.BakedLabel = "Maj G";
+      Assert.That(resolver.ResolvePath("<Keyboard>/leftShift", InputPromptStyle.Glyph), Is.EqualTo(Tag(cap)));
+    }
+
+    [TestCase("numpad0", "0", "Pavé 0")]
+    [TestCase("numpadPlus", "+", "Pavé +")]
+    [TestCase("numpadPeriod", ".", "Pavé .")]
+    public void NativeNumpadCharacter_PreservesDedicatedLocalizationAndKeycapIdentity(string control, string printed, string localized)
+    {
+      const string layout = "MTKDedicatedNumpadKeyboard";
+      var previousKeyboard = Keyboard.current;
+      InputSystem.RegisterLayout("{\"name\":\"" + layout + "\",\"extend\":\"Keyboard\",\"controls\":[{\"name\":\""
+        + control + "\",\"displayName\":\"" + printed + "\"}]}");
+      var keyboard = InputSystem.AddDevice(layout);
+      try
+      {
+        var cap = Cap(control, localized, "fr");
+        catalog.SetEntries(cap);
+        catalog.ConfigureKeyboardGlyphs(InputKeyboardGlyphMode.GeneratedKeycaps);
+        names.LocaleCode = "fr";
+        names.Values["input.key." + control] = localized;
+        using var action = new InputAction("Dedicated numpad prompt", binding: "<" + layout + ">/" + control);
+        Assert.That(keyboard[control].displayName, Is.EqualTo(printed));
+        Assert.That(resolver.Resolve(action, InputPromptStyle.LocalizedName), Is.EqualTo(localized),
+          "A native printed character must not turn a dedicated numpad binding into a main-row semantic key.");
+        Assert.That(resolver.Resolve(action, InputPromptStyle.Glyph), Is.EqualTo(Tag(cap)));
+        Assert.That(resolver.ResolvePath("<Keyboard>/" + control, InputPromptStyle.Glyph), Is.EqualTo(Tag(cap)));
+        Assert.That(action.enabled, Is.False);
+      }
+      finally
+      {
+        InputSystem.RemoveDevice(keyboard);
+        if (previousKeyboard != null && previousKeyboard.added) previousKeyboard.MakeCurrent();
+        InputSystem.RemoveLayout(layout);
+      }
+    }
+
+    [TestCase(InputKeycapContentMode.Label)]
+    [TestCase(InputKeycapContentMode.SpriteAndLabel)]
+    public void ConfiguredKeycapFallback_IsUsedWhenTranslationIsMissingAndRejectsStaleLabels(InputKeycapContentMode content)
+    {
+      var cap = Cap("numpad8", "Num 8", "fr");
+      cap.KeycapContent = content;
+      cap.DisplayName = "Num 8";
+      cap.LocalizationKey = "input.key.numpad8";
+      catalog.SetEntries(cap);
+      catalog.ConfigureKeyboardGlyphs(InputKeyboardGlyphMode.GeneratedKeycaps);
+      names.LocaleCode = "fr";
+      Assert.That(resolver.ResolvePath("<Keyboard>/numpad8", InputPromptStyle.LocalizedName), Is.EqualTo("Num 8"));
+      Assert.That(resolver.ResolvePath("<Keyboard>/numpad8", InputPromptStyle.Glyph), Is.EqualTo(Tag(cap)));
+      Assert.That(resolver.ResolvePath("<Keyboard>/numpad8", InputPromptStyle.GlyphAndName), Is.EqualTo(Tag(cap) + " Num 8"));
+      names.Values["input.key.numpad8"] = "Pavé 8";
+      Assert.That(resolver.ResolvePath("<Keyboard>/numpad8", InputPromptStyle.Glyph), Is.EqualTo("Pavé 8"),
+        "A new translation must invalidate the previously baked fallback label.");
+    }
+
+    [Test]
+    public void ConfiguredKeycapDefinition_RespectsLocaleAndKeepsLegacyAuthoredLookupsSeparate()
+    {
+      var cap = Cap("numpadEnter", "Num Enter", "fr");
+      cap.DisplayName = "Num Enter";
+      cap.LocalizationKey = "project.key.numpadEnter";
+      catalog.SetEntries(cap);
+      catalog.ConfigureKeyboardGlyphs(InputKeyboardGlyphMode.GeneratedKeycaps);
+      names.LocaleCode = "fr-CA";
+      Assert.That(resolver.ResolvePath("<Keyboard>/numpadEnter", InputPromptStyle.LocalizedName), Is.EqualTo("Num Enter"));
+      Assert.That(catalog.TryGetEntry(InputGlyphFamily.KeyboardAndMouse, "numpadEnter", "fr-CA", out _), Is.False);
+      Assert.That(catalog.GetSprite(InputGlyphFamily.KeyboardAndMouse, "numpadEnter"), Is.Null);
+      names.Values["project.key.numpadEnter"] = "Entrée Num";
+      Assert.That(resolver.ResolvePath("<Keyboard>/numpadEnter", InputPromptStyle.LocalizedName), Is.EqualTo("Entrée Num"));
+      names.LocaleCode = "de";
+      Assert.That(resolver.ResolvePath("<Keyboard>/numpadEnter", InputPromptStyle.LocalizedName), Is.EqualTo("Numpad Enter"));
+      names.LocaleCode = "fr";
+      catalog.ConfigureKeyboardGlyphs(InputKeyboardGlyphMode.Authored);
+      Assert.That(resolver.ResolvePath("<Keyboard>/numpadEnter", InputPromptStyle.LocalizedName), Is.EqualTo("Numpad Enter"));
+    }
+
     [Test]
     public void GeneratedMode_LeavesControllerAndMouseArtworkUnchanged()
     {
@@ -262,6 +393,108 @@ namespace MToolKit.Tests.Editor.Runtime.Input
       catalog.ConfigureKeyboardGlyphs(InputKeyboardGlyphMode.GeneratedKeycaps);
       Assert.That(renders, Is.EqualTo(previous));
       Assert.That(text.text, Is.EqualTo("E"));
+    }
+
+    [TestCase(InputGlyphPlatform.Any)]
+    [TestCase(InputGlyphPlatform.Windows)]
+    [TestCase(InputGlyphPlatform.MacOS)]
+    [TestCase(InputGlyphPlatform.Linux)]
+    public void PlatformOverride_PrefersTheSpecificMixedCapBeforeAnyIconFallback(InputGlyphPlatform platform)
+    {
+      var caps = PlatformCaps();
+      var context = new InputPromptContext().WithPlatform(platform);
+      Assert.That(resolver.ResolvePath("<Keyboard>/leftMeta", InputPromptStyle.Glyph, context), Is.EqualTo(Tag(caps[platform])));
+      Assert.That(catalog.TryGetKeycapEntry("leftMeta", "en", "System", platform, out var entry), Is.True);
+      Assert.That(entry, Is.SameAs(caps[platform]));
+      Assert.That(catalog.TryGetKeycapEntry("leftMeta", "en", "System", out var legacy), Is.True);
+      Assert.That(legacy, Is.SameAs(caps[InputGlyphPlatform.Any]), "Legacy APIs remain platform independent.");
+    }
+
+    [TestCase(OperatingSystemFamily.Windows, InputGlyphPlatform.Windows)]
+    [TestCase(OperatingSystemFamily.MacOSX, InputGlyphPlatform.MacOS)]
+    [TestCase(OperatingSystemFamily.Linux, InputGlyphPlatform.Linux)]
+    [TestCase(OperatingSystemFamily.Other, InputGlyphPlatform.Any)]
+    public void NativeOperatingSystemFamily_MapsToTypedPlatform(OperatingSystemFamily family, InputGlyphPlatform expected)
+      => Assert.That(InputGlyphCatalog.PlatformForOperatingSystem(family), Is.EqualTo(expected));
+
+    [Test]
+    public void AutomaticPlatform_UsesTheActualUnityHostFamily()
+    {
+      var caps = PlatformCaps();
+      var expected = SystemInfo.operatingSystemFamily switch
+      {
+        OperatingSystemFamily.Windows => InputGlyphPlatform.Windows,
+        OperatingSystemFamily.MacOSX => InputGlyphPlatform.MacOS,
+        OperatingSystemFamily.Linux => InputGlyphPlatform.Linux,
+        _ => InputGlyphPlatform.Any
+      };
+      Assert.That(resolver.ResolvePath("<Keyboard>/leftMeta", InputPromptStyle.Glyph), Is.EqualTo(Tag(caps[expected])));
+    }
+
+    [Test]
+    public void PlatformImageLookup_KeepsLegacyAnyAndControllerCompatibility()
+    {
+      var windows = Cap("leftMeta", null); windows.Platform = InputGlyphPlatform.Windows;
+      var any = Cap("leftMeta", null);
+      var mac = Cap("leftMeta", null); mac.Platform = InputGlyphPlatform.MacOS;
+      catalog.SetEntries(windows, any, mac, new InputGlyphCatalog.Entry
+      {
+        Family = InputGlyphFamily.Xbox, ControlPath = "buttonSouth", Symbol = "[A]"
+      });
+      Assert.That(catalog.GetSprite(InputGlyphFamily.KeyboardAndMouse, "leftMeta"), Is.SameAs(any.ImageSprite));
+      Assert.That(catalog.GetSprite(InputGlyphFamily.KeyboardAndMouse, "leftMeta", InputGlyphPlatform.MacOS), Is.SameAs(mac.ImageSprite));
+      Assert.That(resolver.ResolvePath("<Gamepad>/buttonSouth", InputPromptStyle.Glyph,
+        new InputPromptContext(familyOverride: InputGlyphFamily.Xbox).WithPlatform(InputGlyphPlatform.Linux)), Is.EqualTo("[A]"));
+    }
+
+    [Test]
+    public void BoundPlatformContexts_RemainIndependentAndPreserveTheirActionSelection()
+    {
+      var caps = PlatformCaps();
+      var settings = Own(ScriptableObject.CreateInstance<InputPromptSettings>());
+      settings.Configure(catalog);
+      using var action = new InputAction("Independent OS prompts");
+      action.AddBinding("<Keyboard>/leftMeta", groups: "Keyboard");
+      action.AddBinding("<Gamepad>/buttonSouth", groups: "Controller");
+      using var first = new InputPromptService(settings, localizer: names);
+      using var second = new InputPromptService(settings, localizer: names);
+      var original = new InputPromptContext(null, "Keyboard", InputGlyphFamily.Generic, 0, TMP_Settings.defaultFontAsset);
+      var windows = original.WithPlatform(InputGlyphPlatform.Windows);
+      Assert.That(windows.BindingGroup, Is.EqualTo(original.BindingGroup));
+      Assert.That(windows.BindingIndex, Is.EqualTo(original.BindingIndex));
+      Assert.That(windows.FontAsset, Is.SameAs(original.FontAsset));
+      Assert.That(windows.FamilyOverride, Is.EqualTo(original.FamilyOverride));
+      first.SetContext(windows);
+      second.SetContext(original.WithPlatform(InputGlyphPlatform.MacOS));
+      var firstHost = Own(new GameObject("Windows prompt", typeof(RectTransform), typeof(TextMeshProUGUI)));
+      var secondHost = Own(new GameObject("Mac prompt", typeof(RectTransform), typeof(TextMeshProUGUI)));
+      var firstText = firstHost.GetComponent<TextMeshProUGUI>();
+      var secondText = secondHost.GetComponent<TextMeshProUGUI>();
+      using var firstBinding = first.Bind(firstText, () => first.Resolve(action, InputPromptStyle.Glyph));
+      using var secondBinding = second.Bind(secondText, () => second.Resolve(action, InputPromptStyle.Glyph));
+      Assert.That(firstText.text, Is.EqualTo(Tag(caps[InputGlyphPlatform.Windows])));
+      Assert.That(secondText.text, Is.EqualTo(Tag(caps[InputGlyphPlatform.MacOS])));
+      second.SetContext(original.WithPlatform(InputGlyphPlatform.Linux));
+      Assert.That(secondText.text, Is.EqualTo(Tag(caps[InputGlyphPlatform.Linux])));
+      Assert.That(firstText.text, Is.EqualTo(Tag(caps[InputGlyphPlatform.Windows])));
+      Assert.That(action.enabled, Is.False);
+    }
+
+    private Dictionary<InputGlyphPlatform, InputGlyphCatalog.Entry> PlatformCaps()
+    {
+      var result = new Dictionary<InputGlyphPlatform, InputGlyphCatalog.Entry>();
+      foreach (var platform in new[] { InputGlyphPlatform.Any, InputGlyphPlatform.Windows, InputGlyphPlatform.MacOS, InputGlyphPlatform.Linux })
+      {
+        var entry = Cap("leftMeta", platform == InputGlyphPlatform.Any ? null : "System", platform == InputGlyphPlatform.Any ? null : "en");
+        entry.Platform = platform;
+        entry.DisplayName = "System";
+        entry.LocalizationKey = "input.key.leftMeta";
+        entry.KeycapContent = platform == InputGlyphPlatform.Any ? InputKeycapContentMode.Sprite : InputKeycapContentMode.SpriteAndLabel;
+        result.Add(platform, entry);
+      }
+      catalog.SetEntries(result.Values.ToArray());
+      catalog.ConfigureKeyboardGlyphs(InputKeyboardGlyphMode.GeneratedKeycaps);
+      return result;
     }
 
     private InputGlyphCatalog.Entry Cap(string control, string label, string locale = null)

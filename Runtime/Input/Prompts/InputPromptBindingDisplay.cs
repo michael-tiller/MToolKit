@@ -41,7 +41,8 @@ namespace MToolKit.Runtime.Input.Prompts
     }
 
     private static InputPromptContext Context(IInputPromptService prompts, int index, TMP_FontAsset font, GamepadIconsData icons)
-      => new InputPromptContext(null, null, PresentationFamily(prompts, icons), index, font);
+      => new InputPromptContext(null, null, PresentationFamily(prompts, icons), index, font,
+        prompts?.Context.PlatformOverride);
 
     private static InputGlyphFamily? PresentationFamily(IInputPromptService prompts, GamepadIconsData icons)
     {

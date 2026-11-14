@@ -32,7 +32,9 @@ namespace MToolKit.Editor.Input
         if (string.IsNullOrWhiteSpace(glyph.ControlPath) || glyph.ControlPath.IndexOfAny(new[] { '<', '>', '"', '\r', '\n', '\t' }) >= 0)
           errors.Add("Every glyph needs a logical Input System control path.");
         if (!Enum.IsDefined(typeof(InputKeycapContentMode), glyph.KeycapContent)) errors.Add("Select a known keycap content mode.");
-        if (!controls.Add(Identity(glyph.ControlPath, glyph.LocaleCode, glyph.BakedLabel, glyph.KeycapContent))) errors.Add("Duplicate control/locale/kind: " + glyph.ControlPath);
+        if (!Enum.IsDefined(typeof(InputGlyphPlatform), glyph.Platform)) errors.Add("Select a known glyph platform.");
+        if (!controls.Add(Identity(glyph.ControlPath, glyph.LocaleCode, glyph.BakedLabel, glyph.KeycapContent, glyph.Platform)))
+          errors.Add("Duplicate control/locale/kind/platform: " + glyph.ControlPath + " [" + glyph.Platform + "]");
         if (string.IsNullOrEmpty(glyph.SpriteName) || !Regex.IsMatch(glyph.SpriteName, "^[a-z0-9]+(?:-[a-z0-9]+)*$") || !names.Add(glyph.SpriteName))
           errors.Add("Sprite names must be distinct semantic lowercase names: " + glyph.SpriteName);
         if (glyph.SourceSprite == null) errors.Add("Choose source artwork for " + glyph.ControlPath);
@@ -51,16 +53,16 @@ namespace MToolKit.Editor.Input
       var generatedSources = source.Glyphs.Select(glyph => AssetDatabase.GetAssetPath(glyph.SourceSprite) == source.SpriteAssetPath).ToArray();
       var asset = InputGlyphSpriteAssetBuilder.Bake(source.SpriteAssetPath,
         source.Glyphs.Select(glyph => new InputGlyphSpriteAssetBuilder.NamedSprite(glyph.SpriteName, glyph.SourceSprite)).ToArray());
-      var identities = new HashSet<string>(source.Glyphs.Select(glyph => Identity(glyph.ControlPath, glyph.LocaleCode, glyph.BakedLabel, glyph.KeycapContent)), StringComparer.OrdinalIgnoreCase);
+      var identities = new HashSet<string>(source.Glyphs.Select(glyph => Identity(glyph.ControlPath, glyph.LocaleCode, glyph.BakedLabel, glyph.KeycapContent, glyph.Platform)), StringComparer.OrdinalIgnoreCase);
       var entries = source.Catalog.Entries.Where(entry => entry != null && !(entry.Family == source.Family
-        && ((old != null && entry.SpriteAsset == old) || identities.Contains(Identity(entry.ControlPath, entry.LocaleCode, entry.BakedLabel, entry.KeycapContent))))).ToList();
+        && ((old != null && entry.SpriteAsset == old) || identities.Contains(Identity(entry.ControlPath, entry.LocaleCode, entry.BakedLabel, entry.KeycapContent, entry.Platform))))).ToList();
       for (int i = 0; i < source.Glyphs.Length; i++)
       {
         var glyph = source.Glyphs[i];
         var sprite = InputGlyphSpriteAssetBuilder.GetSprite(asset, glyph.SpriteName);
         entries.Add(new InputGlyphCatalog.Entry {
           Family = source.Family, ControlPath = glyph.ControlPath, LocaleCode = glyph.LocaleCode,
-          BakedLabel = glyph.BakedLabel, KeycapContent = glyph.KeycapContent, SpriteAsset = asset, SpriteName = glyph.SpriteName,
+          BakedLabel = glyph.BakedLabel, KeycapContent = glyph.KeycapContent, Platform = glyph.Platform, SpriteAsset = asset, SpriteName = glyph.SpriteName,
           ImageSprite = sprite, Symbol = glyph.Symbol, LocalizationKey = glyph.LocalizationKey, DisplayName = glyph.DisplayName
         });
         if (generatedSources[i]) glyph.SourceSprite = sprite;
@@ -83,13 +85,14 @@ namespace MToolKit.Editor.Input
       source.Glyphs = source.Catalog.Entries.Where(entry => entry != null && entry.Family == source.Family && entry.SpriteAsset == atlas)
         .Select(entry => new InputGlyphAtlasSource.Glyph { ControlPath = entry.ControlPath, SpriteName = entry.SpriteName,
           SourceSprite = entry.ImageSprite != null ? entry.ImageSprite : InputGlyphSpriteAssetBuilder.GetSprite(atlas, entry.SpriteName),
-          LocaleCode = entry.LocaleCode, BakedLabel = entry.BakedLabel, KeycapContent = entry.KeycapContent, Symbol = entry.Symbol,
+          LocaleCode = entry.LocaleCode, BakedLabel = entry.BakedLabel, KeycapContent = entry.KeycapContent, Platform = entry.Platform, Symbol = entry.Symbol,
           LocalizationKey = entry.LocalizationKey, DisplayName = entry.DisplayName }).ToArray();
       EditorUtility.SetDirty(source);
     }
 
-    private static string Identity(string control, string locale, string bakedLabel, InputKeycapContentMode content)
+    private static string Identity(string control, string locale, string bakedLabel, InputKeycapContentMode content, InputGlyphPlatform platform)
       => (control ?? "") + "|" + (locale ?? "").Replace('_', '-') + "|"
-        + (content == InputKeycapContentMode.Sprite ? "symbol" : string.IsNullOrEmpty(bakedLabel) ? "authored" : "generated");
+        + (content == InputKeycapContentMode.Sprite ? "symbol" : content == InputKeycapContentMode.SpriteAndLabel
+          ? "mixed" : string.IsNullOrEmpty(bakedLabel) ? "authored" : "generated") + "|" + (int)platform;
   }
 }

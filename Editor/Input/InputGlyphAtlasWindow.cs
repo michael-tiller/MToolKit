@@ -14,8 +14,10 @@ namespace MToolKit.Editor.Input
     private Vector2 scroll;
     private string message;
     private bool failed;
+    private bool warning;
     private Texture2D preview;
     private int previewKey, previewLocale;
+    private bool showAllKeys;
 
     [MenuItem("Tools/MToolKit/Input Glyphs/Atlas Wizard")]
     public static void Open() => GetWindow<InputGlyphAtlasWindow>("Input Glyph Atlas");
@@ -49,6 +51,9 @@ namespace MToolKit.Editor.Input
       {
         enter = false;
         if (iterator.name == "m_Script") continue;
+        if (profile is InputKeycapBakeProfile selected
+          && (iterator.name == nameof(InputKeycapBakeProfile.Keys)
+            || (selected.LocaleSource == InputKeycapLocaleSource.ProjectEnabled && iterator.name == nameof(InputKeycapBakeProfile.Locales)))) continue;
         EditorGUILayout.PropertyField(iterator, true);
       }
       serialized.ApplyModifiedProperties();
@@ -74,19 +79,52 @@ namespace MToolKit.Editor.Input
       }
       else if (profile is InputKeycapBakeProfile keycaps)
       {
-        EditorGUILayout.HelpBox("Import translations with Unity Localization/Google Sheets first, then select the native collection and locales here. Validate saved caps, review stale labels, explicitly rebuild, and preview. Moving an existing collection or table preserves its Unity reference; select the new collection if an import creates a replacement.", MessageType.Info);
-        EditorGUILayout.HelpBox("Single characters and symbols share the standard key width. Sprite mode centers assigned artwork; unassigned artwork keeps a readable localized label. FitLabel uses native ContentSizeFitter; Fixed supports wider special keys. Fonts, padding and content sizes must fit without clipping.", MessageType.Info);
+        EditorGUILayout.HelpBox("Import translations with Unity Localization/Google Sheets first, then select the native collection and locale source here. Neutral characters and symbols use the base atlas; localized labels always use a separate sibling atlas per language. Validate saved caps, explicitly rebuild, and preview. Existing collection/table references survive moves; select a replacement collection after imports that create new assets.", MessageType.Info);
+        string[] resolvedLocales;
+        try { resolvedLocales = InputKeycapBaker.GetLocaleCodes(keycaps); }
+        catch (Exception error) { resolvedLocales = Array.Empty<string>(); EditorGUILayout.HelpBox(error.Message, MessageType.Error); }
+        EditorGUILayout.LabelField("Resolved bake locales", resolvedLocales.Length == 0 ? "None" : string.Join(", ", resolvedLocales));
+        if (keycaps.LocaleSource == InputKeycapLocaleSource.ProjectEnabled)
+          EditorGUILayout.HelpBox("Using all enabled Unity Localization project locales. The saved manual locale list is ignored. Missing translations and font coverage are reported; locale font overrides use native TMP fallbacks.", MessageType.Info);
+        EditorGUILayout.HelpBox("Single characters and symbols share the standard key width. Sprite centers neutral artwork; SpriteAndLabel puts the icon and localized name inside one cap with configurable spacing. Unassigned artwork keeps a readable label. FitLabel uses native ContentSizeFitter for the whole row; Fixed supports wider special keys. Content must fit without clipping.", MessageType.Info);
         if (GUILayout.Button("Validate saved keycaps against imported tables")) Execute(() => {
           var issues = InputKeycapBaker.ValidateBakedContent(keycaps);
-          failed = issues.Length > 0;
+          warning = issues.Length > 0;
           message = issues.Length == 0 ? "Saved keycap entries match the imported labels and expected content modes. Rebuild after changing artwork or styling."
             : string.Join("\n", issues);
         });
+        if (GUILayout.Button("Add missing standard keys")) Execute(() => {
+          Undo.RecordObject(keycaps, "Add missing standard input keys");
+          message = keycaps.EnsureStandardKeys() ? "Added missing standard keys. Authored rows are preserved; rebuild when ready."
+            : "All standard keys are already configured.";
+        });
+        serialized.Update();
+        var keys = serialized.FindProperty(nameof(InputKeycapBakeProfile.Keys));
+        if (keys.arraySize > 0)
+        {
+          previewKey = Mathf.Clamp(previewKey, 0, keys.arraySize - 1);
+          previewKey = EditorGUILayout.Popup("Key to edit", previewKey,
+            keycaps.Keys.Select(key => key == null ? "Empty row" : key.ControlPath + " [" + key.Platform + "]").ToArray());
+          var selectedKey = keys.GetArrayElementAtIndex(previewKey);
+          var field = selectedKey.Copy();
+          var end = selectedKey.GetEndProperty();
+          bool child = true;
+          while (field.NextVisible(child) && !SerializedProperty.EqualContents(field, end))
+          {
+            child = false;
+            EditorGUILayout.PropertyField(field, true);
+          }
+        }
+        else EditorGUILayout.HelpBox("Add standard keys or use the full key list to create custom rows.", MessageType.Info);
+        bool expand = EditorGUILayout.Foldout(showAllKeys, "All key rows (add or remove)", true);
+        if (expand && !showAllKeys) keys.isExpanded = true;
+        showAllKeys = expand;
+        if (showAllKeys) EditorGUILayout.PropertyField(keys, true);
+        serialized.ApplyModifiedProperties();
         if (keycaps.Keys != null && keycaps.Keys.Length > 0)
         {
           previewKey = Mathf.Clamp(previewKey, 0, keycaps.Keys.Length - 1);
-          previewKey = EditorGUILayout.Popup("Preview key", previewKey, keycaps.Keys.Select(key => key?.ControlPath ?? "Empty row").ToArray());
-          var locales = keycaps.Locales != null && keycaps.Locales.Length > 0 ? keycaps.Locales : new[] { "" };
+          var locales = resolvedLocales.Length > 0 ? resolvedLocales : new[] { "" };
           previewLocale = Mathf.Clamp(previewLocale, 0, locales.Length - 1);
           previewLocale = EditorGUILayout.Popup("Preview locale", previewLocale, locales);
           if (GUILayout.Button("Render native keycap preview")) Execute(() => {
@@ -103,21 +141,32 @@ namespace MToolKit.Editor.Input
           }
         }
       }
-      if (GUILayout.Button("Validate and rebuild native atlas", GUILayout.Height(30))) Execute(() => {
-        TMP_SpriteAsset result = profile is InputGlyphAtlasSource atlas ? InputGlyphAtlasAuthoring.Rebuild(atlas)
-          : InputKeycapBaker.Bake((InputKeycapBakeProfile)profile);
+      if (GUILayout.Button("Validate and rebuild native atlases", GUILayout.Height(30))) Execute(() => {
+        TMP_SpriteAsset result;
+        if (profile is InputGlyphAtlasSource atlas)
+        {
+          result = InputGlyphAtlasAuthoring.Rebuild(atlas);
+          message = "Saved native atlas, named glyphs and catalog mappings.";
+        }
+        else
+        {
+          var baked = InputKeycapBaker.BakeAll((InputKeycapBakeProfile)profile);
+          result = baked.PrimaryAsset;
+          warning = baked.Issues.Count > 0;
+          message = "Saved " + baked.Atlases.Count + " separate native atlas output(s)."
+            + (warning ? "\n" + string.Join("\n", baked.Issues) : " All requested labels have native font coverage.");
+        }
         EditorUtility.SetDirty(profile);
         AssetDatabase.SaveAssetIfDirty(profile);
-        EditorGUIUtility.PingObject(result);
-        message = "Saved native atlas, material, named glyphs and catalog mappings. Other device-family atlases are unchanged.";
+        if (result != null) EditorGUIUtility.PingObject(result);
       });
-      if (!string.IsNullOrEmpty(message)) EditorGUILayout.HelpBox(message, failed ? MessageType.Error : MessageType.Info);
+      if (!string.IsNullOrEmpty(message)) EditorGUILayout.HelpBox(message, failed ? MessageType.Error : warning ? MessageType.Warning : MessageType.Info);
       EditorGUILayout.EndScrollView();
     }
 
     private void Execute(Action action)
     {
-      try { failed = false; action(); }
+      try { failed = warning = false; action(); }
       catch (Exception error) { failed = true; message = error.Message; }
     }
 

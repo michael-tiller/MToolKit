@@ -112,6 +112,20 @@ namespace MToolKit.Tests.Editor.Runtime.Input
       Assert.That(row.TextButton.text, Is.EqualTo(action.GetBindingDisplayString(0, options)));
     }
 
+    [Test]
+    public void BindingRows_PreserveTheServicesExplicitPlatformOverride()
+    {
+      prompts.Platform = InputGlyphPlatform.MacOS;
+      var row = root.AddComponent<KeybindListElement>();
+      Configure(row, "TextKeybind", "TextButton", "TextButtonAlt", "TextButtonGamepad");
+      ConfigureIcons(row, "IconButton", "IconButtonAlt", "IconButtonGamepad");
+      row.Initialize(reference, inputPrompts: prompts);
+      Enable(row);
+      Assert.That(prompts.SelectedPlatforms, Is.Not.Empty);
+      Assert.That(prompts.SelectedPlatforms, Is.All.EqualTo(InputGlyphPlatform.MacOS),
+        "The shared binding-row adapter must retain the caller's OS preview context.");
+    }
+
     private void Configure(Component row, params string[] properties)
     {
       foreach (string property in properties)
@@ -159,14 +173,17 @@ namespace MToolKit.Tests.Editor.Runtime.Input
       private readonly Subject<Unit> changed = new();
       public readonly KeyName Localizer = new();
       public readonly List<int> SelectedBindings = new();
+      public readonly List<InputGlyphPlatform?> SelectedPlatforms = new();
+      public InputGlyphPlatform? Platform;
       public Observable<Unit> Changed => changed;
       // Row tests exercise localization/slot/lifecycle projection, independently of
       // whichever real controller happens to be connected to the test host.
-      public InputPromptContext Context => new InputPromptContext(familyOverride: InputGlyphFamily.Generic);
+      public InputPromptContext Context => new InputPromptContext(familyOverride: InputGlyphFamily.Generic).WithPlatform(Platform);
       public void Notify() => changed.OnNext(Unit.Default);
       public string Resolve(InputAction action, InputPromptStyle style = InputPromptStyle.Auto, InputPromptContext? context = null)
       {
         if (context?.BindingIndex != null) SelectedBindings.Add(context.Value.BindingIndex.Value);
+        SelectedPlatforms.Add(context?.PlatformOverride);
         return new InputPromptResolver(localizer: Localizer).Resolve(action, style, context ?? Context);
       }
       public string ResolveReference(InputActionReference input, InputPromptStyle style = InputPromptStyle.Auto,
