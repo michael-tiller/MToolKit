@@ -14,6 +14,61 @@ namespace MToolKit.Tests.Editor.Runtime.Input
   public sealed class InputPromptServiceTests
   {
     [Test]
+    public void TmpPromptInstancesChooseIndependentUnboundPoliciesAndRefreshBindings()
+    {
+      var asset = ScriptableObject.CreateInstance<InputActionAsset>();
+      var action = asset.AddActionMap("Player").AddAction("Confirm");
+      action.AddBinding("<Keyboard>/enter", groups: "Desktop");
+      var reference = InputActionReference.Create(action);
+      var catalog = ScriptableObject.CreateInstance<InputGlyphCatalog>();
+      catalog.SetEntries(
+        new InputGlyphCatalog.Entry { ControlPath = "enter", Symbol = "ENTER", DisplayName = "Enter" },
+        new InputGlyphCatalog.Entry { Family = InputGlyphFamily.Xbox, ControlPath = "buttonSouth", Symbol = "SOUTH" });
+      var settings = ScriptableObject.CreateInstance<InputPromptSettings>();
+      settings.Configure(catalog, InputPromptStyle.Glyph);
+      var fallbackHost = new GameObject("Keyboard fallback", typeof(RectTransform));
+      var hiddenHost = new GameObject("Hidden unbound", typeof(RectTransform));
+      var fallbackText = fallbackHost.AddComponent<TextMeshProUGUI>();
+      var hiddenText = hiddenHost.AddComponent<TextMeshProUGUI>();
+      var fallbackPrompt = fallbackHost.AddComponent<TMPInputPrompt>();
+      var hiddenPrompt = hiddenHost.AddComponent<TMPInputPrompt>();
+      using var service = new InputPromptService(settings, actions: asset);
+      try
+      {
+        service.SetContext(new InputPromptContext(bindingGroup: "Pad", familyOverride: InputGlyphFamily.Xbox));
+        fallbackPrompt.Configure(reference, InputPromptStyle.Glyph);
+        fallbackPrompt.ConfigureUnboundBehavior(InputPromptUnboundBehavior.KeyboardAndMouse);
+        hiddenPrompt.Configure(reference, InputPromptStyle.Glyph);
+        hiddenPrompt.ConfigureUnboundBehavior(InputPromptUnboundBehavior.Hide);
+        fallbackPrompt.Construct(service);
+        hiddenPrompt.Construct(service);
+        Assert.That(fallbackText.text, Is.EqualTo("ENTER"));
+        Assert.That(hiddenText.text, Is.Empty);
+        Assert.That(service.Context.BindingGroup, Is.EqualTo("Pad"), "A view does not change shared input selection.");
+        action.ApplyBindingOverride(0, "<Keyboard>/q");
+        Assert.That(fallbackText.text, Is.EqualTo("Q"), "Fallback observes the actual effective override.");
+        Assert.That(hiddenText.text, Is.Empty);
+        action.RemoveBindingOverride(0);
+        Assert.That(fallbackText.text, Is.EqualTo("ENTER"));
+        action.AddBinding("<Gamepad>/buttonSouth", groups: "Pad");
+        service.SetContext(new InputPromptContext(bindingGroup: "Pad", familyOverride: InputGlyphFamily.Xbox));
+        Assert.That(fallbackText.text, Is.EqualTo("SOUTH"));
+        Assert.That(hiddenText.text, Is.EqualTo("SOUTH"), "Hide only applies when no eligible binding exists.");
+        Assert.That(action.enabled, Is.False);
+      }
+      finally
+      {
+        Object.DestroyImmediate(fallbackHost);
+        Object.DestroyImmediate(hiddenHost);
+        Object.DestroyImmediate(reference);
+        Object.DestroyImmediate(asset);
+        Object.DestroyImmediate(settings);
+        Object.DestroyImmediate(catalog);
+      }
+    }
+
+
+    [Test]
     public void TmpPromptInstancesKeepIndependentExplicitStylesWhenSharedDefaultsChange()
     {
       var asset = ScriptableObject.CreateInstance<InputActionAsset>();

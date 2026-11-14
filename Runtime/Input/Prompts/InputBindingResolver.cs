@@ -10,6 +10,19 @@ namespace MToolKit.Runtime.Input.Prompts
   public sealed class InputBindingResolver
   {
     public ResolvedInputBinding Resolve(InputAction action, InputPromptContext context = default)
+      => Resolve(action, context, desktopOnly: false);
+
+    internal ResolvedInputBinding ResolveKeyboardAndMouse(InputAction action, InputPromptContext context)
+    {
+      // An unpaired/removed caller device is not permission to inspect another player's bindings.
+      if (action == null || !ContextDeviceIsAllowed(action, context.Device))
+        return new ResolvedInputBinding { Action = action };
+      var desktop = new InputPromptContext(null, null, context.FamilyOverride, context.BindingIndex,
+        context.FontAsset, context.PlatformOverride, context.UnboundBehavior);
+      return Resolve(action, desktop, desktopOnly: true);
+    }
+
+    private static ResolvedInputBinding Resolve(InputAction action, InputPromptContext context, bool desktopOnly)
     {
       var empty = new ResolvedInputBinding { Action = action };
       if (action == null) return empty;
@@ -37,6 +50,7 @@ namespace MToolKit.Runtime.Input.Prompts
           };
         else continue;
         if (!candidate.IsBound) continue;
+        if (desktopOnly && !AllControlsAreKeyboardOrMouse(candidate.Controls)) continue;
         int score = 0;
         if (context.Device == null && string.IsNullOrEmpty(group))
           score = IsKeyboardOrMouse(candidate.Controls[0].DeviceLayout) ? 1 : 0;
@@ -47,6 +61,13 @@ namespace MToolKit.Runtime.Input.Prompts
         }
       }
       return selected ?? empty;
+    }
+
+    private static bool AllControlsAreKeyboardOrMouse(IReadOnlyList<InputPromptControl> controls)
+    {
+      foreach (var control in controls)
+        if (!IsKeyboardOrMouse(control.DeviceLayout)) return false;
+      return true;
     }
 
     private static ResolvedInputBinding ResolveComposite(InputAction action, int index,

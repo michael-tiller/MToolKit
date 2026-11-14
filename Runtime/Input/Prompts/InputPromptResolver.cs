@@ -38,7 +38,9 @@ namespace MToolKit.Runtime.Input.Prompts
       InputPromptContext context = default)
     {
       var binding = bindings.Resolve(action, context);
-      if (!binding.IsBound) return Name("input.unbound", "Unbound");
+      if (!binding.IsBound && context.UnboundBehavior == InputPromptUnboundBehavior.KeyboardAndMouse)
+        binding = bindings.ResolveKeyboardAndMouse(action, context);
+      if (!binding.IsBound) return Unbound(context);
       var parts = new List<string>();
       bool chord = IsChord(binding.CompositeName);
       foreach (var control in binding.Controls)
@@ -55,9 +57,12 @@ namespace MToolKit.Runtime.Input.Prompts
     public string ResolvePath(string path, InputPromptStyle style = InputPromptStyle.Auto,
       InputPromptContext context = default)
     {
-      if (string.IsNullOrEmpty(path)) return Name("input.unbound", "Unbound");
+      if (string.IsNullOrEmpty(path)) return Unbound(context);
       return Render(InputBindingResolver.Control(path, context.Device), style, context);
     }
+
+    private string Unbound(InputPromptContext context)
+      => context.UnboundBehavior == InputPromptUnboundBehavior.Hide ? string.Empty : Name("input.unbound", "Unbound");
 
     /// <summary>Presents the supplied actual device. Binding groups and face-button family previews do not change its identity.</summary>
     public string ResolveDevice(InputDevice device, InputPromptStyle style = InputPromptStyle.Auto,

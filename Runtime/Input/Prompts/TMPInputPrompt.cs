@@ -16,6 +16,7 @@ namespace MToolKit.Runtime.Input.Prompts
     [SerializeField] private TMP_Text target;
     [SerializeField] private InputActionReference action;
     [SerializeField] private InputPromptStyle style;
+    [SerializeField] private InputPromptUnboundBehavior unboundBehavior;
     [Tooltip("Optional standalone configuration. Injected services own their own configuration/player context.")]
     [SerializeField] private InputPromptSettings standaloneSettings;
     [SerializeField] private LocalizedString sentence = new();
@@ -43,6 +44,14 @@ namespace MToolKit.Runtime.Input.Prompts
     {
       action = actionReference;
       style = presentation;
+      Refresh();
+    }
+
+    /// <summary>Configures this instance's presentation when the active context has no eligible binding.</summary>
+    public void ConfigureUnboundBehavior(InputPromptUnboundBehavior behavior)
+    {
+      if (unboundBehavior == behavior) return;
+      unboundBehavior = behavior;
       Refresh();
     }
 
@@ -92,7 +101,7 @@ namespace MToolKit.Runtime.Input.Prompts
 
     private string Render()
     {
-      string prompt = prompts.ResolveReference(action, style);
+      string prompt = prompts.ResolveReference(action, style, prompts.Context.WithUnboundBehavior(unboundBehavior));
       if (sentence == null || sentence.IsEmpty) return prompt;
       if (lastPrompt != prompt)
       {

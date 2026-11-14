@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Add explicit unbound-prompt policies for localized Unbound, configured keyboard/mouse fallback, or hidden text. Preserve effective overrides, composite topology, native masks, player restrictions and binding indices; retain valid controller bindings and readable missing-art names. Expose per-instance TMP configuration and an optional compatible named-action adapter. (v1.18.0)
+
 - Add the optional typed named-action display source so UI adapters can request an explicit style without changing shared configuration. Document independent TMP prompt instances and verify shared-service style changes and subscription cleanup. (v1.17.0)
 
 - Implement actual-device prompts through the optional shared service, native layout inheritance and isolated device catalog rows. Add complete saved recipe roundtrips, native sprite renaming that preserves references, and configurable source RGBA tint without double tinting imported atlases. Verify 27 focused runtime/editor cases in Dirigible. (v1.16.0)

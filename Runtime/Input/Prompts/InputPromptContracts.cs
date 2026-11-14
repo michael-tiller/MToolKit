@@ -13,6 +13,13 @@ namespace MToolKit.Runtime.Input.Prompts
     GlyphAndName = 4
   }
 
+  public enum InputPromptUnboundBehavior
+  {
+    ShowUnbound = 0,
+    KeyboardAndMouse = 1,
+    Hide = 2
+  }
+
   public enum InputGlyphFamily
   {
     KeyboardAndMouse = 0,
@@ -62,6 +69,12 @@ namespace MToolKit.Runtime.Input.Prompts
 
     public InputPromptContext(InputDevice device, string bindingGroup,
       InputGlyphFamily? familyOverride, int? bindingIndex, TMP_FontAsset fontAsset, InputGlyphPlatform? platformOverride)
+      : this(device, bindingGroup, familyOverride, bindingIndex, fontAsset, platformOverride,
+        InputPromptUnboundBehavior.ShowUnbound) { }
+
+    public InputPromptContext(InputDevice device, string bindingGroup,
+      InputGlyphFamily? familyOverride, int? bindingIndex, TMP_FontAsset fontAsset, InputGlyphPlatform? platformOverride,
+      InputPromptUnboundBehavior unboundBehavior = InputPromptUnboundBehavior.ShowUnbound)
     {
       Device = device;
       BindingGroup = bindingGroup;
@@ -69,6 +82,7 @@ namespace MToolKit.Runtime.Input.Prompts
       BindingIndex = bindingIndex;
       FontAsset = fontAsset;
       PlatformOverride = platformOverride;
+      UnboundBehavior = unboundBehavior;
     }
 
     public InputDevice Device { get; }
@@ -77,9 +91,13 @@ namespace MToolKit.Runtime.Input.Prompts
     public int? BindingIndex { get; }
     public TMP_FontAsset FontAsset { get; }
     public InputGlyphPlatform? PlatformOverride { get; }
+    public InputPromptUnboundBehavior UnboundBehavior { get; }
 
     public InputPromptContext WithPlatform(InputGlyphPlatform? platform)
-      => new InputPromptContext(Device, BindingGroup, FamilyOverride, BindingIndex, FontAsset, platform);
+      => new InputPromptContext(Device, BindingGroup, FamilyOverride, BindingIndex, FontAsset, platform, UnboundBehavior);
+
+    public InputPromptContext WithUnboundBehavior(InputPromptUnboundBehavior unboundBehavior)
+      => new InputPromptContext(Device, BindingGroup, FamilyOverride, BindingIndex, FontAsset, PlatformOverride, unboundBehavior);
   }
 
   public readonly struct InputPromptControl

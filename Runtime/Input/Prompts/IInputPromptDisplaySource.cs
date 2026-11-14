@@ -7,4 +7,10 @@ namespace MToolKit.Runtime.Input.Prompts
     /// <summary>Returns the named action's TMP-compatible presentation in the requested style.</summary>
     string GetDisplayString(string actionName, InputPromptStyle style);
   }
+
+  /// <summary>Optional per-view policy for actions without an eligible binding in the current context.</summary>
+  public interface IInputPromptFallbackDisplaySource : IInputPromptDisplaySource
+  {
+    string GetDisplayString(string actionName, InputPromptStyle style, InputPromptUnboundBehavior unboundBehavior);
+  }
 }

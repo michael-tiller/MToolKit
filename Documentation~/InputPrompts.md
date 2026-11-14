@@ -14,6 +14,16 @@ Presentation styles have stable serialized values: `Auto = 0`, `Character = 1`, 
 
 The settings asset supplies a default: `Auto` follows that default, while an explicit style overrides it for that resolve call or UI instance. Choose `Glyph` for a compact hotbar, `LocalizedName` for a label, or `GlyphAndName` for an explanatory hint. Changing one view's style does not change shared settings or another view's style.
 
+When an action has no eligible binding in the requested context, choose `InputPromptUnboundBehavior`: `ShowUnbound = 0` preserves the localized Unbound label, `KeyboardAndMouse = 1` tries the same action's configured desktop binding, and `Hide = 2` returns an empty prompt. This policy concerns missing bindings; a valid controller binding with missing artwork still displays its readable controller name. A valid controller binding always takes precedence over desktop fallback.
+
+```csharp
+var context = prompts.Context.WithUnboundBehavior(InputPromptUnboundBehavior.KeyboardAndMouse);
+string shortcut = prompts.Resolve(action, InputPromptStyle.Glyph, context);
+hotbarPrompt.ConfigureUnboundBehavior(InputPromptUnboundBehavior.Hide);
+```
+
+Desktop fallback uses effective keyboard/mouse paths, including overrides and composites, without assuming a scheme name. It preserves action/map/asset masks, player device restrictions and an explicitly selected binding index; it does not enable actions, pair devices or change gameplay routing. If no eligible desktop binding exists, it retains Unbound. An empty explicit path has no action to search; Hide returns empty and other policies retain Unbound. A nonempty `ResolvePath` remains the explicitly requested control.
+
 Configure a Unity Localization collection name on the settings asset. MTK does not assume a game-specific table. `InputPromptSettings.Configure(...)`, `NotifyChanged()`, and catalog setters publish changes. Inspector changes also refresh live bindings. The optional preview binding group explicitly selects bindings; a family override changes only their appearance. For example, a Gamepad group plus PlayStation family can preview the configured controller binding without changing gameplay routing.
 
 ## Direct resolution and composition
@@ -88,6 +98,8 @@ public string GetDisplayString(string actionName, InputPromptStyle style)
 ```
 
 This optional interface adds no members to existing action or hotkey interfaces. Consumers can use it when available and retain their existing adapter otherwise. It is a display seam; the owning service/view still manages `Bind` or `Changed` subscriptions and cleanup.
+
+Adapters can additionally implement `IInputPromptFallbackDisplaySource` to accept a per-view unbound policy through its three-argument `GetDisplayString` overload. The original two-argument interface remains compatible. Pass the policy through `InputPromptContext.WithUnboundBehavior`; avoid detecting Unbound by comparing localized text.
 
 ## Runtime action identity and independent players
 

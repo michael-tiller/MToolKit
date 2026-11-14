@@ -203,7 +203,8 @@ namespace MToolKit.Runtime.Input.Prompts
     {
       var context = requested ?? Context;
       return new InputPromptContext(context.Device, context.BindingGroup, context.FamilyOverride,
-        context.BindingIndex, context.FontAsset != null ? context.FontAsset : renderFont, context.PlatformOverride);
+        context.BindingIndex, context.FontAsset != null ? context.FontAsset : renderFont, context.PlatformOverride,
+        context.UnboundBehavior);
     }
 
     private void RefreshConfiguration()
