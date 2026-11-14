@@ -527,6 +527,14 @@ namespace MToolKit.Editor.Input
         var mesh = Object.Instantiate(sourceMesh);
         mesh.hideFlags = HideFlags.HideAndDontSave;
         ownedMeshes.Add(mesh);
+        if (QualitySettings.activeColorSpace == ColorSpace.Linear)
+        {
+          // UGUI/TMP vertices contain authored sRGB colors. An ordinary preview draw
+          // expects linear vertex RGB; Color.linear preserves the original alpha.
+          var colors = mesh.colors;
+          for (int i = 0; i < colors.Length; i++) colors[i] = colors[i].linear;
+          mesh.colors = colors;
+        }
         var properties = new MaterialPropertyBlock();
         // TMP_Text inherits Graphic's white mainTexture; its actual glyph atlas is on
         // the native font material. Image and TMP_SubMeshUI expose their own textures.

@@ -32,6 +32,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Preserve configured keycap color bytes in Linear projects by converting native UGUI/TMP preview vertex RGB before rendering, while retaining alpha and source artwork. Verify exact baked theme pixels and all affected authoring cases in Dirigible. (v1.16.1)
+
 - Keep hydrated graphics settings intact when controls initialize; update bound dropdowns silently while retaining user input and safe rebinding. (v1.10.4)
 
 - Reach semantic accessibility font floors at the viewport-supported scale endpoint, preserving ordinary75–100% typography and existing policy overloads. Reapply for capacity changes while suppressing redundant request-only updates; retain theme/lifecycle refresh and subscription cleanup. Add endpoint and binding regression coverage. (v1.10.3)
