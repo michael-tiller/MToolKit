@@ -22,6 +22,12 @@ namespace MToolKit.Runtime.Input.Prompts
     Generic = 4
   }
 
+  public enum InputGlyphEntryKind
+  {
+    Binding = 0,
+    Device = 1
+  }
+
   public enum InputKeyboardGlyphMode
   {
     Authored = 0,

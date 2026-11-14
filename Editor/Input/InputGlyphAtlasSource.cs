@@ -10,6 +10,8 @@ namespace MToolKit.Editor.Input
     [Serializable]
     public sealed class Glyph
     {
+      public InputGlyphEntryKind Kind;
+      public string DeviceLayout;
       public string ControlPath;
       public string SpriteName;
       public Sprite SourceSprite;

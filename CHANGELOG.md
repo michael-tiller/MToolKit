@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Checkpoint optional device-prompt/catalog contracts, native five-button mouse guards and focused red specifications for identity selection, source-recipe metadata and reference-preserving sprite renaming. The optional 2D editor module and device selection remain scaffolds pending implementation; this is an explicitly requested in-progress retention commit. (v1.15.0)
+
 - Add separate keyboard cap sheets for every configured Unity locale, per-locale fonts, configurable icon-plus-localized-label caps and direct wizard editing. Complete the installed physical-key layout additively, retain distinct numpad identities and configured fallback names, and select typed Windows/macOS/Linux variants with constructor-safe cached Unity OS detection. Preserve legacy authored/Image APIs and native resource identities; report translation/font coverage explicitly. (v1.14.0)
 
 - Add per-key source artwork and locale-neutral symbol caps to saved keycap profiles, plus explicit imported-table validation and rebake guidance. Keep the localized name visible in GlyphAndName, preserve compact left/right modifier identity and retain native atlas/Image compatibility. Verify actual central-sprite rendering, moved localization assets and resource cleanup. (v1.13.0)

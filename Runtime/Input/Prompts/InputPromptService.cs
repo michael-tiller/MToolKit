@@ -14,7 +14,7 @@ using UnityEngine.Localization.Settings;
 
 namespace MToolKit.Runtime.Input.Prompts
 {
-  public sealed class InputPromptService : IInputPromptService, IDisposable
+  public sealed class InputPromptService : IInputDevicePromptService, IDisposable
   {
     private static readonly Lazy<Serilog.ILogger> log = new(() => Log.Logger.ForContext<InputPromptService>().ForFeature("Input.Prompts"));
     private readonly Subject<Unit> changed = new();
@@ -120,6 +120,9 @@ namespace MToolKit.Runtime.Input.Prompts
       RegisterSpriteAssets();
       return resolver.ResolvePath(path, EffectiveStyle(style), EffectiveContext(context));
     }
+
+    public string ResolveDevice(InputPromptStyle style = InputPromptStyle.Auto, InputPromptContext? context = null)
+      => resolver.ResolveDevice((context ?? Context).Device, EffectiveStyle(style), EffectiveContext(context));
 
     /// <summary>Formats trusted translated content/arguments. Use Compose with PlainText for external text.</summary>
     public string Localize(string key, string fallback, params object[] arguments)

@@ -12,6 +12,8 @@ namespace MToolKit.Runtime.Input.Prompts
     [Serializable]
     public sealed class Entry
     {
+      public InputGlyphEntryKind Kind;
+      public string DeviceLayout;
       public InputGlyphFamily Family;
       public string ControlPath;
       public TMP_SpriteAsset SpriteAsset;
@@ -59,6 +61,12 @@ namespace MToolKit.Runtime.Input.Prompts
     {
       keyboardGlyphMode = mode;
       Changed?.Invoke();
+    }
+
+    public bool TryGetDeviceEntry(string deviceLayout, string localeCode, InputGlyphPlatform platform, out Entry entry)
+    {
+      entry = null;
+      return false;
     }
 
     public bool TryGetEntry(InputGlyphFamily family, string controlPath, string localeCode, out Entry entry)

@@ -1,0 +1,11 @@
+{
+  "name": "MToolKit.Editor.SpriteAuthoring",
+  "rootNamespace": "MToolKit.Editor.SpriteAuthoring",
+  "references": ["Unity.2D.Sprite.Editor"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true,
+  "defineConstraints": ["MTK_SPRITE_AUTHORING"],
+  "versionDefines": [
+    { "name": "com.unity.2d.sprite", "expression": "1.0.0", "define": "MTK_SPRITE_AUTHORING" }
+  ]
+}

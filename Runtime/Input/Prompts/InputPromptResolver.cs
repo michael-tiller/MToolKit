@@ -59,6 +59,10 @@ namespace MToolKit.Runtime.Input.Prompts
       return Render(InputBindingResolver.Control(path, context.Device), style, context);
     }
 
+    public string ResolveDevice(InputDevice device, InputPromptStyle style = InputPromptStyle.Auto,
+      InputPromptContext context = default)
+      => Name("input.device.none", "No input device");
+
     private string Render(InputPromptControl control, InputPromptStyle style, InputPromptContext context)
     {
       control = PrintedKeyboardIdentity(control);
