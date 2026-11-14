@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Implement actual-device prompts through the optional shared service, native layout inheritance and isolated device catalog rows. Add complete saved recipe roundtrips, native sprite renaming that preserves references, and configurable source RGBA tint without double tinting imported atlases. Verify 27 focused runtime/editor cases in Dirigible. (v1.16.0)
+
 - Checkpoint optional device-prompt/catalog contracts, native five-button mouse guards and focused red specifications for identity selection, source-recipe metadata and reference-preserving sprite renaming. The optional 2D editor module and device selection remain scaffolds pending implementation; this is an explicitly requested in-progress retention commit. (v1.15.0)
 
 - Add separate keyboard cap sheets for every configured Unity locale, per-locale fonts, configurable icon-plus-localized-label caps and direct wizard editing. Complete the installed physical-key layout additively, retain distinct numpad identities and configured fallback names, and select typed Windows/macOS/Linux variants with constructor-safe cached Unity OS detection. Preserve legacy authored/Image APIs and native resource identities; report translation/font coverage explicitly. (v1.14.0)

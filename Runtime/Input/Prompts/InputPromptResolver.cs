@@ -59,9 +59,38 @@ namespace MToolKit.Runtime.Input.Prompts
       return Render(InputBindingResolver.Control(path, context.Device), style, context);
     }
 
+    /// <summary>Presents the supplied actual device. Binding groups and face-button family previews do not change its identity.</summary>
     public string ResolveDevice(InputDevice device, InputPromptStyle style = InputPromptStyle.Auto,
       InputPromptContext context = default)
-      => Name("input.device.none", "No input device");
+    {
+      if (device == null || !device.added || !device.enabled) return Name("input.device.none", "No input device");
+      string locale = (localizer as IInputPromptLocaleProvider)?.LocaleCode;
+      var platform = context.PlatformOverride ?? GetHostPlatform();
+      InputGlyphCatalog.Entry entry = null;
+      if (catalog != null) catalog.TryGetDeviceEntry(device.layout, locale, platform, out entry);
+      string fallback = !string.IsNullOrEmpty(entry?.DisplayName) ? entry.DisplayName
+        : !string.IsNullOrEmpty(device.displayName) ? device.displayName : InputBindingResolver.Humanize(device.layout);
+      string key = !string.IsNullOrEmpty(entry?.LocalizationKey) ? entry.LocalizationKey : DeviceLocalizationKey(device);
+      string name = Name(key, fallback);
+      if (style == InputPromptStyle.Character || style == InputPromptStyle.LocalizedName) return name;
+      string glyph = Glyph(entry, context);
+      return string.IsNullOrEmpty(glyph) ? name
+        : style == InputPromptStyle.GlyphAndName ? glyph + " " + name : glyph;
+    }
+
+    private string DeviceLocalizationKey(InputDevice device)
+    {
+      if (InputGlyphCatalog.IsLayout(device.layout, "Keyboard")) return "input.device.keyboard";
+      if (InputGlyphCatalog.IsLayout(device.layout, "Mouse")) return "input.device.mouse";
+      var family = catalog != null ? catalog.ResolveFamily(device.layout) : InputGlyphCatalog.FamilyForLayout(device.layout);
+      return family switch
+      {
+        InputGlyphFamily.Xbox => "input.device.xbox",
+        InputGlyphFamily.PlayStation => "input.device.playstation",
+        InputGlyphFamily.Nintendo => "input.device.nintendo",
+        _ => InputGlyphCatalog.IsLayout(device.layout, "Gamepad") ? "input.device.controller" : "input.device.generic"
+      };
+    }
 
     private string Render(InputPromptControl control, InputPromptStyle style, InputPromptContext context)
     {

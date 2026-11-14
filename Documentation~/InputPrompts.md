@@ -6,7 +6,7 @@ The runtime pipeline is `InputAction/effective binding → InputBindingResolver 
 
 Create **MToolKit / Input / Input Glyph Catalog** and **Prompt Settings** assets. Assign the settings to `GlobalConstantsConfigAsset.InputPrompts` for the standard VContainer installation, or pass them to a separately owned `InputPromptService`.
 
-Each catalog entry has a device family, logical control path (`enter`, `buttonSouth`, `dpad/up`), optional named TMP sprite asset/reference, optional symbol, localization key, readable fallback and optional `ImageSprite`. Multiple families can use separate atlases. Printable keyboard characters do not require catalog entries.
+Each catalog entry has a kind, device family, optional named TMP sprite asset/reference, optional symbol, localization key, readable fallback and optional `ImageSprite`. `InputGlyphEntryKind.Binding = 0` is the compatible default and uses a logical control path (`enter`, `buttonSouth`, `dpad/up`). `Device = 1` uses `DeviceLayout` instead of a control path to describe the input device itself. Multiple families can use separate atlases. Printable keyboard characters do not require catalog entries.
 
 Presentation styles have stable serialized values: `Auto = 0`, `Character = 1`, `LocalizedName = 2`, `Glyph = 3`, `GlyphAndName = 4`. Device families are `KeyboardAndMouse = 0`, `Xbox = 1`, `PlayStation = 2`, `Nintendo = 3`, `Generic = 4`.
 
@@ -84,11 +84,43 @@ The service observes native binding/device/user changes, existing rebinder notif
 
 Default layout inheritance covers XInput, DualShock/DualSense and Switch Pro families. Generic Gamepad stays generic. Add ordered catalog layout rules to support another family/layout without changing the resolver. Bindings keep their actual logical controls; glyph choice never swaps face-button behavior.
 
+## Device identity prompts
+
+The optional `IInputDevicePromptService` adds `ResolveDevice(...)` without changing `IInputPromptService` or requiring action-only implementations to add methods. The standard VContainer installer exposes both interfaces on the same `InputPromptService` singleton. Use `Resolve(action, ...)` for a configured control and `ResolveDevice(...)` for the actual input device; device identity requires no invented action or binding.
+
+```csharp
+using System.Collections.Generic;
+
+// devicePrompts is an injected IInputDevicePromptService; deviceCaption is TMP_Text.
+IDisposable deviceBinding = devicePrompts.Bind(deviceCaption, () =>
+    devicePrompts.Localize("input.prompt.device", "Using {device}",
+        new Dictionary<string, object> {
+            ["device"] = devicePrompts.ResolveDevice(InputPromptStyle.GlyphAndName)
+        }));
+
+// OnDisable: release this UI binding; the injected service belongs to its DI scope.
+deviceBinding.Dispose();
+```
+
+Add `input.prompt.device` as a native Smart String, for example English `Using {device}` and French `Périphérique actif : {device}`. The argument above is trusted resolver output, so its native sprite tag remains intact. The same `Bind` observes device, locale and catalog changes and updates the existing widget. Standalone callers can cast their owned `InputPromptService` to `IInputDevicePromptService` and dispose the service with the owning context.
+
+Automatic device identity follows the service's relevant input activity or its specified `PlayerInput`'s paired devices. Supply a runtime action asset, action source or `PlayerInput` for that context; merely connecting a controller does not select it. A context passed to `ResolveDevice` or retained with `SetContext` selects its explicit `Device`. `FamilyOverride` and preview binding groups affect action artwork/selection; they do not change the actual device's identity. The synchronous alternative is `InputPromptResolver.ResolveDevice(device, style, context)`.
+
+Author a `Device` catalog/recipe row with a native `DeviceLayout`, such as `XInputController`, `DualShockGamepad` or `Gamepad`, and leave `ControlPath` empty. Lookup walks the actual layout and its closest native ancestors first, then applies platform and locale fallbacks within each layout. A PlayStation-specific `Any` entry therefore wins over a generic `Gamepad` entry for Windows. The row's `Family` organizes its atlas recipe; it does not create a gameplay binding or alter layout identity. Device identity is layout/locale/platform based, independent of keyboard keycap content metadata. Binding, generated-keycap and legacy Image lookups exclude device rows.
+
+`Character` and `LocalizedName` return a localized device name. `Auto`/`Glyph` prefer available device artwork, and `GlyphAndName` appends its localized name. Missing artwork uses the authored fallback or native device display name; a null, removed or disabled device uses `input.device.none`. Default name keys use the `input.device.` prefix followed by `keyboard`, `mouse`, `xbox`, `playstation`, `nintendo`, `controller` or `generic`; a row's `LocalizationKey` overrides them.
+
+Identity reflects the native layout/provider exposed to Unity, not verified physical hardware. A Steam-backed layout can have explicitly authored Steam artwork, including a registered non-Gamepad provider layout. This does not enable Steam support, guarantee a physical Steam Controller, or identify Steam hardware behind XInput emulation. Preview choices likewise provide no hardware-detection proof. Additional controller layouts and artwork remain configuration work.
+
+The native Mouse's five button paths remain `leftButton`, `rightButton`, `middleButton`, `forwardButton` and `backButton`. Its `DeltaControl` supplies synthetic `scroll/up` and `scroll/down` axes for exact directional artwork; `scroll/y` remains an undirected axis. Authoring glyphs does not add buttons or change input routing.
+
 ## Existing GamepadIconsData and editor authoring
 
 ### Saved atlas recipes and generated keycaps
 
 Open **Tools / MToolKit / Input Glyphs / Atlas Wizard** to author glyph artwork. A saved atlas recipe records its destination, catalog mappings, semantic sprite names and source Sprites. Replace a source Sprite and rebuild from the recipe to update the native TMP atlas without editing consumer strings. Add new logical controls to the recipe rather than encoding numeric atlas indices in localization content.
+
+Each `InputGlyphAtlasSource.Glyph.Tint` defaults to `Color.white`. Baking multiplies the source RGBA pixels by this tint before packing the native atlas, leaving original artwork and import settings unchanged. This supports, for example, baking white source icons as black. `ImportFromCatalog` treats generated pixels as already tinted and initializes the imported recipe's tint to white. Rebuilding from destination-backed generated artwork also resets its tint to white after applying it, so repeated bakes do not compound the tint. The lower-level editor `NamedSprite(name, sprite, tint)` overload provides the same behavior.
 
 Save editor-only recipes and bake profiles under an `Editor` folder, outside runtime Addressables folders. Save the generated TMP assets/atlases in the runtime artwork folder. The runtime catalog references generated output, never its authoring profile.
 
@@ -101,6 +133,12 @@ Keep fonts and optional nine-sliced border/background source sprites referenced 
 Background and border image layers support both static (`Simple`) and native nine-sliced (`Sliced`) sprites. For nine-slicing, set the source Sprite's border in Unity's Sprite Editor; the baker keeps the source import settings. An optional authored UGUI background prefab supports procedural styles during baking. For example, a prefab can contain an independently installed Procedural UI Tool component. MTK instantiates the prefab only in its isolated editor preview and consumes the rendered result; it does not copy vendor code, require that package, or depend on it at runtime. Keep the ordinary image-based profile when that optional tool is unavailable.
 
 The editor preview submits UGUI's generated Graphic meshes, native materials and textures through Unity's preview renderer. It preserves native UGUI layout, slicing and TMP label geometry; it adds no runtime renderer. Keep background prefabs self-contained and unmasked: `Mask` and `RectMask2D` effects are rejected instead of exporting an incorrect clipped result.
+
+### Optional native sprite-slice renaming
+
+With Unity's optional `com.unity.2d.sprite` editor package available, `MToolKit.Editor.SpriteAuthoring.SpriteRenameUtility.Rename(...)` renames saved multiple-sprite texture slices through the native Sprite Editor data providers. Pass `SpriteRename(sourceSprite, newName)` records. It validates all requested textures, sprite IDs and final names before applying changes, supports simultaneous name swaps, and skips no-op sheets. Existing sprite GUIDs/local file IDs, geometry and serialized Image references are retained; the source PNG is unchanged. Duplicate final names are rejected before an importer is written. The returned integer is the number of changed slices. This optional editor assembly introduces no runtime dependency.
+
+### Keyboard cap content
 
 For a special key, set the row's `ContentMode` to `Sprite`, assign its `ContentSprite`, and choose the maximum `SpriteSize`. Native UGUI centers the image and preserves its aspect ratio within the same background, padding and width rules as text caps. One symbol cap can serve every language. Keep `LocalizationKey` for its separate localized name; an unassigned source sprite uses the readable localized label until artwork is supplied. Ordinary text caps keep `ContentMode = Label`.
 
@@ -159,4 +197,6 @@ Sprites use `<sprite="AtlasName" name="semantic-name">`; ordinary native `<sprit
 
 Atlas names are registered using the native case-insensitive TMP hash. Assets whose names collide with an existing native registration fall back to a symbol/name rather than rendering another atlas. Quotes, control characters, angle brackets and backslashes are rejected in generated tag attributes.
 
-The Dirigible starter art includes keyboard/mouse, Xbox and PlayStation controls plus Nintendo/generic face buttons. Other controls remain readable names until their artwork is authored. This is a catalog/art coverage limit, not a change to configured input behavior. Native integration tests verify actual Sprite characters, asset references, materials, atlas UVs and geometry at two font sizes. In the consuming Unity 6000.3.10f1/uGUI package, the aggregate `TMP_TextInfo.spriteCount` is overwritten with zero; inspect actual `TMP_TextElementType.Sprite` characters when validating that version. No vendor modification is required for rendering.
+MTK's migration/starter generator supplies basic keyboard/three-button mouse artwork, existing Xbox/PlayStation controls and Nintendo/generic face buttons. Dirigible's separate configured recipes add D-pad/stick-axis artwork, five native mouse buttons, directional scroll glyphs and device identities. Coverage belongs to the consuming catalog; controls without artwork retain readable names and their configured input behavior.
+
+Native integration tests inspect actual Sprite characters, asset references, materials, atlas UVs and geometry at two font sizes. In the consuming Unity 6000.3.10f1/uGUI package, the aggregate `TMP_TextInfo.spriteCount` is overwritten with zero; inspect actual `TMP_TextElementType.Sprite` characters when validating that version. No vendor modification is required for rendering.

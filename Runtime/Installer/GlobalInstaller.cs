@@ -516,7 +516,8 @@ namespace MToolKit.Runtime.Installer
           GlobalConstantsHelper.Instance?.GlobalConstantsConfig?.InputPrompts,
           resolver.Resolve<IInputService>() as IInputActionSource,
           resolver.Resolve<ILocalizationService>()), Lifetime.Singleton)
-        .As<IInputPromptService>();
+        .As<IInputPromptService>()
+        .As<IInputDevicePromptService>();
 
       // Register global plugins if config is provided
       if (globalPluginConfig != null)

@@ -63,8 +63,18 @@ namespace MToolKit.Runtime.Input.Prompts
       Changed?.Invoke();
     }
 
+    /// <summary>Native layout specificity precedes platform and locale fallback; authored order breaks equal matches.</summary>
     public bool TryGetDeviceEntry(string deviceLayout, string localeCode, InputGlyphPlatform platform, out Entry entry)
     {
+      for (string layout = deviceLayout; !string.IsNullOrEmpty(layout); layout = InputSystem.GetNameOfBaseLayout(layout))
+        foreach (var candidatePlatform in PlatformFallbacks(platform))
+          foreach (string locale in LocaleFallbacks(localeCode))
+            foreach (var candidate in entries)
+              if (candidate != null && candidate.Kind == InputGlyphEntryKind.Device
+                && string.Equals(candidate.DeviceLayout, layout, StringComparison.OrdinalIgnoreCase)
+                && candidate.Platform == candidatePlatform
+                && string.Equals(NormalizeLocale(candidate.LocaleCode), locale, StringComparison.OrdinalIgnoreCase))
+              { entry = candidate; return true; }
       entry = null;
       return false;
     }
@@ -100,7 +110,8 @@ namespace MToolKit.Runtime.Input.Prompts
         if (TryGetNeutralSprite(controlPath, candidatePlatform, out entry)) return true;
         foreach (string locale in LocaleFallbacks(localeCode))
           foreach (var candidate in entries)
-            if (candidate != null && candidate.Family == InputGlyphFamily.KeyboardAndMouse
+            if (candidate != null && candidate.Kind == InputGlyphEntryKind.Binding
+              && candidate.Family == InputGlyphFamily.KeyboardAndMouse
               && candidate.Platform == candidatePlatform
               && string.Equals(candidate.ControlPath, controlPath, StringComparison.OrdinalIgnoreCase)
               && string.Equals(NormalizeLocale(candidate.LocaleCode), locale, StringComparison.OrdinalIgnoreCase)
@@ -122,7 +133,8 @@ namespace MToolKit.Runtime.Input.Prompts
     private bool TryGetNeutralSprite(string controlPath, InputGlyphPlatform platform, out Entry entry)
     {
       foreach (var candidate in entries)
-        if (candidate != null && candidate.Family == InputGlyphFamily.KeyboardAndMouse && candidate.Platform == platform
+        if (candidate != null && candidate.Kind == InputGlyphEntryKind.Binding
+          && candidate.Family == InputGlyphFamily.KeyboardAndMouse && candidate.Platform == platform
           && candidate.KeycapContent == InputKeycapContentMode.Sprite
           && string.Equals(candidate.ControlPath, controlPath, StringComparison.OrdinalIgnoreCase)
           && NormalizeLocale(candidate.LocaleCode).Length == 0)
@@ -170,7 +182,8 @@ namespace MToolKit.Runtime.Input.Prompts
     {
       foreach (string locale in LocaleFallbacks(localeCode))
         foreach (var candidate in entries)
-          if (candidate != null && candidate.Family == family && candidate.Platform == platform
+          if (candidate != null && candidate.Kind == InputGlyphEntryKind.Binding
+            && candidate.Family == family && candidate.Platform == platform
             && string.Equals(candidate.ControlPath, controlPath, StringComparison.OrdinalIgnoreCase)
             && string.Equals(NormalizeLocale(candidate.LocaleCode), locale, StringComparison.OrdinalIgnoreCase)
             && (bakedLabel == null

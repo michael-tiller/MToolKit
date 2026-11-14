@@ -16,9 +16,11 @@ namespace MToolKit.Editor.Input
   {
     public readonly struct NamedSprite
     {
-      public NamedSprite(string name, Sprite sprite) { Name = name; Sprite = sprite; }
+      public NamedSprite(string name, Sprite sprite) : this(name, sprite, Color.white) { }
+      public NamedSprite(string name, Sprite sprite, Color tint) { Name = name; Sprite = sprite; Tint = tint; }
       public string Name { get; }
       public Sprite Sprite { get; }
+      public Color Tint { get; }
     }
 
     /// <summary>
@@ -53,7 +55,7 @@ namespace MToolKit.Editor.Input
       Texture2D atlas = null;
       try
       {
-        foreach (var source in ordered) textures.Add(ReadPixels(source.Sprite));
+        foreach (var source in ordered) textures.Add(ReadPixels(source.Sprite, source.Tint));
         atlas = new Texture2D(2, 2, TextureFormat.RGBA32, false);
         var packed = atlas.PackTextures(textures.ToArray(), 2, 4096, false);
         if (packed.Length != ordered.Length)
@@ -185,7 +187,7 @@ namespace MToolKit.Editor.Input
       }
     }
 
-    private static Texture2D ReadPixels(Sprite sprite)
+    private static Texture2D ReadPixels(Sprite sprite, Color tint)
     {
       Texture2D source = sprite.texture;
       Texture2D readable = null;
@@ -201,7 +203,9 @@ namespace MToolKit.Editor.Input
         }
         var rect = sprite.rect;
         var copy = new Texture2D((int)rect.width, (int)rect.height, TextureFormat.RGBA32, false);
-        copy.SetPixels(source.GetPixels((int)rect.x, (int)rect.y, (int)rect.width, (int)rect.height));
+        var pixels = source.GetPixels((int)rect.x, (int)rect.y, (int)rect.width, (int)rect.height);
+        for (int i = 0; i < pixels.Length; i++) pixels[i] *= tint;
+        copy.SetPixels(pixels);
         copy.Apply(false, false);
         return copy;
       }

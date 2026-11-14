@@ -15,6 +15,7 @@ namespace MToolKit.Editor.Input
       public string ControlPath;
       public string SpriteName;
       public Sprite SourceSprite;
+      public Color Tint = Color.white;
       public string LocaleCode;
       public string BakedLabel;
       public InputKeycapContentMode KeycapContent;

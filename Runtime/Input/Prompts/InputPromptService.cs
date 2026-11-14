@@ -121,8 +121,15 @@ namespace MToolKit.Runtime.Input.Prompts
       return resolver.ResolvePath(path, EffectiveStyle(style), EffectiveContext(context));
     }
 
+    /// <summary>Follows the relevant actual input device independently from binding-group or family artwork previews.</summary>
     public string ResolveDevice(InputPromptStyle style = InputPromptStyle.Auto, InputPromptContext? context = null)
-      => resolver.ResolveDevice((context ?? Context).Device, EffectiveStyle(style), EffectiveContext(context));
+    {
+      ThrowIfDisposed();
+      RegisterSpriteAssets();
+      var actual = context ?? explicitContext ?? new InputPromptContext(activeDevice, activeGroup);
+      var effective = EffectiveContext(actual);
+      return resolver.ResolveDevice(effective.Device, EffectiveStyle(style), effective);
+    }
 
     /// <summary>Formats trusted translated content/arguments. Use Compose with PlainText for external text.</summary>
     public string Localize(string key, string fallback, params object[] arguments)
