@@ -160,17 +160,19 @@ namespace MToolKit.Tests.Editor.Runtime.Input
       public readonly KeyName Localizer = new();
       public readonly List<int> SelectedBindings = new();
       public Observable<Unit> Changed => changed;
-      public InputPromptContext Context => default;
+      // Row tests exercise localization/slot/lifecycle projection, independently of
+      // whichever real controller happens to be connected to the test host.
+      public InputPromptContext Context => new InputPromptContext(familyOverride: InputGlyphFamily.Generic);
       public void Notify() => changed.OnNext(Unit.Default);
       public string Resolve(InputAction action, InputPromptStyle style = InputPromptStyle.Auto, InputPromptContext? context = null)
       {
         if (context?.BindingIndex != null) SelectedBindings.Add(context.Value.BindingIndex.Value);
-        return new InputPromptResolver(localizer: Localizer).Resolve(action, style, context ?? default);
+        return new InputPromptResolver(localizer: Localizer).Resolve(action, style, context ?? Context);
       }
       public string ResolveReference(InputActionReference input, InputPromptStyle style = InputPromptStyle.Auto,
         InputPromptContext? context = null) => Resolve(input?.action, style, context);
       public string ResolvePath(string path, InputPromptStyle style = InputPromptStyle.Auto, InputPromptContext? context = null)
-        => new InputPromptResolver(localizer: Localizer).ResolvePath(path, style, context ?? default);
+        => new InputPromptResolver(localizer: Localizer).ResolvePath(path, style, context ?? Context);
       public string Localize(string key, string fallback, params object[] arguments) => fallback;
       public string Compose(string key, string fallback, params InputPromptArgument[] arguments) => fallback;
       public IDisposable Bind(TMP_Text text, Func<string> render) => Disposable.Empty;

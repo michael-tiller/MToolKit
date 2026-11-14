@@ -93,6 +93,8 @@ namespace MToolKit.Editor.Input
         catalog = ScriptableObject.CreateInstance<InputGlyphCatalog>();
         AssetDatabase.CreateAsset(catalog, catalogPath);
       }
+      // Starter controller regeneration must retain keyboard caps authored by saved bake profiles.
+      entries.AddRange(catalog.Entries.Where(entry => entry != null && !string.IsNullOrEmpty(entry.BakedLabel)));
       catalog.SetEntries(entries.ToArray());
       catalog.SetLayoutRules(
         new InputGlyphCatalog.LayoutRule { Layout = "DualShockGamepad", Family = InputGlyphFamily.PlayStation },
@@ -100,7 +102,7 @@ namespace MToolKit.Editor.Input
         new InputGlyphCatalog.LayoutRule { Layout = "XInputController", Family = InputGlyphFamily.Xbox },
         new InputGlyphCatalog.LayoutRule { Layout = "SwitchProControllerHID", Family = InputGlyphFamily.Nintendo });
       EditorUtility.SetDirty(catalog);
-      AssetDatabase.SaveAssets();
+      AssetDatabase.SaveAssetIfDirty(catalog);
       return catalog;
     }
 

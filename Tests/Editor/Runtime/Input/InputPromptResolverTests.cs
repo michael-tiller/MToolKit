@@ -158,7 +158,9 @@ namespace MToolKit.Tests.Editor.Runtime.Input
       action.AddBinding("<Keyboard>/e", groups: "Keyboard");
       action.AddBinding("<Gamepad>/buttonSouth", groups: "Controller");
       asset.bindingMask = InputBinding.MaskByGroup("Controller");
-      Assert.That(resolver.Resolve(action, InputPromptStyle.LocalizedName), Is.EqualTo("South"));
+      // This test exercises masks, independently of a real controller's printed family.
+      Assert.That(resolver.Resolve(action, InputPromptStyle.LocalizedName,
+        new InputPromptContext(familyOverride: InputGlyphFamily.Generic)), Is.EqualTo("South"));
       map.bindingMask = InputBinding.MaskByGroup("Keyboard");
       Assert.That(resolver.Resolve(action), Is.EqualTo("Unbound"));
       map.bindingMask = null;
@@ -248,6 +250,38 @@ namespace MToolKit.Tests.Editor.Runtime.Input
         Assert.That(resolver.Resolve(action), Is.EqualTo("E"));
       }
       finally { InputSystem.RemoveDevice(pad); }
+    }
+
+    [Test]
+    public void IdleXboxCurrent_DoesNotSelectAControllerBindingOrCreateAnActivePlayerContext()
+    {
+      const string layout = "MTKIdlePresentationXbox";
+      var previous = Gamepad.current;
+      InputSystem.RegisterLayout("{\"name\":\"" + layout + "\",\"extend\":\"XInputController\"}");
+      var pad = (Gamepad)InputSystem.AddDevice(layout);
+      try
+      {
+        pad.MakeCurrent();
+        var asset = Own(ScriptableObject.CreateInstance<InputActionAsset>());
+        var action = asset.AddActionMap("Owned player").AddAction("Use");
+        action.AddBinding("<Keyboard>/e");
+        action.AddBinding("<Gamepad>/buttonSouth");
+        using var service = new InputPromptService(actions: asset);
+        Assert.That(Gamepad.current, Is.SameAs(pad));
+        Assert.That(service.Context.Device, Is.Null, "Connecting an idle controller is not player activity.");
+        Assert.That(resolver.Resolve(action), Is.EqualTo("E"));
+        Assert.That(service.Resolve(action), Is.EqualTo("E"));
+        InputSystem.RemoveDevice(pad);
+        Assert.That(service.Context.Device, Is.Null);
+        Assert.That(service.Resolve(action), Is.EqualTo("E"));
+        Assert.That(action.enabled, Is.False);
+      }
+      finally
+      {
+        if (pad.added) InputSystem.RemoveDevice(pad);
+        if (previous != null && previous.added) previous.MakeCurrent();
+        InputSystem.RemoveLayout(layout);
+      }
     }
 
     [Test]

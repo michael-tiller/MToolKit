@@ -48,6 +48,15 @@ namespace MToolKit.Editor.Input
       var previous = AssetDatabase.LoadMainAssetAtPath(assetPath);
       if (previous != null && !(previous is TMP_SpriteAsset))
         throw new InvalidOperationException("The destination already contains a different asset type: " + assetPath);
+      if (previous is TMP_SpriteAsset existing && existing.material != null
+          && AssetDatabase.GetAssetPath(existing.material) != assetPath)
+        throw new InvalidOperationException("The TMP material is shared outside this generated asset. Choose a dedicated output: " + assetPath);
+      string atlasPath = Path.ChangeExtension(assetPath, ".png").Replace('\\', '/');
+      if (File.Exists(PhysicalPath(atlasPath)) && (!(previous is TMP_SpriteAsset owned)
+          || owned.spriteSheet == null || AssetDatabase.GetAssetPath(owned.spriteSheet) != atlasPath))
+        throw new InvalidOperationException("The atlas sidecar is existing artwork not owned by this TMP asset: " + atlasPath);
+      var existingSprites = previous == null ? new Dictionary<string, Sprite>(StringComparer.Ordinal)
+        : AssetDatabase.LoadAllAssetsAtPath(assetPath).OfType<Sprite>().ToDictionary(sprite => sprite.name, StringComparer.Ordinal);
       var shader = Shader.Find("TextMeshPro/Sprite");
       if (shader == null) throw new InvalidOperationException("Import TMP Essential Resources before authoring glyphs.");
 
@@ -60,7 +69,6 @@ namespace MToolKit.Editor.Input
         var packed = atlas.PackTextures(textures.ToArray(), 2, 4096, false);
         if (packed.Length != ordered.Length)
           throw new InvalidOperationException("The input glyphs did not fit into the atlas.");
-        string atlasPath = Path.ChangeExtension(assetPath, ".png").Replace('\\', '/');
         File.WriteAllBytes(PhysicalPath(atlasPath), atlas.EncodeToPNG());
         AssetDatabase.ImportAsset(atlasPath, ImportAssetOptions.ForceSynchronousImport);
         var importer = (TextureImporter)AssetImporter.GetAtPath(atlasPath);
@@ -96,8 +104,6 @@ namespace MToolKit.Editor.Input
         asset.spriteSheet = savedAtlas;
         asset.spriteCharacterTable.Clear();
         asset.spriteGlyphTable.Clear();
-        foreach (var ownedSprite in AssetDatabase.LoadAllAssetsAtPath(assetPath).OfType<Sprite>().ToArray())
-          Object.DestroyImmediate(ownedSprite, true);
 
         for (int i = 0; i < ordered.Length; i++)
         {
@@ -106,7 +112,16 @@ namespace MToolKit.Editor.Input
             Mathf.RoundToInt(normalized.width * atlas.width), Mathf.RoundToInt(normalized.height * atlas.height));
           var sprite = Sprite.Create(savedAtlas, rect, new Vector2(0.5f, 0.5f), 100, 0, SpriteMeshType.FullRect);
           sprite.name = ordered[i].Name;
-          AssetDatabase.AddObjectToAsset(sprite, asset);
+          if (existingSprites.TryGetValue(sprite.name, out var retained))
+          {
+            // Copy native Sprite serialization while retaining its real persistent object/local file id.
+            EditorUtility.CopySerialized(sprite, retained);
+            Object.DestroyImmediate(sprite);
+            sprite = retained;
+            EditorUtility.SetDirty(sprite);
+            existingSprites.Remove(sprite.name);
+          }
+          else AssetDatabase.AddObjectToAsset(sprite, asset);
           // Each glyph occupies one em, independent of the source artwork's pixel resolution.
           float scale = 64f / rect.height;
           var metrics = new GlyphMetrics(rect.width * scale, 64, 0, 51.2f, rect.width * scale);
@@ -115,6 +130,7 @@ namespace MToolKit.Editor.Input
           asset.spriteCharacterTable.Add(new TMP_SpriteCharacter(0xFFFE, asset, glyph)
           { name = ordered[i].Name, scale = 1 });
         }
+        foreach (var removed in existingSprites.Values) Object.DestroyImmediate(removed, true);
         if (asset.material == null)
         {
           asset.material = new Material(shader) { name = asset.name + " Material" };
@@ -125,7 +141,8 @@ namespace MToolKit.Editor.Input
         asset.UpdateLookupTables();
         EditorUtility.SetDirty(asset.material);
         EditorUtility.SetDirty(asset);
-        AssetDatabase.SaveAssets();
+        AssetDatabase.SaveAssetIfDirty(asset);
+        TMPro_EventManager.ON_SPRITE_ASSET_PROPERTY_CHANGED(true, asset);
         return asset;
       }
       finally

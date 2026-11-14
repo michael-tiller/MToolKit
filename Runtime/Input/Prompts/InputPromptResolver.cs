@@ -65,11 +65,13 @@ namespace MToolKit.Runtime.Input.Prompts
       // A preview family changes gamepad artwork, never a keyboard binding or gameplay semantics.
       var family = actualFamily == InputGlyphFamily.KeyboardAndMouse ? actualFamily
         : context.FamilyOverride ?? actualFamily;
+      string locale = (localizer as IInputPromptLocaleProvider)?.LocaleCode;
       InputGlyphCatalog.Entry entry = null;
-      if (catalog != null) catalog.TryGetEntry(family, control.ControlPath, out entry);
+      if (catalog != null) catalog.TryGetEntry(family, control.ControlPath, locale, out entry);
       string fallback = !string.IsNullOrEmpty(entry?.DisplayName) ? entry.DisplayName : DefaultName(control, family);
       string key = !string.IsNullOrEmpty(entry?.LocalizationKey) ? entry.LocalizationKey : LocalizationKey(control, family);
-      string name = Name(key, fallback);
+      string rawName = LocalizedName(key, fallback);
+      string name = InputPromptRichText.Escape(rawName);
       if (style == InputPromptStyle.LocalizedName) return name;
       if (style == InputPromptStyle.Character)
       {
@@ -80,6 +82,18 @@ namespace MToolKit.Runtime.Input.Prompts
           if (!string.IsNullOrEmpty(shortName)) return InputPromptRichText.Escape(shortName);
         }
         return !string.IsNullOrEmpty(control.Character) ? InputPromptRichText.Escape(control.Character) : name;
+      }
+      if (catalog != null && catalog.KeyboardGlyphMode == InputKeyboardGlyphMode.GeneratedKeycaps
+        && InputGlyphCatalog.IsLayout(control.DeviceLayout, "Keyboard"))
+      {
+        // A baked label is literal image content. Match before rich-text escaping so
+        // punctuation and labels that resemble markup keep their actual identity.
+        string label = !string.IsNullOrEmpty(control.Character) ? control.Character : rawName;
+        string keycap = catalog.TryGetKeycapEntry(control.ControlPath, locale, label, out var cap)
+          ? Glyph(cap, context, allowSymbol: false) : null;
+        if (string.IsNullOrEmpty(keycap)) return name;
+        return style == InputPromptStyle.GlyphAndName && !string.Equals(label, rawName, StringComparison.Ordinal)
+          ? keycap + " " + name : keycap;
       }
       string glyph = Glyph(entry, context);
       if (style == InputPromptStyle.GlyphAndName) return string.IsNullOrEmpty(glyph) ? name : glyph + " " + name;
@@ -105,7 +119,7 @@ namespace MToolKit.Runtime.Input.Prompts
       return new InputPromptControl(control.DeviceLayout, key, control.Character, control.Character, control.PartName);
     }
 
-    private string Glyph(InputGlyphCatalog.Entry entry, InputPromptContext context)
+    private string Glyph(InputGlyphCatalog.Entry entry, InputPromptContext context, bool allowSymbol = true)
     {
       if (entry == null) return null;
       var asset = entry.SpriteAsset;
@@ -113,7 +127,7 @@ namespace MToolKit.Runtime.Input.Prompts
         && asset.material != null && asset.spriteSheet != null && asset.GetSpriteIndexFromName(entry.SpriteName) >= 0
         && (SpriteAvailable == null || SpriteAvailable(asset)))
         return "<sprite=\"" + asset.name + "\" name=\"" + entry.SpriteName + "\">";
-      if (string.IsNullOrEmpty(entry.Symbol)) return null;
+      if (!allowSymbol || string.IsNullOrEmpty(entry.Symbol)) return null;
       if (context.FontAsset != null
         && !context.FontAsset.HasCharacters(entry.Symbol, out uint[] _, searchFallbacks: true, tryAddCharacter: false)) return null;
       return InputPromptRichText.Escape(entry.Symbol);
@@ -128,10 +142,12 @@ namespace MToolKit.Runtime.Input.Prompts
       return true;
     }
 
-    private string Name(string key, string fallback)
+    private string Name(string key, string fallback) => InputPromptRichText.Escape(LocalizedName(key, fallback));
+
+    private string LocalizedName(string key, string fallback)
     {
       string value = localizer?.GetName(key, fallback);
-      return InputPromptRichText.Escape(string.IsNullOrEmpty(value) ? fallback : value);
+      return string.IsNullOrEmpty(value) ? fallback : value;
     }
 
     private static string LocalizationKey(InputPromptControl control, InputGlyphFamily family)

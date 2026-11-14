@@ -20,6 +20,10 @@ namespace MToolKit.Runtime.Input.Prompts
       public string LocalizationKey;
       public string DisplayName;
       public Sprite ImageSprite;
+      [Tooltip("Optional locale identifier. Empty entries are independent of the selected language.")]
+      public string LocaleCode;
+      [Tooltip("Exact literal label baked into a generated keyboard cap. Empty for authored glyphs.")]
+      public string BakedLabel;
     }
 
     [Serializable]
@@ -31,8 +35,10 @@ namespace MToolKit.Runtime.Input.Prompts
 
     [SerializeField] private Entry[] entries = new Entry[0];
     [SerializeField] private LayoutRule[] layoutRules = new LayoutRule[0];
+    [SerializeField] private InputKeyboardGlyphMode keyboardGlyphMode;
     public IReadOnlyList<Entry> Entries => entries;
     public IReadOnlyList<LayoutRule> LayoutRules => layoutRules;
+    public InputKeyboardGlyphMode KeyboardGlyphMode => keyboardGlyphMode;
     public event Action Changed;
 
     public void SetEntries(params Entry[] values)
@@ -45,6 +51,26 @@ namespace MToolKit.Runtime.Input.Prompts
     {
       layoutRules = values ?? new LayoutRule[0];
       Changed?.Invoke();
+    }
+
+    public void ConfigureKeyboardGlyphs(InputKeyboardGlyphMode mode)
+    {
+      keyboardGlyphMode = mode;
+      Changed?.Invoke();
+    }
+
+    public bool TryGetEntry(InputGlyphFamily family, string controlPath, string localeCode, out Entry entry)
+    {
+      return FindEntry(family, controlPath, localeCode, null, out entry);
+    }
+
+    /// <summary>Finds a generated cap only when its baked text still matches the displayed key.</summary>
+    public bool TryGetKeycapEntry(string controlPath, string localeCode, string bakedLabel, out Entry entry)
+    {
+      if (!string.IsNullOrWhiteSpace(bakedLabel))
+        return FindEntry(InputGlyphFamily.KeyboardAndMouse, controlPath, localeCode, bakedLabel, out entry);
+      entry = null;
+      return false;
     }
 
     private void OnValidate() => Changed?.Invoke();
@@ -71,14 +97,36 @@ namespace MToolKit.Runtime.Input.Prompts
         || InputSystem.IsFirstLayoutBasedOnSecond(actual, parent));
 
     public bool TryGetEntry(InputGlyphFamily family, string controlPath, out Entry entry)
+      => TryGetEntry(family, controlPath, null, out entry);
+
+    private bool FindEntry(InputGlyphFamily family, string controlPath, string localeCode, string bakedLabel,
+      out Entry entry)
     {
-      foreach (var candidate in entries)
-        if (candidate != null && candidate.Family == family
-          && string.Equals(candidate.ControlPath, controlPath, StringComparison.OrdinalIgnoreCase))
-        { entry = candidate; return true; }
+      foreach (string locale in LocaleFallbacks(localeCode))
+        foreach (var candidate in entries)
+          if (candidate != null && candidate.Family == family
+            && string.Equals(candidate.ControlPath, controlPath, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(NormalizeLocale(candidate.LocaleCode), locale, StringComparison.OrdinalIgnoreCase)
+            && (bakedLabel == null ? string.IsNullOrEmpty(candidate.BakedLabel)
+              : string.Equals(candidate.BakedLabel, bakedLabel, StringComparison.Ordinal)))
+          { entry = candidate; return true; }
       entry = null;
       return false;
     }
+
+    private static IEnumerable<string> LocaleFallbacks(string localeCode)
+    {
+      string locale = NormalizeLocale(localeCode);
+      while (locale.Length > 0)
+      {
+        yield return locale;
+        int separator = locale.LastIndexOf('-');
+        locale = separator > 0 ? locale.Substring(0, separator) : string.Empty;
+      }
+      yield return string.Empty;
+    }
+
+    private static string NormalizeLocale(string localeCode) => (localeCode ?? string.Empty).Trim().Replace('_', '-');
 
     /// <summary>Shared authoring supports native TMP and consumers that still render a UI Image.</summary>
     public Sprite GetSprite(InputGlyphFamily family, string controlPath)

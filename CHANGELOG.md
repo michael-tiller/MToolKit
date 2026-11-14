@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Add a saved glyph-atlas wizard and configurable UGUI/TMP keycap bake profiles with fonts, static or nine-sliced border/background images, optional authored procedural prefabs, shared sizing and per-key width rules. Resolve generated localized caps with stale-label fallbacks, preserve native Sprite/material references during rebuilds, and verify real glyph pixels, locale switching and resource cleanup. (v1.12.0)
+
 - Resolve effective input bindings into localized native TMP prompts with explicit device families and presentation styles, asset-driven glyphs, independent player contexts, live input/locale/rebinding updates, safe named composition and a lifecycle-owned TMP component. Preserve typed legacy Image icons and migrate settings labels; add native sprite authoring, focused regression coverage and configuration/migration examples. (v1.11.0)
 
 - Add viewport capacity limits to applied UI scale while preserving the requested 75?300% preference. Reuse existing canvas/settings bindings, localized inline feedback and selection scrolling; expose pure CanvasScaler-consistent calculations and cover invalid/subminimum viewports without polling. Retain applied rebinding persistence during integration. (v1.10.0)

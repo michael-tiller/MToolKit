@@ -22,6 +22,12 @@ namespace MToolKit.Runtime.Input.Prompts
     Generic = 4
   }
 
+  public enum InputKeyboardGlyphMode
+  {
+    Authored = 0,
+    GeneratedKeycaps = 1
+  }
+
   /// <summary>A caller's binding selection and independent presentation preference.</summary>
   public readonly struct InputPromptContext
   {
@@ -77,6 +83,12 @@ namespace MToolKit.Runtime.Input.Prompts
   public interface IInputPromptLocalizer
   {
     string GetName(string semanticKey, string fallback);
+  }
+
+  /// <summary>Optional locale identity for localized, text-bearing baked glyphs.</summary>
+  public interface IInputPromptLocaleProvider
+  {
+    string LocaleCode { get; }
   }
 
   /// <summary>Protects text arguments while preserving native TMP rich text for generated prompts.</summary>

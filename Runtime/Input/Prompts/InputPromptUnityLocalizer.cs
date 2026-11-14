@@ -8,7 +8,7 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 namespace MToolKit.Runtime.Input.Prompts
 {
   /// <summary>Uses Unity's shared table cache without blocking localization initialization or owning its handles.</summary>
-  internal sealed class InputPromptUnityLocalizer : IInputPromptLocalizer, IDisposable
+  internal sealed class InputPromptUnityLocalizer : IInputPromptLocalizer, IInputPromptLocaleProvider, IDisposable
   {
     private readonly Func<string> tableName;
     private readonly Action changed;
@@ -23,6 +23,17 @@ namespace MToolKit.Runtime.Input.Prompts
     { this.tableName = tableName; this.changed = changed; }
 
     public string GetName(string semanticKey, string fallback) => Localize(semanticKey, fallback);
+
+    public string LocaleCode
+    {
+      get
+      {
+        if (disposed || !LocalizationSettings.HasSettings) return null;
+        var selected = LocalizationSettings.SelectedLocaleAsync;
+        return selected.IsDone && selected.Status == AsyncOperationStatus.Succeeded
+          ? selected.Result?.Identifier.Code : null;
+      }
+    }
 
     public string Localize(string key, string fallback, params object[] arguments)
     {
