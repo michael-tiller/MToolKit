@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "ExpectedIdentity": "GRUEBOX-III\\metag",
+  "UnityVersion": "6000.3.10f1",
+  "UnityExecutable": "E:/Unity/Editors/6000.3.10f1/Editor/Unity.exe",
+  "DependencyProjectRoot": "E:/Personal/dirigible2D",
+  "ConsumerRevision": "REPLACE_WITH_REVIEWED_40_CHARACTER_DIRIGIBLE_COMMIT",
+  "RunsRoot": "E:/LicensedMenuCI/runs",
+  "ControlRoot": "E:/LicensedMenuCI/control",
+  "RunnersRoot": "E:/LicensedMenuCI/runners",
+  "LocalPackages": [
+    {
+      "Name": "com.michael-tiller.mtoolkit",
+      "LockName": "MToolKit",
+      "Source": "REPLACE_WITH_LOCAL_MTOOLKIT_GIT_ROOT",
+      "Commit": "REPLACE_WITH_LOCKED_MTOOLKIT_COMMIT"
+    },
+    {
+      "Name": "com.llamabrainlabs.ai-test-harness",
+      "LockName": "ai-test-harness",
+      "Source": "REPLACE_WITH_LOCAL_HARNESS_GIT_ROOT",
+      "Commit": "REPLACE_WITH_LOCKED_HARNESS_COMMIT"
+    },
+    {
+      "Name": "com.roughneck.reporting",
+      "Source": "REPLACE_WITH_LOCAL_PACKAGE_TGZ",
+      "Sha256": "REPLACE_WITH_REVIEWED_SHA256"
+    }
+  ]
+}

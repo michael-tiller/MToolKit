@@ -104,5 +104,16 @@ namespace MToolKit.Theme
       else
         ApplyCurrent();
     }
+
+    /// <summary>Explicit local-style precedence for composed widgets and custom prefabs.</summary>
+    public void SetOverrideTheme(bool value)
+    {
+      overrideTheme = value;
+      cached = null;
+      if (CurrentTheme.HasInstance)
+        ApplyTheme(CurrentTheme.Instance.Current);
+      else
+        ApplyCurrent();
+    }
   }
 }

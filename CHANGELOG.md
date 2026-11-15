@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Add the `MToolKit.ContextMenus` module with runtime/authored hierarchical actions, shared sessions, inline list foldouts, native annular rendering, replacement and partial-arc concentric presentations, configurable widgets/profiles, semantic input ownership, secondary actions, theme bindings and optional transitions. Ship ten editable presenter/widget prefabs, six menu profiles, a host config and saved gallery scene; retain a safe fresh-destination generator and authoring/migration documentation. Add optional scoped rebinder registration for runtime action instances. (v1.21.0)
+
 - Add per-key source-rectangle, alpha-bound and monochrome-ink sizing for central keycap artwork. Fit visible symbols without enlarging caps, retain source/importer identities and release prepared pixels on failure; verify actual authored arrows/Caps/Context art, legacy scale, colors and native rendering in Dirigible. (v1.20.0)
 
 - Configure keycap caption color independently from artwork and select a native TMP font-material preset in saved profiles and the Atlas Wizard. Validate atlas compatibility consistently in previews and saved bakes; isolate and release temporary material copies while retaining existing tint behavior by default. Verify 38 native authoring cases in Dirigible. (v1.19.0)
@@ -39,6 +41,8 @@ not a roadmap milestone.
 - Add independent camera pan and zoom sensitivity settings with neutral defaults, finite 10–300% ranges, Apply/Cancel/default baselines and INI persistence. Preserve existing binding behavior and legacy files without the new keys. (v1.8.0)
 
 ### Fixed
+
+- Retain independently acquired Addressables references for repeated assets and overlapping groups; release failed, canceled and unregistered acquisitions. Return menu provider/command/asset continuations to their captured Unity owner before framework state evaluation and cleanup, and reject stale worker notifications after replacement. Observe DI-owned request/canvas lifetime, retain live foreign-action prompt bindings, measure actual radial center/auxiliary bounds, and complete independent owned cleanup when custom widget or presenter lifecycle callbacks throw or reenter. (v1.21.0)
 
 - Preserve normal text-em caption proportions in new keycap profiles and let standard named keys fit their labels. Keep saved profile dimensions explicit; verify native baked ink at SmallCopy and accessibility scales in Dirigible. (v1.19.1)
 

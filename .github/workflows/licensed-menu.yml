@@ -1,0 +1,58 @@
+name: Licensed menu CI
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/licensed-menu.yml'
+      - 'Tools/CI/**'
+      - 'Runtime/ContextMenus/**'
+      - 'Runtime/Theme/**'
+      - 'Runtime/AssetLoader/**'
+      - 'Runtime/Input/**'
+      - 'Tests/Editor/ContextMenus/**'
+      - 'Tests/Runtime/ContextMenus/**'
+      - 'Samples~/HierarchicalActionMenus/**'
+      - 'Assets/Samples/MToolKit/**'
+      - 'package.json'
+      - 'Assets/_Dirigible/Source/UI/ContextMenu/**'
+      - 'Assets/_Dirigible/Source/Actions/ActionInteractionService.cs'
+      - 'Assets/_Dirigible/Source/UI/Menu/SelectionCommandRowBinder.cs'
+      - 'Assets/_Dirigible/Config/InputSystem_Actions.*'
+      - 'Assets/_Dirigible/Tests.Editor/Actions/ControllerContextActivationTests.cs'
+      - 'Assets/_Dirigible/Tests.Editor/Actions/ActionMenuOwnershipTests.cs'
+      - 'Assets/_Dirigible/Tests.Editor/Actions/ActionInteractionOwnershipTests.cs'
+      - 'Assets/_Dirigible/Tests.Editor/Actions/ActionInputConsumerTests.cs'
+      - 'Assets/_Dirigible/Tests.Editor/Actions/WorldContextDispatcherTests.cs'
+      - 'Assets/_Dirigible/Tests.Editor/UI/ContextMenu/**'
+      - 'Assets/_Dirigible/Tests.Editor/UI/ContextMenuAccessibleInputTests.cs'
+      - 'Assets/_Dirigible/Tests.Editor/UI/ContextPriorityFanTests.cs'
+      - 'Packages/manifest.json'
+      - '.captain-sdlc/dependency-lock.json'
+permissions:
+  contents: read
+concurrency:
+  group: licensed-menu-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+jobs:
+  menu-ci:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'michael-tiller'
+    runs-on: ${{ format('licensed-menu-{0}-{1}', github.run_id, github.run_attempt) }}
+    timeout-minutes: 180
+    steps:
+      # The external job-start hook validates the reviewed run before any steps.
+      # No checkout action, private token, raw Unity log, or dependency cache.
+      - name: Run pinned menu integration checks
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & (Join-Path $env:LICENSED_MENU_TOOLS 'Invoke-LicensedMenuCI.ps1') -ApprovalPath $env:LICENSED_MENU_APPROVAL
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish safe aggregate evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: menu-ci-counts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: menu-ci-public/*.json
+          if-no-files-found: ignore
+          retention-days: 7
+          include-hidden-files: false

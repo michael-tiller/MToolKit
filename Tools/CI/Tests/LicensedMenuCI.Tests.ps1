@@ -1,0 +1,212 @@
+Import-Module (Join-Path $PSScriptRoot '../LicensedMenuCI.psm1') -Force -DisableNameChecking
+
+
+Describe 'Runner hook file-command handoff' {
+ It 'passes values from a hidden child through GITHUB_ENV without changing its parent environment' {
+  $handoff=Join-Path $TestDrive 'github-env';[IO.File]::WriteAllText($handoff,'')
+  $child=Join-Path $TestDrive 'hook-child.ps1'
+  $module=(Resolve-Path (Join-Path $PSScriptRoot '../LicensedMenuCI.psm1')).Path.Replace("'","''")
+  $code="Import-Module '"+$module+"' -Force -DisableNameChecking"+[Environment]::NewLine+"Write-CiRunnerEnvironment -EnvironmentFile '"+$handoff.Replace("'","''")+"' -ToolsPath 'E:\Trusted Tools' -ApprovalPath 'E:\Trusted Tools\approval.json'"
+  [IO.File]::WriteAllText($child,$code)
+  $originalTools=$env:LICENSED_MENU_TOOLS;$originalApproval=$env:LICENSED_MENU_APPROVAL
+  $start=[Diagnostics.ProcessStartInfo]::new()
+  $start.FileName=Join-Path $PSHOME 'powershell.exe';$start.Arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$child+'"'
+  $start.UseShellExecute=$false;$start.CreateNoWindow=$true;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
+  $process=[Diagnostics.Process]::Start($start)
+  $stdout=$process.StandardOutput.ReadToEndAsync();$stderr=$process.StandardError.ReadToEndAsync()
+  $process.WaitForExit(10000)|Should Be $true
+  $exitCode=$process.ExitCode;$process.Dispose()
+  $exitCode|Should Be 0
+  $entries=@{}
+  foreach($line in [IO.File]::ReadAllLines($handoff)){ $separator=$line.IndexOf('=');$entries[$line.Substring(0,$separator)]=$line.Substring($separator+1) }
+  $entries['LICENSED_MENU_TOOLS']|Should Be 'E:\Trusted Tools'
+  $entries['LICENSED_MENU_APPROVAL']|Should Be 'E:\Trusted Tools\approval.json'
+  $step=Join-Path $TestDrive 'job-step.ps1'
+  [IO.File]::WriteAllText($step,'if($env:LICENSED_MENU_TOOLS -ceq ''E:\Trusted Tools'' -and $env:LICENSED_MENU_APPROVAL -ceq ''E:\Trusted Tools\approval.json''){exit 0}else{exit 19}')
+  $start.Arguments='-NoProfile -ExecutionPolicy Bypass -File "'+$step+'"'
+  foreach($key in $entries.Keys){$start.EnvironmentVariables[$key]=$entries[$key]}
+  $next=[Diagnostics.Process]::Start($start)
+  $next.WaitForExit(10000)|Should Be $true
+  $next.ExitCode|Should Be 0
+  $next.Dispose()
+  $env:LICENSED_MENU_TOOLS|Should Be $originalTools
+  $env:LICENSED_MENU_APPROVAL|Should Be $originalApproval
+ }
+ It 'rejects file-command injection in a control path' {
+  $file=Join-Path $TestDrive 'injected-env';[IO.File]::WriteAllText($file,'')
+  {Write-CiRunnerEnvironment $file ('E:\Tools'+[char]10+'OTHER=bad') 'E:\approval.json'}|Should Throw
+ }
+}
+
+Describe 'One candidate menu sample per isolated Unity project' {
+ BeforeEach {
+  $owned=Join-Path $TestDrive 'sample-run';$project=Join-Path $owned 'project';$private=Join-Path $owned 'private'
+  $package=Join-Path $TestDrive 'candidate-package';$sample=Join-Path $package 'Samples~/HierarchicalActionMenus'
+  New-Item -ItemType Directory -Force -Path (Join-Path $project 'Assets/Samples/MToolKit/1.21.0/HierarchicalActionMenus'),$private,(Join-Path $sample 'Runtime')|Out-Null
+  [IO.File]::WriteAllText((Join-Path $package 'package.json'),'{"name":"com.michael-tiller.mtoolkit","version":"1.22.0"}')
+  [IO.File]::WriteAllText((Join-Path $sample 'ActionMenuGallery.unity'),'candidate saved scene')
+  [IO.File]::WriteAllText((Join-Path $sample 'ActionMenuGallery.unity.meta'),'candidate scene guid')
+  [IO.File]::WriteAllText((Join-Path $sample 'Runtime/Menu.asmdef'),'candidate assembly')
+  [IO.File]::WriteAllText((Join-Path $sample 'Runtime/Menu.asmdef.meta'),'candidate assembly guid')
+  [IO.File]::WriteAllText(($sample+'.meta'),'candidate folder guid')
+  $old=Join-Path $project 'Assets/Samples/MToolKit/1.21.0/HierarchicalActionMenus'
+  [IO.File]::WriteAllText((Join-Path $old 'Old.asmdef'),'preserve imported assembly')
+  [IO.File]::WriteAllText(($old+'.meta'),'preserve imported folder guid')
+ }
+ It 'parks the complete old import with metadata then stages the candidate once at its package version' {
+  $destination=Set-CiMenuSampleSnapshot $project $package $private $owned
+  $destination|Should Be ([IO.Path]::GetFullPath((Join-Path $project 'Assets/Samples/MToolKit/1.22.0/HierarchicalActionMenus')))
+  [IO.File]::ReadAllText((Join-Path $destination 'Runtime/Menu.asmdef.meta'))|Should Be 'candidate assembly guid'
+  [IO.File]::ReadAllText(($destination+'.meta'))|Should Be 'candidate folder guid'
+  @(Get-ChildItem -LiteralPath (Join-Path $project 'Assets') -Recurse -File -Filter '*.asmdef').Count|Should Be 1
+  Test-Path -LiteralPath $old|Should Be $false
+  Test-Path -LiteralPath ($old+'.meta')|Should Be $false
+  $parked=@(Get-ChildItem -LiteralPath $private -Recurse -File -Filter Old.asmdef)
+  $parked.Count|Should Be 1
+  [IO.File]::ReadAllText($parked[0].FullName)|Should Be 'preserve imported assembly'
+  @(Get-ChildItem -LiteralPath $private -Recurse -File -Filter 'HierarchicalActionMenus.meta').Count|Should Be 1
+  [IO.File]::ReadAllText((Join-Path $sample 'Runtime/Menu.asmdef'))|Should Be 'candidate assembly'
+ }
+ It 'refuses a candidate missing its saved gallery before parking existing assets' {
+  Remove-Item -LiteralPath (Join-Path $sample 'ActionMenuGallery.unity')
+  {Set-CiMenuSampleSnapshot $project $package $private $owned}|Should Throw
+  Test-Path -LiteralPath (Join-Path $old 'Old.asmdef')|Should Be $true
+ }
+ It 'refuses parking inside Assets or moving from a foreign checkout' {
+  {Set-CiMenuSampleSnapshot $project $package (Join-Path $project 'Assets/private') $owned}|Should Throw
+  {Set-CiMenuSampleSnapshot (Join-Path $TestDrive 'foreign-project') $package $private $owned}|Should Throw
+  Test-Path -LiteralPath (Join-Path $old 'Old.asmdef')|Should Be $true
+ }
+}
+Describe 'Whole dependency snapshots' {
+ It 'clones the exact committed snapshot without adopting dirty files or a linked git file' {
+  $source=Join-Path $TestDrive 'committed-source';$owned=Join-Path $TestDrive 'clone-owner'
+  New-Item -ItemType Directory -Force -Path $source,$owned|Out-Null
+  $null=& git init --quiet $source
+  $file=Join-Path $source 'package.txt';[IO.File]::WriteAllText($file,'committed')
+  $null=& git -C $source add package.txt
+  $null=& git -C $source -c user.name=Fixture -c user.email=fixture@example.invalid commit --quiet -m fixture
+  $revision=(& git -C $source rev-parse HEAD).Trim()
+  [IO.File]::WriteAllText($file,'uncommitted')
+  $target=Copy-CiGitSnapshot $source $revision (Join-Path $owned 'snapshot') $owned
+  [IO.File]::ReadAllText((Join-Path $target 'package.txt'))|Should Be 'committed'
+  (& git -C $target rev-parse HEAD).Trim()|Should Be $revision
+  (Get-Item -LiteralPath (Join-Path $target '.git') -Force).PSIsContainer|Should Be $true
+ }
+ It 'copies all nested data and metadata without overwriting another destination' {
+  $source=Join-Path $TestDrive 'vendor'
+  $owned=Join-Path $TestDrive 'run'
+  New-Item -ItemType Directory -Force -Path (Join-Path $source 'nested'),$owned|Out-Null
+  [IO.File]::WriteAllText((Join-Path $source 'nested/file.dll'),'licensed fixture')
+  [IO.File]::WriteAllText((Join-Path $source 'nested/file.dll.meta'),'fixture guid')
+  $target=Join-Path $owned 'project/Assets/ThirdParty'
+  Copy-CiDependencyRoot $source $target $owned
+  [IO.File]::ReadAllText((Join-Path $target 'nested/file.dll.meta'))|Should Be 'fixture guid'
+  {Copy-CiDependencyRoot $source $target $owned}|Should Throw
+  {Copy-CiDependencyRoot $source (Join-Path $TestDrive 'foreign') $owned}|Should Throw
+ }
+ It 'records a deterministic digest that changes when a nested dependency or metadata changes' {
+  $source=Join-Path $TestDrive 'digest-vendor';New-Item -ItemType Directory -Force -Path $source|Out-Null
+  $meta=Join-Path $source 'asset.meta';[IO.File]::WriteAllText($meta,'original')
+  $before=Get-CiTreeDigest $source
+  $same=Get-CiTreeDigest $source
+  $before.Hash|Should Be $same.Hash
+  $before.FileCount|Should Be 1
+  [IO.File]::WriteAllText($meta,'changed')
+  (Get-CiTreeDigest $source).Hash|Should Not Be $before.Hash
+ }
+ It 'rejects an unavailable pinned Git commit before creating a destination' {
+  $source=Join-Path $TestDrive 'source-git';$owned=Join-Path $TestDrive 'snapshot-owner'
+  New-Item -ItemType Directory -Force -Path $source,$owned|Out-Null
+  $null=& git init --quiet $source
+  $target=Join-Path $owned 'snapshot'
+  {Copy-CiGitSnapshot $source ('f'*40) $target $owned}|Should Throw
+  Test-Path -LiteralPath $target|Should Be $false
+ }
+}
+
+Describe 'Licensed menu CI trust and launcher boundaries' {
+  BeforeEach {
+    $root = Join-Path $TestDrive 'owned'
+    New-Item -ItemType Directory -Force -Path $root | Out-Null
+  }
+  It 'accepts an actual descendant without creating it' {
+    Assert-CiChildPath $root (Join-Path $root 'integration/project') | Should Be ([IO.Path]::GetFullPath((Join-Path $root 'integration/project')))
+  }
+  It 'rejects root itself' { { Assert-CiChildPath $root $root } | Should Throw }
+  It 'rejects sibling-prefix paths' { { Assert-CiChildPath $root ($root+'-foreign/data') } | Should Throw }
+  It 'rejects traversal outside owned root' { { Assert-CiChildPath $root (Join-Path $root '../foreign') } | Should Throw }
+  It 'quotes a space-containing Windows argument' { Quote-CiCmdArgument 'E:\CI Run\project' | Should Be '"E:\CI Run\project"' }
+  It 'rejects cmd expansion and command separators even within quotes' {
+    foreach ($bad in @('E:\%USERPROFILE%','E:\a&b','E:\a|b','E:\a^b','E:\a!b',('E:\a'+[char]34+'b'))) {
+      { Quote-CiCmdArgument $bad } | Should Throw
+    }
+  }
+  It 'uses hidden cmd start wait without quit or no graphics for rendered tests' {
+    $start=New-CiUnityStartInfo 'E:\CI Run\project' 'E:\Unity\Unity.exe' 'E:\CI Run\result.xml' 'E:\CI Run\unity.log' 'PlayMode' 'MToolKit.ContextMenus.Samples.Tests'
+    $start.FileName | Should Be 'cmd.exe'
+    $start.Arguments | Should Match '/c start "" /wait'
+    $start.Arguments | Should Match '"-runTests"'
+    $start.Arguments | Should Not Match '\-quit|\-nographics'
+    $start.UseShellExecute | Should Be $false
+    $start.CreateNoWindow | Should Be $true
+  }
+  It 'repairs missing ALLUSERSPROFILE in the child only' {
+    $start=New-CiUnityStartInfo 'E:\project' 'E:\Unity.exe' 'E:\result.xml' 'E:\unity.log' 'EditMode' 'MToolKit.Tests.Editor.ContextMenus' @{ALLUSERSPROFILE=' '}
+    $start.EnvironmentVariables['ALLUSERSPROFILE'] | Should Be ([Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData))
+  }
+  It 'preserves explicit ALLUSERSPROFILE' {
+    $start=New-CiUnityStartInfo 'E:\project' 'E:\Unity.exe' 'E:\result.xml' 'E:\unity.log' 'EditMode' 'MToolKit.Tests.Editor.ContextMenus' @{ALLUSERSPROFILE='E:\Custom ProgramData'}
+    $start.EnvironmentVariables['ALLUSERSPROFILE'] | Should Be 'E:\Custom ProgramData'
+  }
+  It 'requires the approved canonical run and same-repository pull request' {
+    $a=[pscustomobject]@{Repository='michael-tiller/MToolKit';RunId='42';RunAttempt='1';Actor='michael-tiller';WorkflowSha=('a'*40);MergeSha=('b'*40);HeadSha=('c'*40);WorkflowPath='.github/workflows/licensed-menu.yml';PullRequest=7}
+    $e=@{GITHUB_REPOSITORY=$a.Repository;GITHUB_RUN_ID='42';GITHUB_RUN_ATTEMPT='1';GITHUB_ACTOR=$a.Actor;GITHUB_TRIGGERING_ACTOR=$a.Actor;GITHUB_EVENT_NAME='pull_request';GITHUB_WORKFLOW_SHA=$a.WorkflowSha;GITHUB_SHA=$a.MergeSha;GITHUB_REF='refs/pull/7/merge';GITHUB_JOB='menu-ci';GITHUB_WORKFLOW_REF=($a.Repository+'/'+$a.WorkflowPath+'@refs/pull/7/merge')}
+    $event=[pscustomobject]@{number=7;pull_request=[pscustomobject]@{head=[pscustomobject]@{sha=$a.HeadSha;repo=[pscustomobject]@{full_name=$a.Repository}};base=[pscustomobject]@{repo=[pscustomobject]@{full_name=$a.Repository}}}}
+    Assert-CiJobApproval $a $e $event | Should Be $true
+    $event.pull_request.head.repo.full_name='attacker/fork'
+    { Assert-CiJobApproval $a $e $event } | Should Throw
+  }
+  It 'rejects a different run or changed workflow despite a matching actor' {
+    $a=[pscustomobject]@{Repository='michael-tiller/MToolKit';RunId='42';RunAttempt='1';Actor='michael-tiller';WorkflowSha=('a'*40);MergeSha=('b'*40);HeadSha=('c'*40);WorkflowPath='.github/workflows/licensed-menu.yml';PullRequest=7}
+    $e=@{GITHUB_REPOSITORY=$a.Repository;GITHUB_RUN_ID='43';GITHUB_RUN_ATTEMPT='1';GITHUB_ACTOR=$a.Actor;GITHUB_TRIGGERING_ACTOR=$a.Actor;GITHUB_EVENT_NAME='pull_request';GITHUB_WORKFLOW_SHA=$a.WorkflowSha;GITHUB_SHA=$a.MergeSha;GITHUB_REF='refs/pull/7/merge';GITHUB_JOB='menu-ci';GITHUB_WORKFLOW_REF=($a.Repository+'/'+$a.WorkflowPath+'@refs/pull/7/merge')}
+    $event=[pscustomobject]@{number=7;pull_request=[pscustomobject]@{head=[pscustomobject]@{sha=$a.HeadSha;repo=[pscustomobject]@{full_name=$a.Repository}};base=[pscustomobject]@{repo=[pscustomobject]@{full_name=$a.Repository}}}}
+    { Assert-CiJobApproval $a $e $event } | Should Throw
+    $e.GITHUB_RUN_ID='42';$e.GITHUB_WORKFLOW_SHA=('d'*40)
+    { Assert-CiJobApproval $a $e $event } | Should Throw
+  }
+}
+Describe 'Fresh Unity XML is the CI authority' {
+  BeforeEach {
+    $path=Join-Path $TestDrive 'result.xml'
+    $started=[DateTime]::UtcNow.AddSeconds(-5)
+    $green='<test-run total="1" passed="1" failed="0" result="Passed"><test-suite><test-case fullname="MToolKit.Tests.Editor.ContextMenus.MenuSessionTests.Command" result="Passed"/></test-suite></test-run>'
+    [IO.File]::WriteAllText($path,$green)
+  }
+  It 'accepts fresh all-passed matching tests and zero exit' {
+    $r=Read-CiTestResult $path $started 0 @('MToolKit.Tests.Editor.ContextMenus')
+    $r.Total | Should Be 1
+    $r.Outcome | Should Be 'Passed'
+  }
+  It 'rejects exit and XML disagreement' { { Read-CiTestResult $path $started 2 @('MToolKit.Tests.Editor.ContextMenus') } | Should Throw }
+  It 'rejects stale XML' { { Read-CiTestResult $path ([DateTime]::UtcNow.AddMinutes(1)) 0 @('MToolKit.Tests.Editor.ContextMenus') } | Should Throw }
+  It 'rejects empty, skipped, and mismatched selections' {
+    { Read-CiTestResult $path $started 0 @('Other.Namespace') } | Should Throw
+    [IO.File]::WriteAllText($path,$green.Replace('result="Passed"','result="Skipped"'))
+    { Read-CiTestResult $path $started 0 @('MToolKit.Tests.Editor.ContextMenus') } | Should Throw
+    [IO.File]::WriteAllText($path,'<test-run total="0" passed="0" failed="0" result="Passed"/>')
+    { Read-CiTestResult $path $started 0 @('MToolKit.Tests.Editor.ContextMenus') } | Should Throw
+  }
+  It 'rejects XML external entities' {
+    [IO.File]::WriteAllText($path,'<!DOCTYPE x [<!ENTITY secret SYSTEM "file:///C:/private.txt">]><test-run total="1" passed="1" failed="0" result="Passed">&secret;</test-run>')
+    { Read-CiTestResult $path $started 0 @('MToolKit.Tests.Editor.ContextMenus') } | Should Throw
+  }
+  It 'publishes only fixed-schema numeric evidence and public commit identities' {
+    $r=[pscustomobject]@{Total=1;Passed=1;Failed=0;ExitCode=0;Outcome='Passed';PrivatePath='E:\Private\dirigible';Message='license secret';Xml='private xml'}
+    $safe=ConvertTo-CiSafeSummary $r 'michael-tiller/MToolKit' ('a'*40) ('b'*40) 'framework'
+    $text=$safe|ConvertTo-Json -Compress
+    $text | Should Not Match 'Private|secret|Xml'
+    $safe.total | Should Be 1
+    $safe.revision | Should Be ('a'*40)
+  }
+}
