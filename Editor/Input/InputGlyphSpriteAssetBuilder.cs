@@ -7,6 +7,7 @@ using TMPro;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.TextCore;
+using UnityEngine.UI;
 using Object = UnityEngine.Object;
 
 namespace MToolKit.Editor.Input
@@ -134,6 +135,7 @@ namespace MToolKit.Editor.Input
         EditorUtility.SetDirty(asset);
         AssetDatabase.SaveAssetIfDirty(asset);
         TMPro_EventManager.ON_SPRITE_ASSET_PROPERTY_CHANGED(true, asset);
+        RefreshActiveGraphicMaterials();
         return asset;
       }
       finally
@@ -141,6 +143,16 @@ namespace MToolKit.Editor.Input
         foreach (var texture in textures) Object.DestroyImmediate(texture);
         if (atlas != null) Object.DestroyImmediate(atlas);
       }
+    }
+
+    private static void RefreshActiveGraphicMaterials()
+    {
+      // Editor imports can clear UGUI's stencil cache while unchanged scene graphics
+      // still submit its destroyed materials. Queue a native material update once;
+      // the sprite notification alone does not refresh static text or ordinary Images.
+      foreach (var graphic in Resources.FindObjectsOfTypeAll<Graphic>())
+        if (graphic != null && graphic.isActiveAndEnabled && !EditorUtility.IsPersistent(graphic))
+          graphic.SetMaterialDirty();
     }
 
     /// <summary>Checks existing destination ownership without creating folders or writing assets.</summary>

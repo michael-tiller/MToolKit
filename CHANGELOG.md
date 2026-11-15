@@ -40,6 +40,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Refresh active UGUI materials after native input-atlas rebakes so unchanged text and Images recover from Unity's invalidated stencil-material cache. Queue one native material update without polling or forcing layout; verify the reproduced missing-label failure in Dirigible. (v1.20.1)
+
 - Preserve normal text-em caption proportions in new keycap profiles and let standard named keys fit their labels. Keep saved profile dimensions explicit; verify native baked ink at SmallCopy and accessibility scales in Dirigible. (v1.19.1)
 
 - Prefer the selected desktop device's bindings while preserving mixed chords and documented first-eligible composite representatives. Observe foreign binding changes without letting them change an owned player's device. Use valid family artwork, then Generic artwork for the same control, then the original localized name; retain native Image compatibility without borrowing Xbox art for unknown controllers. Verify 189 consuming-project input cases and align the stale VERSION companion with the package version. (v1.18.1)

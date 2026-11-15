@@ -245,6 +245,8 @@ Editor-only `InputGlyphSpriteAssetBuilder.Bake(assetPath, IReadOnlyList<NamedSpr
 
 The existing `TryGetEntry(family, controlPath)` and `GetSprite` APIs continue to select locale-neutral authored artwork for Image compatibility. Use the locale overload for localized authored artwork, or `TryGetKeycapEntry(controlPath, localeCode, expectedLabel, out entry)` and its `ImageSprite` for an explicitly selected generated cap.
 
+An Editor rebake also queues a native material refresh for active scene UGUI graphics. Unity imports can invalidate cached stencil materials on unchanged text and Images; these consumers recover on the next normal canvas update without reconstructing their UI. Runtime prompts do not depend on this Editor repair or on the baker. For source sprites containing authored black outlines, choose `AlphaBounds` to enlarge visible RGBA artwork while keeping those outlines; `MonochromeInkBounds` deliberately converts dark pixels to transparency.
+
 Sprites use `<sprite="AtlasName" name="semantic-name">`; ordinary native `<sprite name="semantic-name">` also works with a TMP text object's configured sprite asset. Use unique atlas names, valid sprite characters, materials and textures. Missing artwork or unsupported symbols remain readable through names. The editor baker is not included in player execution.
 
 Atlas names are registered using the native case-insensitive TMP hash. Assets whose names collide with an existing native registration fall back to a symbol/name rather than rendering another atlas. Quotes, control characters, angle brackets and backslashes are rejected in generated tag attributes.
