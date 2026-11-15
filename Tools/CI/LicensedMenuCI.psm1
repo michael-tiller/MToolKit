@@ -189,6 +189,11 @@ function Get-CiIgnoredDependencyManifest {
  }
  return $result
 }
+function Write-CiPackageManifest {
+ param($Manifest,[string]$Path)
+ $json=$Manifest|ConvertTo-Json -Depth 30
+ [IO.File]::WriteAllText($Path,$json,[Text.UTF8Encoding]::new($false))
+}
 function Write-CiRunnerEnvironment {
  param([string]$EnvironmentFile,[string]$ToolsPath,[string]$ApprovalPath)
  foreach($path in @($EnvironmentFile,$ToolsPath,$ApprovalPath)){

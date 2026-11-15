@@ -1,6 +1,25 @@
 Import-Module (Join-Path $PSScriptRoot '../LicensedMenuCI.psm1') -Force -DisableNameChecking
 
 
+Describe 'Unity package manifest UTF-8 protocol' {
+ It 'writes strict UTF-8 without a BOM while preserving non-ASCII dependency paths and parsed data' {
+  $directory=Join-Path $TestDrive ('manifest-'+[char]0x00e9)
+  New-Item -ItemType Directory -Path $directory|Out-Null
+  $path=Join-Path $directory 'manifest.json'
+  $unicode='file:E:/Donn'+[char]0x00e9+'es/Menu-'+[char]0x4e16+[char]0x754c
+  $manifest=[pscustomobject]@{dependencies=[ordered]@{'com.michael-tiller.mtoolkit'=$unicode;'com.unity.inputsystem'='1.14.2'};testables=@('com.michael-tiller.mtoolkit')}
+  Write-CiPackageManifest $manifest $path
+  $bytes=[IO.File]::ReadAllBytes($path)
+  $text=[Text.UTF8Encoding]::new($false,$true).GetString($bytes)
+  [int]$text[0]|Should Not Be 65279
+  $parsed=$text|ConvertFrom-Json
+  $parsed.dependencies.'com.michael-tiller.mtoolkit'|Should Be $unicode
+  $parsed.dependencies.'com.unity.inputsystem'|Should Be '1.14.2'
+  @($parsed.testables).Count|Should Be 1
+  $parsed.testables[0]|Should Be 'com.michael-tiller.mtoolkit'
+ }
+}
+
 Describe 'Runner hook file-command handoff' {
  It 'passes values from a hidden child through GITHUB_ENV without changing its parent environment' {
   $handoff=Join-Path $TestDrive 'github-env';[IO.File]::WriteAllText($handoff,'')

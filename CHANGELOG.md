@@ -42,6 +42,10 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Write the generated Unity package manifest as UTF-8 without a byte-order mark, preserving non-ASCII local dependency paths for package resolution. (v1.21.2)
+
+- Give the standalone menu gallery an explicit clearing camera so static UI remains visible when switching presentations. (v1.21.2)
+
 - Hydrate ignored CI dependency directories around tracked candidate files without overwriting them. Recognize directory-only ignore rules, preserve equivalent tracked Git text checkout line endings, and retain raw and canonical digests with private hydration receipts. (v1.21.1)
 
 - Apply the dedicated center theme role to default menu center backgrounds and enlarge the gallery center's description area without reducing text or interaction sizes. (v1.21.1)

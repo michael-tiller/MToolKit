@@ -85,7 +85,7 @@ try {
  }
  if(-not $mtkRoot -or $mtkRevision -notmatch '^[a-f0-9]{40}$'){throw 'No pinned MToolKit integration source.'}
  # This rewrites only the generated integration manifest. The committed lock is retained unchanged.
- $manifest|ConvertTo-Json -Depth 30|Set-Content -LiteralPath $manifestPath -Encoding utf8
+ Write-CiPackageManifest $manifest $manifestPath
  $resolved|ConvertTo-Json -Depth 10|Set-Content -LiteralPath (Join-Path $privateRoot 'resolved-inputs.json') -Encoding utf8
  $sampleDestination=Set-CiMenuSampleSnapshot $project $mtkRoot $privateRoot $runRoot
  $bridge=Join-Path $project 'Assets/Editor/LicensedMenuCiEntry.cs'

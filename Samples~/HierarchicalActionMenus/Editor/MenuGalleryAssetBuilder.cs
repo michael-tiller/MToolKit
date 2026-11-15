@@ -564,6 +564,9 @@ namespace MToolKit.ContextMenus.Samples.Editor
       try
       {
         SceneManager.SetActiveScene(scene);
+        var clearCamera = new GameObject("Gallery clear camera", typeof(Camera)).GetComponent<Camera>();
+        clearCamera.clearFlags = CameraClearFlags.SolidColor; clearCamera.backgroundColor = Color.black;
+        clearCamera.cullingMask = 0; clearCamera.depth = -100;
         var canvasObject = new GameObject("Action Menu Gallery", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
         var canvas = canvasObject.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         var scaler = canvasObject.GetComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
