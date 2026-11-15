@@ -42,6 +42,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Preserve Generic Image glyph fallback after Sprite destruction and refresh native UI materials after glyph atlas rebakes, retaining the accepted native regression fixture alongside hierarchical menus. (v1.21.3)
+
 - Write the generated Unity package manifest as UTF-8 without a byte-order mark, preserving non-ASCII local dependency paths for package resolution. (v1.21.2)
 
 - Give the standalone menu gallery an explicit clearing camera so static UI remains visible when switching presentations. (v1.21.2)
@@ -51,6 +53,9 @@ not a roadmap milestone.
 - Apply the dedicated center theme role to default menu center backgrounds and enlarge the gallery center's description area without reducing text or interaction sizes. (v1.21.1)
 
 - Retain independently acquired Addressables references for repeated assets and overlapping groups; release failed, canceled and unregistered acquisitions. Return menu provider/command/asset continuations to their captured Unity owner before framework state evaluation and cleanup, and reject stale worker notifications after replacement. Observe DI-owned request/canvas lifetime, retain live foreign-action prompt bindings, measure actual radial center/auxiliary bounds, and complete independent owned cleanup when custom widget or presenter lifecycle callbacks throw or reenter. (v1.21.0)
+- Normalize destroyed Unity Sprite wrappers before Image glyph fallback so usable Generic artwork is selected and exhausted lookups return real null. Preserve native TMP atlas presentation independently of its optional Sprite object; cover nine native destruction/compatibility cases in the consuming project. (v1.20.2)
+
+- Refresh active UGUI materials after native input-atlas rebakes so unchanged text and Images recover from Unity's invalidated stencil-material cache. Queue one native material update without polling or forcing layout; verify the reproduced missing-label failure in Dirigible. (v1.20.1)
 
 - Preserve normal text-em caption proportions in new keycap profiles and let standard named keys fit their labels. Keep saved profile dimensions explicit; verify native baked ink at SmallCopy and accessibility scales in Dirigible. (v1.19.1)
 
