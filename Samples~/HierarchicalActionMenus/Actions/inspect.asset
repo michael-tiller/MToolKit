@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: inspect
   m_EditorClassIdentifier: MToolKit.ContextMenus.Samples::MToolKit.ContextMenus.Samples.GalleryCommandDefinitionSO
   Id: gallery.inspect
-  Label: Inspect selected item
+  Label: Inspect
   LabelKey: 
   Description: 'Inspect selected item: the same action in every presentation.'
   DescriptionKey: 

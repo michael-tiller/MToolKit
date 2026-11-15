@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: cycle-variant
   m_EditorClassIdentifier: MToolKit.ContextMenus.Samples::MToolKit.ContextMenus.Samples.GalleryVariantDefinitionSO
   Id: gallery.cycle-variant
-  Label: Cycle variant
+  Label: Variant
   LabelKey: 
   Description: 'Cycle variant: the same action in every presentation.'
   DescriptionKey: 

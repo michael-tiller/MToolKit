@@ -84,43 +84,108 @@ function Copy-CiGitSnapshot {
  return $target
 }
 function Copy-CiDependencyRoot {
- param([string]$Source,[string]$Destination,[string]$OwnedRoot)
+ param([string]$Source,[string]$Destination,[string]$OwnedRoot,[string]$GitProject,[Collections.Generic.List[object]]$ExistingFiles)
  $target=Assert-CiChildPath $OwnedRoot $Destination;Assert-CiNoReparse $Source
- if(-not(Test-Path -LiteralPath $Source) -or (Test-Path -LiteralPath $target)){throw 'Dependencies require existing roots and fresh destinations.'}
- foreach($entry in @(Get-ChildItem -LiteralPath $Source -Force -Recurse -ErrorAction Stop)){if($entry.Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Dependency roots cannot contain links.'}}
- $null=New-Item -ItemType Directory -Force -Path ([IO.Path]::GetDirectoryName($target))
- Copy-Item -LiteralPath $Source -Destination $target -Recurse -Force
+ $root=Get-Item -LiteralPath $Source -Force -ErrorAction Stop
+ $entries=@($root);if($root.PSIsContainer){$entries+=@(Get-ChildItem -LiteralPath $root.FullName -Force -Recurse -ErrorAction Stop|Sort-Object FullName)}
+ $tracked=Get-CiTrackedTextPaths $GitProject $target
+ $directories=[Collections.Generic.List[string]]::new();$copies=[Collections.Generic.List[object]]::new()
+ # Preflight the complete root before copying: a candidate collision never gets overwritten.
+ foreach($entry in $entries){
+  if($entry.Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'Dependency roots cannot contain links.'}
+  $relative=$entry.FullName.Substring($root.FullName.Length).TrimStart([char[]]'\/')
+  $to=if($relative){Join-Path $target $relative}else{$target}
+  Assert-CiNoReparse $to
+  if(Test-Path -LiteralPath $to){
+   $existing=Get-Item -LiteralPath $to -Force
+   if($existing.PSIsContainer -ne $entry.PSIsContainer){throw 'Dependency destination has a conflicting file or directory.'}
+   if($entry.PSIsContainer){continue}
+   $a=(Get-FileHash -LiteralPath $entry.FullName -Algorithm SHA256).Hash;$b=(Get-FileHash -LiteralPath $to -Algorithm SHA256).Hash
+   $mode='existing-identical';$canonical=$null
+   if($a -cne $b){
+    if(-not $tracked.Contains($to)){throw 'Dependency file differs from the candidate snapshot.'}
+    $canonical=Get-CiUtf8LfHash $entry.FullName;$other=Get-CiUtf8LfHash $to
+    if(-not $canonical -or $canonical -cne $other){throw 'Tracked dependency differs beyond Git text line endings.'}
+    $mode='existing-git-text-eol'
+   }
+   if($null -ne $ExistingFiles){$ExistingFiles.Add([pscustomobject]@{source=$entry.FullName;destination=$to;sourceSha256=$a;destinationSha256=$b;canonicalSha256=$canonical;mode=$mode})}
+  }elseif($entry.PSIsContainer){$directories.Add($to)}else{$copies.Add([pscustomobject]@{source=$entry.FullName;destination=$to})}
+ }
+ foreach($directory in $directories){$null=[IO.Directory]::CreateDirectory($directory)}
+ foreach($copy in $copies){$null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($copy.destination));[IO.File]::Copy($copy.source,$copy.destination,$false)}
 }
 function Copy-CiIgnoredDependencies {
- param([string]$SourceProject,[string]$DestinationProject,[string]$OwnedRoot)
- foreach($relative in @('Assets/ThirdParty','Assets/Plugins','Assets/Packages','Assets/ExternalDependencyManager','Assets/TextMesh Pro','Packages/com.ivanmurzak.unity.mcp')){
-  $ignored=Invoke-CiGit @('-C',$DestinationProject,'check-ignore',$relative)
-  if([string]::IsNullOrWhiteSpace($ignored)){throw 'Required root is not ignored by the tested repository.'}
-  Copy-CiDependencyRoot (Join-Path $SourceProject $relative) (Join-Path $DestinationProject $relative) $OwnedRoot
-  if($relative.StartsWith('Assets/')){Copy-CiDependencyRoot (Join-Path $SourceProject ($relative+'.meta')) (Join-Path $DestinationProject ($relative+'.meta')) $OwnedRoot}
+ param([string]$SourceProject,[string]$DestinationProject,[string]$OwnedRoot,[string]$ReceiptPath)
+ $receipt=$null
+ if($ReceiptPath){
+  $receipt=Assert-CiChildPath $OwnedRoot $ReceiptPath
+  foreach($project in @($SourceProject,$DestinationProject)){
+   $base=[IO.Path]::GetFullPath($project).TrimEnd([char[]]'\/')
+   if($receipt.StartsWith($base+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)){throw 'Hydration receipts must stay outside source and destination projects.'}
+  }
+  if(Test-Path -LiteralPath $receipt){throw 'Hydration receipt must be fresh.'}
+ }
+ $existing=[Collections.Generic.List[object]]::new();$complete=$false
+ try{
+  foreach($relative in @('Assets/ThirdParty','Assets/Plugins','Assets/Packages','Assets/ExternalDependencyManager','Assets/TextMesh Pro','Packages/com.ivanmurzak.unity.mcp')){
+   $ignored=Invoke-CiGit @('-C',$DestinationProject,'check-ignore','--no-index','--',($relative+'/'))
+   if([string]::IsNullOrWhiteSpace($ignored)){throw 'Required root is not ignored by the tested repository.'}
+   Copy-CiDependencyRoot (Join-Path $SourceProject $relative) (Join-Path $DestinationProject $relative) $OwnedRoot -GitProject $DestinationProject -ExistingFiles $existing
+   if($relative.StartsWith('Assets/')){Copy-CiDependencyRoot (Join-Path $SourceProject ($relative+'.meta')) (Join-Path $DestinationProject ($relative+'.meta')) $OwnedRoot -GitProject $DestinationProject -ExistingFiles $existing}
+  }
+  $complete=$true
+ }finally{
+  if($receipt){
+   $null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($receipt))
+   [pscustomobject]@{schemaVersion=1;complete=$complete;sourceProject=$SourceProject;destinationProject=$DestinationProject;existingFiles=@($existing.ToArray())}|ConvertTo-Json -Depth 5|Set-Content -LiteralPath $receipt -Encoding utf8
+  }
  }
 }
-function Get-CiTreeDigest {
+function Get-CiTrackedTextPaths {
+ param([string]$Project,[string]$Path)
+ $result=[Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+ if(-not $Project){return ,$result}
+ $projectPath=[IO.Path]::GetFullPath($Project).TrimEnd([char[]]'\/');$full=Assert-CiChildPath $projectPath $Path
+ $relative=$full.Substring($projectPath.Length+1).Replace('\','/')
+ $files=(Invoke-CiGit @('-C',$projectPath,'ls-files','-z','--',$relative)).Split([char[]]@([char]0),[StringSplitOptions]::RemoveEmptyEntries)
+ foreach($file in $files){
+  $attrs=(Invoke-CiGit @('-C',$projectPath,'check-attr','-z','text','eol','--',$file)).Split([char]0)
+  if($attrs.Count -ge 6 -and $attrs[2] -ne 'unset' -and ($attrs[2] -in @('set','auto') -or $attrs[5] -in @('lf','crlf'))){$null=$result.Add([IO.Path]::GetFullPath((Join-Path $projectPath $file)))}
+ }
+ return ,$result
+}
+function Get-CiUtf8LfHash {
  param([string]$Path)
+ try{$text=[Text.UTF8Encoding]::new($false,$true).GetString([IO.File]::ReadAllBytes($Path))}catch [Text.DecoderFallbackException]{return $null}
+ if($text.IndexOf([char]0) -ge 0){return $null}
+ $hash=[Security.Cryptography.SHA256]::Create()
+ try{return [BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($text.Replace("`r`n","`n")))).Replace('-','')}finally{$hash.Dispose()}
+}
+function Get-CiTreeDigest {
+ param([string]$Path,[string]$GitProject)
  Assert-CiNoReparse $Path
  $entry=Get-Item -LiteralPath $Path -Force
  $files=@(if($entry.PSIsContainer){Get-ChildItem -LiteralPath $entry.FullName -File -Force -Recurse|Sort-Object FullName}else{$entry})
- $lines=[Text.StringBuilder]::new()
+ $lines=[Text.StringBuilder]::new();$rawLines=[Text.StringBuilder]::new();$tracked=Get-CiTrackedTextPaths $GitProject $entry.FullName
  foreach($file in $files){
   Assert-CiNoReparse $file.FullName
   $relative=if($entry.PSIsContainer){$file.FullName.Substring($entry.FullName.TrimEnd('\').Length+1).Replace('\','/')}else{$file.Name}
-  $null=$lines.Append($relative).Append([char]0).Append((Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash).Append([char]10)
+  $raw=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash;$canonical=$null
+  if($tracked.Contains($file.FullName)){$canonical=Get-CiUtf8LfHash $file.FullName}
+  if(-not $canonical){$canonical=$raw}
+  $null=$lines.Append($relative).Append([char]0).Append($canonical).Append([char]10)
+  $null=$rawLines.Append($relative).Append([char]0).Append($raw).Append([char]10)
  }
  $hash=[Security.Cryptography.SHA256]::Create()
- try{$digest=[BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($lines.ToString()))).Replace('-','')}finally{$hash.Dispose()}
- return [pscustomobject]@{Hash=$digest;FileCount=$files.Count}
+ try{$digest=[BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($lines.ToString()))).Replace('-','');$rawDigest=[BitConverter]::ToString($hash.ComputeHash([Text.Encoding]::UTF8.GetBytes($rawLines.ToString()))).Replace('-','')}finally{$hash.Dispose()}
+ return [pscustomobject]@{Hash=$digest;RawHash=$rawDigest;FileCount=$files.Count}
 }
 function Get-CiIgnoredDependencyManifest {
  param([string]$Project)
  $result=@()
  foreach($relative in @('Assets/ThirdParty','Assets/Plugins','Assets/Packages','Assets/ExternalDependencyManager','Assets/TextMesh Pro','Packages/com.ivanmurzak.unity.mcp')){
   $paths=@($relative);if($relative.StartsWith('Assets/')){$paths+=($relative+'.meta')}
-  foreach($path in $paths){$digest=Get-CiTreeDigest (Join-Path $Project $path);$result+=@([pscustomobject]@{Path=$path;Hash=$digest.Hash;FileCount=$digest.FileCount})}
+  foreach($path in $paths){$digest=Get-CiTreeDigest (Join-Path $Project $path) -GitProject $Project;$result+=@([pscustomobject]@{Path=$path;Hash=$digest.Hash;RawHash=$digest.RawHash;FileCount=$digest.FileCount})}
  }
  return $result
 }

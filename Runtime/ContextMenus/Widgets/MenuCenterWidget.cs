@@ -83,7 +83,11 @@ namespace MToolKit.ContextMenus.Widgets
       base.ApplyVisuals();
       if (State == null) return;
       if (DisabledReason != null) DisabledReason.text = State.Availability.DisabledReason ?? string.Empty;
-      if (UseSkin) Tint(DisabledReason, MenuVisualRole.Description);
+      if (UseSkin)
+      {
+        Tint(Background, MenuVisualRole.Center);
+        Tint(DisabledReason, MenuVisualRole.Description);
+      }
     }
 
     private void ClearPool()

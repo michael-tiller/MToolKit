@@ -29,7 +29,7 @@ try {
  $consumerRevision=if($isFramework){[string]$config.ConsumerRevision}else{[string]$approval.MergeSha}
  $consumerSource=if($isFramework){[string]$config.DependencyProjectRoot}else{[string]$approval.SourceRoot}
  $project=Copy-CiGitSnapshot $consumerSource $consumerRevision (Join-Path $runRoot 'project') $runRoot
- Copy-CiIgnoredDependencies $config.DependencyProjectRoot $project $runRoot
+ Copy-CiIgnoredDependencies $config.DependencyProjectRoot $project $runRoot -ReceiptPath (Join-Path $privateRoot 'hydrated-inputs.json')
  $copiedRoots=@(Get-CiIgnoredDependencyManifest $project)
  if($copiedRoots.Count -ne $approval.IgnoredDependencyManifest.Count){throw 'Dependency root manifest is incomplete.'}
  foreach($input in $approval.IgnoredDependencyManifest){

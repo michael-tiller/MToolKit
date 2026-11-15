@@ -135,7 +135,7 @@ namespace MToolKit.ContextMenus.Samples.Editor
       var refs = CreateReferences(outputRoot, input);
       var icons = CreateIcons(outputRoot);
       var theme = CreateThemes(outputRoot, font);
-      var secondary = SavePrefab(outputRoot, "SecondaryAction", () => ActionWidget("Secondary action", font, theme.Label, true, true, false));
+      var secondary = SavePrefab(outputRoot, "SecondaryAction", () => SecondaryWidget(font, theme.Label));
       var row = SavePrefab(outputRoot, "ListRow", () => ActionWidget("List row", font, theme.Label, true, true, false));
       var radial = SavePrefab(outputRoot, "RadialLabelIcon", () => ActionWidget("Radial label and icon", font, theme.Label, true, true, true));
       var iconOnly = SavePrefab(outputRoot, "IconOnly", () => ActionWidget("Icon only", font, theme.Label, false, true, true));
@@ -321,9 +321,11 @@ namespace MToolKit.ContextMenus.Samples.Editor
         var submenu = Definition<MenuSubmenuDefinitionSO>(id, label, 1);
         submenu.Children = children; submenu.Provider = null; submenu.Primary = null; submenu.ProfileOverride = null; return submenu;
       }
-      var variant = Definition<GalleryVariantDefinitionSO>("cycle-variant", "Cycle variant", 2);
+      var variant = Definition<GalleryVariantDefinitionSO>("cycle-variant", "Variant", 2);
+      variant.Description = "Cycle variant: the same action in every presentation.";
       variant.BindingHint = refs["Menu/Secondary"];
-      var inspect = Command("inspect", "Inspect selected item", outcome: MenuActionOutcome.Refresh);
+      var inspect = Command("inspect", "Inspect", outcome: MenuActionOutcome.Refresh);
+      inspect.Description = "Inspect selected item: the same action in every presentation.";
       inspect.BindingHint = refs["Menu/Inspect"];
       var revolver = Command("equip-revolver", "Revolver", "Equipment: sidearm");
       revolver.SecondaryActions = new MenuActionDefinitionSO[] { variant, inspect };
@@ -496,24 +498,34 @@ namespace MToolKit.ContextMenus.Samples.Editor
       root.gameObject.AddComponent<LayoutElement>().preferredHeight = 40;
       return root.gameObject;
     }
+    private static GameObject SecondaryWidget(TMP_FontAsset font, Typeset labelTypeset)
+    {
+      var root = ActionWidget("Secondary action", font, labelTypeset, true, false, false);
+      ((RectTransform)root.transform).sizeDelta = new Vector2(98, 44);
+      var label = root.GetComponent<MenuActionWidget>().Label.rectTransform;
+      label.offsetMin = new Vector2(8, 0); label.offsetMax = new Vector2(-8, 0);
+      var element = root.GetComponent<LayoutElement>();
+      element.minWidth = element.minHeight = 40; element.preferredWidth = 98; element.preferredHeight = 44;
+      return root;
+    }
     private static GameObject Center(TMP_FontAsset font, Typeset labelTypeset, Typeset descriptionTypeset, GameObject secondary)
     {
-      var root = Rect("Center information", null); root.sizeDelta = new Vector2(160, 250);
+      var root = Rect("Center information", null); root.sizeDelta = new Vector2(220, 220);
       var background = root.gameObject.AddComponent<Image>(); background.raycastTarget = false;
-      var title = Text("Title", root, font, 19); Place(title.rectTransform, new Vector2(0, 84), new Vector2(152, 40));
-      var description = Text("Description", root, font, 16); Place(description.rectTransform, new Vector2(0, 42), new Vector2(152, 44));
-      var unavailable = Text("Availability", root, font, 16); Place(unavailable.rectTransform, new Vector2(0, 5), new Vector2(152, 24));
-      var cost = Text("Cost", root, font, 16); Place(cost.rectTransform, new Vector2(0, -18), new Vector2(152, 20));
-      var variant = Text("Variant", root, font, 16); Place(variant.rectTransform, new Vector2(0, -38), new Vector2(152, 20));
-      var hint = Text("Binding", root, font, 16); Place(hint.rectTransform, new Vector2(0, -58), new Vector2(152, 20));
+      var title = Text("Title", root, font, 19); Place(title.rectTransform, new Vector2(0, 90), new Vector2(200, 32));
+      var description = Text("Description", root, font, 16); Place(description.rectTransform, new Vector2(0, 36), new Vector2(200, 72));
+      var unavailable = Text("Availability", root, font, 16); Place(unavailable.rectTransform, new Vector2(0, -12), new Vector2(200, 20));
+      var cost = Text("Cost", root, font, 16); Place(cost.rectTransform, new Vector2(0, -34), new Vector2(200, 20));
+      var variant = Text("Variant", root, font, 16); Place(variant.rectTransform, new Vector2(0, -56), new Vector2(200, 20));
+      var hint = Text("Binding", root, font, 16); Place(hint.rectTransform, new Vector2(0, -77), new Vector2(200, 18));
       foreach (var text in new[] { title, description })
       {
         var preset = text.gameObject.AddComponent<TypesetPreset>(); Set(preset, Backing("Text"), p => p.objectReferenceValue = text);
         preset.SetOverrideTheme(true); preset.SetStart(text == title ? labelTypeset : descriptionTypeset);
       }
-      var container = Rect("Secondary actions", root); Place(container, new Vector2(0, -98), new Vector2(152, 84));
-      var layout = container.gameObject.AddComponent<VerticalLayoutGroup>(); layout.spacing = 4;
-      layout.childControlWidth = layout.childControlHeight = true; layout.childForceExpandWidth = true; layout.childForceExpandHeight = false;
+      var container = Rect("Secondary actions", root); Place(container, new Vector2(0, -109), new Vector2(200, 44));
+      var layout = container.gameObject.AddComponent<HorizontalLayoutGroup>(); layout.spacing = 4;
+      layout.childControlWidth = layout.childControlHeight = true; layout.childForceExpandWidth = layout.childForceExpandHeight = true;
       var widget = root.gameObject.AddComponent<MenuCenterWidget>(); widget.Configure(title, description, disabledReason: unavailable,
         bindingHint: hint, secondaryContainer: container, secondaryPrefab: secondary);
       widget.Cost = cost; widget.Variant = variant; widget.Background = background;

@@ -93,7 +93,7 @@ Describe 'Whole dependency snapshots' {
   (& git -C $target rev-parse HEAD).Trim()|Should Be $revision
   (Get-Item -LiteralPath (Join-Path $target '.git') -Force).PSIsContainer|Should Be $true
  }
- It 'copies all nested data and metadata without overwriting another destination' {
+ It 'copies missing nested data and accepts identical existing dependency files without overwriting' {
   $source=Join-Path $TestDrive 'vendor'
   $owned=Join-Path $TestDrive 'run'
   New-Item -ItemType Directory -Force -Path (Join-Path $source 'nested'),$owned|Out-Null
@@ -102,7 +102,8 @@ Describe 'Whole dependency snapshots' {
   $target=Join-Path $owned 'project/Assets/ThirdParty'
   Copy-CiDependencyRoot $source $target $owned
   [IO.File]::ReadAllText((Join-Path $target 'nested/file.dll.meta'))|Should Be 'fixture guid'
-  {Copy-CiDependencyRoot $source $target $owned}|Should Throw
+  Copy-CiDependencyRoot $source $target $owned
+  [IO.File]::ReadAllText((Join-Path $target 'nested/file.dll.meta'))|Should Be 'fixture guid'
   {Copy-CiDependencyRoot $source (Join-Path $TestDrive 'foreign') $owned}|Should Throw
  }
  It 'records a deterministic digest that changes when a nested dependency or metadata changes' {
@@ -122,6 +123,97 @@ Describe 'Whole dependency snapshots' {
   $target=Join-Path $owned 'snapshot'
   {Copy-CiGitSnapshot $source ('f'*40) $target $owned}|Should Throw
   Test-Path -LiteralPath $target|Should Be $false
+ }
+}
+
+Describe 'Required ignored dependency roots with tracked candidate subsets' {
+ BeforeEach {
+  $owned=Join-Path $TestDrive ('hydrate-'+[Guid]::NewGuid().ToString('N'))
+  $source=Join-Path $owned 'source';$project=Join-Path $owned 'project'
+  New-Item -ItemType Directory -Force -Path $source,$project|Out-Null
+  $null=& git init --quiet $project
+  $null=& git init --quiet $source
+  [IO.File]::WriteAllText((Join-Path $project '.gitattributes'),"* text=auto eol=lf`n*.bin -text`n")
+  [IO.File]::WriteAllText((Join-Path $source '.gitattributes'),"* text=auto eol=lf`n*.bin -text`n")
+  $required=@('Assets/ThirdParty','Assets/Plugins','Assets/Packages','Assets/ExternalDependencyManager','Assets/TextMesh Pro','Packages/com.ivanmurzak.unity.mcp')
+  $ignore=@()
+  foreach($relative in $required){
+   $root=Join-Path $source $relative
+   New-Item -ItemType Directory -Force -Path (Join-Path $root 'nested')|Out-Null
+   [IO.File]::WriteAllText((Join-Path $root 'nested/payload.bin'),$relative)
+   [IO.File]::WriteAllText((Join-Path $root 'nested/payload.bin.meta'),'nested fixture metadata')
+   $ignore+=($relative+'/')
+   if($relative.StartsWith('Assets/')){
+    [IO.File]::WriteAllText(($root+'.meta'),'root fixture metadata')
+    $ignore+=($relative+'.meta')
+   }
+  }
+  [IO.File]::WriteAllLines((Join-Path $project '.gitignore'),[string[]]$ignore)
+ }
+ It 'recognizes directory-only ignore rules before missing dependency directories exist' {
+  Test-Path -LiteralPath (Join-Path $project 'Assets/ThirdParty')|Should Be $false
+  Copy-CiIgnoredDependencies $source $project $owned
+  foreach($relative in $required){
+   [IO.File]::ReadAllText((Join-Path $project ($relative+'/nested/payload.bin')))|Should Be $relative
+  }
+  [IO.File]::ReadAllText((Join-Path $project 'Assets/ThirdParty.meta'))|Should Be 'root fixture metadata'
+ }
+ It 'hydrates whole ignored roots around identical tracked files while retaining candidate-only source and metadata' {
+  $tracked='Assets/Plugins/nested/payload.bin';$meta='Assets/Plugins.meta';$candidate='Assets/Plugins/nested/candidate.cs'
+  New-Item -ItemType Directory -Force -Path (Join-Path $project 'Assets/Plugins/nested')|Out-Null
+  [IO.File]::WriteAllBytes((Join-Path $project $tracked),[IO.File]::ReadAllBytes((Join-Path $source $tracked)))
+  [IO.File]::WriteAllBytes((Join-Path $project $meta),[IO.File]::ReadAllBytes((Join-Path $source $meta)))
+  [IO.File]::WriteAllText((Join-Path $project $candidate),'candidate-owned source')
+  $null=& git -C $project add -f -- $tracked $meta $candidate
+  if($LASTEXITCODE -ne 0){throw 'Fixture failed to track the candidate subset.'}
+  $before=(Get-FileHash -LiteralPath (Join-Path $project $tracked) -Algorithm SHA256).Hash
+  Copy-CiIgnoredDependencies $source $project $owned
+  (Get-FileHash -LiteralPath (Join-Path $project $tracked) -Algorithm SHA256).Hash|Should Be $before
+  [IO.File]::ReadAllText((Join-Path $project $candidate))|Should Be 'candidate-owned source'
+  [IO.File]::ReadAllText((Join-Path $project $meta))|Should Be 'root fixture metadata'
+  [IO.File]::ReadAllText((Join-Path $project 'Assets/Plugins/nested/payload.bin.meta'))|Should Be 'nested fixture metadata'
+ }
+ It 'rejects conflicting existing files before copying any missing sibling or overwriting candidate bytes' {
+  $sourceRoot=Join-Path $source 'Assets/Plugins';$target=Join-Path $project 'Assets/Plugins'
+  New-Item -ItemType Directory -Force -Path (Join-Path $target 'nested')|Out-Null
+  [IO.File]::WriteAllText((Join-Path $target 'nested/payload.bin'),'different candidate bytes')
+  [IO.File]::WriteAllText((Join-Path $sourceRoot 'brand-new.bin'),'must not be copied after conflict')
+  {Copy-CiDependencyRoot $sourceRoot $target $owned}|Should Throw
+  [IO.File]::ReadAllText((Join-Path $target 'nested/payload.bin'))|Should Be 'different candidate bytes'
+  Test-Path -LiteralPath (Join-Path $target 'brand-new.bin')|Should Be $false
+ }
+ It 'preserves tracked Git text checkout bytes and approves only their canonical EOL-equivalent digest' {
+  $relative='Assets/Plugins/nested/tracked.txt';$sourceFile=Join-Path $source $relative;$targetFile=Join-Path $project $relative
+  New-Item -ItemType Directory -Force -Path ([IO.Path]::GetDirectoryName($targetFile))|Out-Null
+  [IO.File]::WriteAllText($sourceFile,"same text`nsecond line`n")
+  [IO.File]::WriteAllText($targetFile,"same text`r`nsecond line`r`n")
+  $null=& git -C $source add -f -- $relative
+  $null=& git -C $project add -f -- $relative
+  $before=(Get-FileHash -LiteralPath $targetFile -Algorithm SHA256).Hash
+  $receipt=Join-Path $owned 'private/hydration.json'
+  Copy-CiIgnoredDependencies $source $project $owned -ReceiptPath $receipt
+  (Get-FileHash -LiteralPath $targetFile -Algorithm SHA256).Hash|Should Be $before
+  $expected=@(Get-CiIgnoredDependencyManifest $source|Where-Object Path -eq 'Assets/Plugins')[0]
+  $actual=@(Get-CiIgnoredDependencyManifest $project|Where-Object Path -eq 'Assets/Plugins')[0]
+  $actual.Hash|Should Be $expected.Hash
+  $actual.RawHash|Should Not Be $expected.RawHash
+  $record=Get-Content -LiteralPath $receipt -Raw|ConvertFrom-Json
+  $equivalent=@($record.existingFiles|Where-Object mode -eq 'existing-git-text-eol')
+  $equivalent.Count|Should Be 1
+  $equivalent[0].sourceSha256|Should Not Be $equivalent[0].destinationSha256
+ }
+ It 'rejects EOL differences for ignored files and binary data and rejects changed tracked text' {
+  foreach($case in @('ignored.txt','tracked.bin','changed.txt')){
+   $from=Join-Path $owned ('case-source/'+$case);$to=Join-Path $project ('Assets/Plugins/'+$case)
+   New-Item -ItemType Directory -Force -Path ([IO.Path]::GetDirectoryName($from)),([IO.Path]::GetDirectoryName($to))|Out-Null
+   $a=if($case -eq 'tracked.bin'){"binary`0data`n"}else{"source text`n"}
+   $b=if($case -eq 'tracked.bin'){"binary`0data`r`n"}elseif($case -eq 'changed.txt'){"different text`r`n"}else{"source text`r`n"}
+   [IO.File]::WriteAllText($from,$a);[IO.File]::WriteAllText($to,$b)
+   if($case -ne 'ignored.txt'){$null=& git -C $project add -f -- ('Assets/Plugins/'+$case)}
+   $before=(Get-FileHash -LiteralPath $to -Algorithm SHA256).Hash
+   {Copy-CiDependencyRoot $from $to $owned -GitProject $project}|Should Throw
+   (Get-FileHash -LiteralPath $to -Algorithm SHA256).Hash|Should Be $before
+  }
  }
 }
 

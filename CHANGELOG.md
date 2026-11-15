@@ -42,6 +42,10 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Hydrate ignored CI dependency directories around tracked candidate files without overwriting them. Recognize directory-only ignore rules, preserve equivalent tracked Git text checkout line endings, and retain raw and canonical digests with private hydration receipts. (v1.21.1)
+
+- Apply the dedicated center theme role to default menu center backgrounds and enlarge the gallery center's description area without reducing text or interaction sizes. (v1.21.1)
+
 - Retain independently acquired Addressables references for repeated assets and overlapping groups; release failed, canceled and unregistered acquisitions. Return menu provider/command/asset continuations to their captured Unity owner before framework state evaluation and cleanup, and reject stale worker notifications after replacement. Observe DI-owned request/canvas lifetime, retain live foreign-action prompt bindings, measure actual radial center/auxiliary bounds, and complete independent owned cleanup when custom widget or presenter lifecycle callbacks throw or reenter. (v1.21.0)
 
 - Preserve normal text-em caption proportions in new keycap profiles and let standard named keys fit their labels. Keep saved profile dimensions explicit; verify native baked ink at SmallCopy and accessibility scales in Dirigible. (v1.19.1)

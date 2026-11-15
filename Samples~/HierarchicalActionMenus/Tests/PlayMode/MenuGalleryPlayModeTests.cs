@@ -374,7 +374,7 @@ namespace MToolKit.ContextMenus.Samples.Tests
       var profile = Object.Instantiate(gallery.HostConfig.Resolve(MenuGalleryController.Gta));
       ownedObjects.Add(profile);
       // This supported composition deliberately overlaps its standard center with the ring.
-      profile.InnerRadius = 40;
+      profile.InnerRadius = 40; profile.RingWidth = 160;
       var context = new MenuContext(gallery.State);
       yield return gallery.MenuService.OpenAsync(new MenuOpenRequest(gallery.ActionSet.Create(context), context,
         gallery.Canvas, new Vector2(Screen.width * .5f, Screen.height * .5f), profile: profile)).ToCoroutine();
