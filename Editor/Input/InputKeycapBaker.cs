@@ -101,8 +101,7 @@ namespace MToolKit.Editor.Input
                 continue;
               }
             }
-            var texture = RenderContent(profile, label, FixedWidth(key), HasSprite(key) ? key.ContentSprite : null,
-              key.SpriteSize, font, content == InputKeycapContentMode.SpriteAndLabel);
+            var texture = RenderKeyContent(profile, key, label, font);
             textures.Add(texture);
             var sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(.5f, .5f));
             sprites.Add(sprite);
@@ -187,9 +186,52 @@ namespace MToolKit.Editor.Input
     {
       if (key == null) throw new InvalidOperationException("Choose a keycap row.");
       ValidateContentMode(key);
-      var sprite = HasSprite(key) ? key.ContentSprite : null;
-      return RenderContent(profile, ResolveLabel(profile, key, locale), FixedWidth(key), sprite, key.SpriteSize,
-        ResolveFont(profile, locale), EffectiveContent(key) == InputKeycapContentMode.SpriteAndLabel);
+      return RenderKeyContent(profile, key, ResolveLabel(profile, key, locale), ResolveFont(profile, locale));
+    }
+
+    private static Texture2D RenderKeyContent(InputKeycapBakeProfile profile, InputKeycapBakeProfile.Key key,
+      string label, TMP_FontAsset font)
+    {
+      var source = HasSprite(key) ? key.ContentSprite : null;
+      bool includeLabel = EffectiveContent(key) == InputKeycapContentMode.SpriteAndLabel;
+      if (source == null || key.ArtworkSizing == InputKeycapArtworkSizing.SourceRect)
+        return RenderContent(profile, label, FixedWidth(key), source, key.SpriteSize, font, includeLabel);
+
+      Texture2D prepared = null;
+      Sprite sprite = null;
+      try
+      {
+        prepared = InputGlyphSpriteAssetBuilder.ReadPixels(source, Color.white);
+        prepared.filterMode = FilterMode.Point;
+        prepared.wrapMode = TextureWrapMode.Clamp;
+        var pixels = prepared.GetPixels32();
+        int left = prepared.width, right = -1, bottom = prepared.height, top = -1;
+        for (int i = 0; i < pixels.Length; i++)
+        {
+          var pixel = pixels[i];
+          if (key.ArtworkSizing == InputKeycapArtworkSizing.MonochromeInkBounds)
+          {
+            byte alpha = (byte)Mathf.RoundToInt(((Color)pixel).grayscale * pixel.a);
+            pixels[i] = new Color32(255, 255, 255, alpha);
+          }
+          if (pixels[i].a == 0) continue;
+          int x = i % prepared.width, y = i / prepared.width;
+          left = Math.Min(left, x); right = Math.Max(right, x);
+          bottom = Math.Min(bottom, y); top = Math.Max(top, y);
+        }
+        if (right < left)
+          throw new InvalidOperationException("The selected artwork sizing finds no visible ink: " + key.ControlPath);
+        prepared.SetPixels32(pixels);
+        prepared.Apply(false, false);
+        sprite = Sprite.Create(prepared, new Rect(left, bottom, right - left + 1, top - bottom + 1),
+          new Vector2(.5f, .5f), source.pixelsPerUnit, 0, SpriteMeshType.FullRect);
+        return RenderContent(profile, label, FixedWidth(key), sprite, key.SpriteSize, font, includeLabel);
+      }
+      finally
+      {
+        if (sprite != null) Object.DestroyImmediate(sprite);
+        if (prepared != null) Object.DestroyImmediate(prepared);
+      }
     }
 
     private static Texture2D RenderContent(InputKeycapBakeProfile profile, string label, int fixedWidth,
@@ -416,6 +458,8 @@ namespace MToolKit.Editor.Input
         { issues.Add("Select a known content mode: " + key.ControlPath); continue; }
         if (!Enum.IsDefined(typeof(InputGlyphPlatform), key.Platform))
         { issues.Add("Select a known platform: " + key.ControlPath); continue; }
+        if (!Enum.IsDefined(typeof(InputKeycapArtworkSizing), key.ArtworkSizing))
+        { issues.Add("Select a known artwork sizing mode: " + key.ControlPath); continue; }
         var content = EffectiveContent(key);
         bool symbol = content == InputKeycapContentMode.Sprite;
         bool localized = !symbol && !string.IsNullOrEmpty(key.LocalizationKey);
@@ -500,6 +544,8 @@ namespace MToolKit.Editor.Input
         throw new InvalidOperationException("Select a known keycap content mode: " + key.ControlPath);
       if (!Enum.IsDefined(typeof(InputGlyphPlatform), key.Platform))
         throw new InvalidOperationException("Select a known glyph platform: " + key.ControlPath);
+      if (!Enum.IsDefined(typeof(InputKeycapArtworkSizing), key.ArtworkSizing))
+        throw new InvalidOperationException("Select a known artwork sizing mode: " + key.ControlPath);
     }
 
     private static int FixedWidth(InputKeycapBakeProfile.Key key)

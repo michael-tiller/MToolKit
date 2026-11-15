@@ -14,6 +14,7 @@ namespace MToolKit.Editor.Input
   public enum InputKeycapWidthRule { FitLabel = 0, Fixed = 1 }
   public enum InputKeycapImageMode { Simple = 0, Sliced = 1 }
   public enum InputKeycapLocaleSource { ProfileLocales = 0, ProjectEnabled = 1 }
+  public enum InputKeycapArtworkSizing { SourceRect = 0, AlphaBounds = 1, MonochromeInkBounds = 2 }
 
   [CreateAssetMenu(fileName = "InputKeycapBakeProfile", menuName = "MToolKit/Input Glyphs/Keycap Bake Profile")]
   public sealed class InputKeycapBakeProfile : ScriptableObject
@@ -37,7 +38,9 @@ namespace MToolKit.Editor.Input
       public InputKeycapContentMode ContentMode;
       [Tooltip("Optional central artwork. Sprite mode keeps a readable label until artwork is assigned.")]
       public Sprite ContentSprite;
-      [Tooltip("Maximum central artwork size in baked pixels. Native Image preserves the sprite aspect ratio.")]
+      [Tooltip("SourceRect preserves the authored rectangle. AlphaBounds trims transparent padding. MonochromeInkBounds converts white-on-black brightness to alpha and trims the visible ink. Source assets remain unchanged.")]
+      public InputKeycapArtworkSizing ArtworkSizing;
+      [Tooltip("Maximum central artwork size in baked pixels. Bounds modes measure visible content; SourceRect measures the whole source rectangle. Native Image preserves the aspect ratio.")]
       public Vector2 SpriteSize = new(32, 32);
       public InputKeycapWidthRule WidthRule;
       public int FixedWidth;

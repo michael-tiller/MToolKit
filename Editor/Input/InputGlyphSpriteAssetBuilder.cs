@@ -187,10 +187,11 @@ namespace MToolKit.Editor.Input
       }
     }
 
-    private static Texture2D ReadPixels(Sprite sprite, Color tint)
+    internal static Texture2D ReadPixels(Sprite sprite, Color tint)
     {
       Texture2D source = sprite.texture;
       Texture2D readable = null;
+      Texture2D copy = null;
       try
       {
         if (!source.isReadable)
@@ -202,12 +203,17 @@ namespace MToolKit.Editor.Input
           source = readable;
         }
         var rect = sprite.rect;
-        var copy = new Texture2D((int)rect.width, (int)rect.height, TextureFormat.RGBA32, false);
+        copy = new Texture2D((int)rect.width, (int)rect.height, TextureFormat.RGBA32, false);
         var pixels = source.GetPixels((int)rect.x, (int)rect.y, (int)rect.width, (int)rect.height);
         for (int i = 0; i < pixels.Length; i++) pixels[i] *= tint;
         copy.SetPixels(pixels);
         copy.Apply(false, false);
         return copy;
+      }
+      catch
+      {
+        if (copy != null) Object.DestroyImmediate(copy);
+        throw;
       }
       finally
       {

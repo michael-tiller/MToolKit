@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Add per-key source-rectangle, alpha-bound and monochrome-ink sizing for central keycap artwork. Fit visible symbols without enlarging caps, retain source/importer identities and release prepared pixels on failure; verify actual authored arrows/Caps/Context art, legacy scale, colors and native rendering in Dirigible. (v1.20.0)
+
 - Configure keycap caption color independently from artwork and select a native TMP font-material preset in saved profiles and the Atlas Wizard. Validate atlas compatibility consistently in previews and saved bakes; isolate and release temporary material copies while retaining existing tint behavior by default. Verify 38 native authoring cases in Dirigible. (v1.19.0)
 
 - Add explicit unbound-prompt policies for localized Unbound, configured keyboard/mouse fallback, or hidden text. Preserve effective overrides, composite topology, native masks, player restrictions and binding indices; retain valid controller bindings and readable missing-art names. Expose per-instance TMP configuration and an optional compatible named-action adapter. (v1.18.0)
