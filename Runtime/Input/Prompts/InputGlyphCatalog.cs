@@ -230,8 +230,10 @@ namespace MToolKit.Runtime.Input.Prompts
       if (entry.ImageSprite != null) return entry.ImageSprite;
       if (entry.SpriteAsset == null || string.IsNullOrEmpty(entry.SpriteName)) return null;
       int index = entry.SpriteAsset.GetSpriteIndexFromName(entry.SpriteName);
-      return index < 0 || index >= entry.SpriteAsset.spriteCharacterTable.Count ? null
+      var sprite = index < 0 || index >= entry.SpriteAsset.spriteCharacterTable.Count ? null
         : (entry.SpriteAsset.spriteCharacterTable[index]?.glyph as TMP_SpriteGlyph)?.sprite;
+      // Detached Unity objects must become CLR null before the caller's ?? fallback.
+      return sprite != null ? sprite : null;
     }
 
     internal static bool HasUsableTmpSprite(Entry entry)

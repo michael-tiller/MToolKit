@@ -40,6 +40,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Normalize destroyed Unity Sprite wrappers before Image glyph fallback so usable Generic artwork is selected and exhausted lookups return real null. Preserve native TMP atlas presentation independently of its optional Sprite object; cover nine native destruction/compatibility cases in the consuming project. (v1.20.2)
+
 - Refresh active UGUI materials after native input-atlas rebakes so unchanged text and Images recover from Unity's invalidated stencil-material cache. Queue one native material update without polling or forcing layout; verify the reproduced missing-label failure in Dirigible. (v1.20.1)
 
 - Preserve normal text-em caption proportions in new keycap profiles and let standard named keys fit their labels. Keep saved profile dimensions explicit; verify native baked ink at SmallCopy and accessibility scales in Dirigible. (v1.19.1)
