@@ -38,6 +38,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Preserve normal text-em caption proportions in new keycap profiles and let standard named keys fit their labels. Keep saved profile dimensions explicit; verify native baked ink at SmallCopy and accessibility scales in Dirigible. (v1.19.1)
+
 - Prefer the selected desktop device's bindings while preserving mixed chords and documented first-eligible composite representatives. Observe foreign binding changes without letting them change an owned player's device. Use valid family artwork, then Generic artwork for the same control, then the original localized name; retain native Image compatibility without borrowing Xbox art for unknown controllers. Verify 189 consuming-project input cases and align the stale VERSION companion with the package version. (v1.18.1)
 
 - Preserve configured keycap color bytes in Linear projects by converting native UGUI/TMP preview vertex RGB before rendering, while retaining alpha and source artwork. Verify exact baked theme pixels and all affected authoring cases in Dirigible. (v1.16.1)
