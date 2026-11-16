@@ -1,0 +1,969 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 038cc33123b3482cb309523b450ae542, type: 3}
+  m_Name: MenuGlyphCatalog
+  m_EditorClassIdentifier: MToolKit.Runtime::MToolKit.Runtime.Input.Prompts.InputGlyphCatalog
+  entries:
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: a
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-a
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: A
+    ImageSprite: {fileID: -459454215000711972, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: A
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: b
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-b
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: B
+    ImageSprite: {fileID: -3994810076510673440, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: B
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: c
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-c
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: C
+    ImageSprite: {fileID: 2281479682564823664, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: C
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: d
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-d
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: D
+    ImageSprite: {fileID: 6568879256234828352, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: D
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: e
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-e
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: E
+    ImageSprite: {fileID: -287350315166853179, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: E
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: f
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-f
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: F
+    ImageSprite: {fileID: 2158547402685007413, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: F
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: g
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-g
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: G
+    ImageSprite: {fileID: -5485350618000517570, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: G
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: h
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-h
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: H
+    ImageSprite: {fileID: 8550643935163057211, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: H
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: i
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-i
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: I
+    ImageSprite: {fileID: 6013774343950154271, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: I
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: j
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-j
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: J
+    ImageSprite: {fileID: -6912696156612640326, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: J
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: k
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-k
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: K
+    ImageSprite: {fileID: 1024466151482901565, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: K
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: l
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-l
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: L
+    ImageSprite: {fileID: -7142808300245433245, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: L
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: m
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-m
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: M
+    ImageSprite: {fileID: 6137402142803103623, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: M
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: n
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-n
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: N
+    ImageSprite: {fileID: -723347342273394324, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: N
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: o
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-o
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: O
+    ImageSprite: {fileID: -2991915912052499560, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: O
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: p
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-p
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: P
+    ImageSprite: {fileID: -2654393676029022241, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: P
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: q
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-q
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: Q
+    ImageSprite: {fileID: 6557170366606903292, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: Q
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: r
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-r
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: R
+    ImageSprite: {fileID: 401654116635612622, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: R
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: s
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-s
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: S
+    ImageSprite: {fileID: -3946977072318020199, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: S
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: t
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-t
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: T
+    ImageSprite: {fileID: -1865482063080351754, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: T
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: u
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-u
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: U
+    ImageSprite: {fileID: -6163317559602472822, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: U
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: v
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-v
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: V
+    ImageSprite: {fileID: -47527221063514490, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: V
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: w
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-w
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: W
+    ImageSprite: {fileID: -6002596574743042531, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: W
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: x
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-x
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: X
+    ImageSprite: {fileID: 1563837166149924821, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: X
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: y
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-y
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: Y
+    ImageSprite: {fileID: -6459588387702935, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: Y
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: z
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-z
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: Z
+    ImageSprite: {fileID: 2066508109248379437, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: Z
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: 0
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-0
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: 0
+    ImageSprite: {fileID: -2862604177533475697, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: 0
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: 1
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-1
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: 1
+    ImageSprite: {fileID: 4044755553853485948, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: 1
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: 2
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-2
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: 2
+    ImageSprite: {fileID: -8131615705446889047, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: 2
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: 3
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-3
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: 3
+    ImageSprite: {fileID: 5473894951514362130, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: 3
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: 4
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-4
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: 4
+    ImageSprite: {fileID: -2126890744036896301, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: 4
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: 5
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-5
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: 5
+    ImageSprite: {fileID: -7474511888067143973, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: 5
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: 6
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-6
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: 6
+    ImageSprite: {fileID: -3784497247031718138, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: 6
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: 7
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-7
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: 7
+    ImageSprite: {fileID: 7514620829343267471, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: 7
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: 8
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-8
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: 8
+    ImageSprite: {fileID: -3998408945399629885, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: 8
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: 9
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-9
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: 9
+    ImageSprite: {fileID: -3509868170237290135, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: 9
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: minus
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-minus
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: '-'
+    ImageSprite: {fileID: 1890685614523168416, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: '-'
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: equals
+    SpriteAsset: {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    SpriteName: keycap-equals
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: =
+    ImageSprite: {fileID: -2013637346918060402, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+    LocaleCode: 
+    BakedLabel: =
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: enter
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-enter-en
+    Symbol: 
+    LocalizationKey: input.key.enter
+    DisplayName: Enter
+    ImageSprite: {fileID: 3858600405278584194, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: Enter
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: backspace
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-backspace-en
+    Symbol: 
+    LocalizationKey: input.key.backspace
+    DisplayName: Backspace
+    ImageSprite: {fileID: 570645610287999941, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: Backspace
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: space
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-space-en
+    Symbol: 
+    LocalizationKey: input.key.space
+    DisplayName: Space
+    ImageSprite: {fileID: 1221868809877413604, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: Space
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: leftShift
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-left-shift-en
+    Symbol: 
+    LocalizationKey: input.key.leftShift
+    DisplayName: LShift
+    ImageSprite: {fileID: 3728797979096104336, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: LShift
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: tab
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-tab-en
+    Symbol: 
+    LocalizationKey: input.key.tab
+    DisplayName: Tab
+    ImageSprite: {fileID: -5898367821306057266, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: Tab
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: escape
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-escape-en
+    Symbol: 
+    LocalizationKey: input.key.escape
+    DisplayName: Escape
+    ImageSprite: {fileID: -8472185792449922598, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: Escape
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: leftCtrl
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-left-ctrl-en
+    Symbol: 
+    LocalizationKey: input.key.leftCtrl
+    DisplayName: LCtrl
+    ImageSprite: {fileID: -6356629860478235033, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: LCtrl
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: upArrow
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-up-arrow-en
+    Symbol: 
+    LocalizationKey: input.key.upArrow
+    DisplayName: Up Arrow
+    ImageSprite: {fileID: 7270502001125148420, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: Up Arrow
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: downArrow
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-down-arrow-en
+    Symbol: 
+    LocalizationKey: input.key.downArrow
+    DisplayName: Down Arrow
+    ImageSprite: {fileID: -5944099346483062879, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: Down Arrow
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: leftArrow
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-left-arrow-en
+    Symbol: 
+    LocalizationKey: input.key.leftArrow
+    DisplayName: Left Arrow
+    ImageSprite: {fileID: -1943490351299954342, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: Left Arrow
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: rightArrow
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-right-arrow-en
+    Symbol: 
+    LocalizationKey: input.key.rightArrow
+    DisplayName: Right Arrow
+    ImageSprite: {fileID: -2910070418367402185, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: Right Arrow
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: pageDown
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-page-down-en
+    Symbol: 
+    LocalizationKey: input.key.pageDown
+    DisplayName: Page Down
+    ImageSprite: {fileID: -6323888287029721874, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: Page Down
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: pageUp
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-page-up-en
+    Symbol: 
+    LocalizationKey: input.key.pageUp
+    DisplayName: Page Up
+    ImageSprite: {fileID: 4280335519818568547, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: Page Up
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: f1
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-f1-en
+    Symbol: 
+    LocalizationKey: input.key.f1
+    DisplayName: F1
+    ImageSprite: {fileID: -6661285747816356592, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: F1
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: f2
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-f2-en
+    Symbol: 
+    LocalizationKey: input.key.f2
+    DisplayName: F2
+    ImageSprite: {fileID: 3689878667658330875, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: F2
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: f8
+    SpriteAsset: {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    SpriteName: keycap-f8-en
+    Symbol: 
+    LocalizationKey: input.key.f8
+    DisplayName: F8
+    ImageSprite: {fileID: 1576487508326713306, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}
+    LocaleCode: en
+    BakedLabel: F8
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: leftButton
+    SpriteAsset: {fileID: 11400000, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    SpriteName: menu-mouse-left
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: leftButton
+    ImageSprite: {fileID: 591835382679827009, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    LocaleCode: 
+    BakedLabel: 
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: rightButton
+    SpriteAsset: {fileID: 11400000, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    SpriteName: menu-mouse-right
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: rightButton
+    ImageSprite: {fileID: 3755695876283781135, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    LocaleCode: 
+    BakedLabel: 
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 0
+    ControlPath: middleButton
+    SpriteAsset: {fileID: 11400000, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    SpriteName: menu-mouse-middle
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: middleButton
+    ImageSprite: {fileID: 4133068869635240218, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    LocaleCode: 
+    BakedLabel: 
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 4
+    ControlPath: buttonSouth
+    SpriteAsset: {fileID: 11400000, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    SpriteName: menu-gamepad-south
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: buttonSouth
+    ImageSprite: {fileID: 5730016179901680456, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    LocaleCode: 
+    BakedLabel: 
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 4
+    ControlPath: buttonEast
+    SpriteAsset: {fileID: 11400000, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    SpriteName: menu-gamepad-east
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: buttonEast
+    ImageSprite: {fileID: -1565432033819339007, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    LocaleCode: 
+    BakedLabel: 
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 4
+    ControlPath: buttonWest
+    SpriteAsset: {fileID: 11400000, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    SpriteName: menu-gamepad-west
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: buttonWest
+    ImageSprite: {fileID: -742741530596798440, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    LocaleCode: 
+    BakedLabel: 
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 4
+    ControlPath: buttonNorth
+    SpriteAsset: {fileID: 11400000, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    SpriteName: menu-gamepad-north
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: buttonNorth
+    ImageSprite: {fileID: -4410854347505120794, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    LocaleCode: 
+    BakedLabel: 
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 4
+    ControlPath: leftShoulder
+    SpriteAsset: {fileID: 11400000, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    SpriteName: menu-gamepad-leftshoulder
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: LB
+    ImageSprite: {fileID: 4158075545244999743, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    LocaleCode: 
+    BakedLabel: 
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 4
+    ControlPath: rightShoulder
+    SpriteAsset: {fileID: 11400000, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    SpriteName: menu-gamepad-rightshoulder
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: RB
+    ImageSprite: {fileID: 3022424853767262737, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    LocaleCode: 
+    BakedLabel: 
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 4
+    ControlPath: leftTrigger
+    SpriteAsset: {fileID: 11400000, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    SpriteName: menu-gamepad-lefttrigger
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: LT
+    ImageSprite: {fileID: 7238145024024451330, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    LocaleCode: 
+    BakedLabel: 
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 4
+    ControlPath: rightTrigger
+    SpriteAsset: {fileID: 11400000, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    SpriteName: menu-gamepad-righttrigger
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: RT
+    ImageSprite: {fileID: 1427574546674635041, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    LocaleCode: 
+    BakedLabel: 
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 4
+    ControlPath: start
+    SpriteAsset: {fileID: 11400000, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    SpriteName: menu-gamepad-start
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: Menu
+    ImageSprite: {fileID: -5249482498250749110, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    LocaleCode: 
+    BakedLabel: 
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 4
+    ControlPath: select
+    SpriteAsset: {fileID: 11400000, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    SpriteName: menu-gamepad-select
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: View
+    ImageSprite: {fileID: 3976533447320244480, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    LocaleCode: 
+    BakedLabel: 
+    KeycapContent: 0
+    Platform: 0
+  - Kind: 0
+    DeviceLayout: 
+    Family: 4
+    ControlPath: rightStickPress
+    SpriteAsset: {fileID: 11400000, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    SpriteName: menu-gamepad-rightstickpress
+    Symbol: 
+    LocalizationKey: 
+    DisplayName: RS
+    ImageSprite: {fileID: 75226254497503684, guid: b2d0731e48c5c0c4194cb7494b847ec8, type: 2}
+    LocaleCode: 
+    BakedLabel: 
+    KeycapContent: 0
+    Platform: 0
+  layoutRules: []
+  keyboardGlyphMode: 1

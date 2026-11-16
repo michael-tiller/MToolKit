@@ -1,7 +1,7 @@
 {
   "name": "MToolKit.ContextMenus.Samples.Editor",
   "rootNamespace": "MToolKit.ContextMenus.Samples.Editor",
-  "references": ["MToolKit.ContextMenus.Samples", "MToolKit.ContextMenus", "MToolKit.Runtime", "MToolKit.Theme", "UnityEngine.UI", "Unity.TextMeshPro", "Unity.InputSystem", "UniTask"],
+  "references": ["MToolKit.ContextMenus.Samples", "MToolKit.ContextMenus", "MToolKit.Runtime", "MToolKit.Theme", "MToolKit.Editor.Input", "UnityEngine.UI", "Unity.TextMeshPro", "Unity.InputSystem", "UniTask"],
   "includePlatforms": ["Editor"],
   "excludePlatforms": [],
   "allowUnsafeCode": false,

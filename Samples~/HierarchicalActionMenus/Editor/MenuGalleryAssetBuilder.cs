@@ -132,6 +132,7 @@ namespace MToolKit.ContextMenus.Samples.Editor
       Folder(outputRoot);
       foreach (string folder in GeneratedFolders) Folder(outputRoot + "/" + folder);
       var input = CreateInput(outputRoot);
+      var promptSettings = MenuGalleryGlyphAuthoring.Create(outputRoot, font);
       var refs = CreateReferences(outputRoot, input);
       var icons = CreateIcons(outputRoot);
       var artwork = CreateArtwork(outputRoot);
@@ -179,7 +180,7 @@ namespace MToolKit.ContextMenus.Samples.Editor
       };
       EditorUtility.SetDirty(config);
       SaveOwnedAssets(outputRoot);
-      CreateScene(scenePath, font, config, actions, input, theme);
+      CreateScene(scenePath, font, config, actions, input, theme, promptSettings);
       SaveOwnedAssets(outputRoot);
       Debug.Log("Created editable action-menu gallery at " + scenePath + ". Open this scene and enter Play Mode to validate it.");
       return scenePath;
@@ -632,7 +633,7 @@ namespace MToolKit.ContextMenus.Samples.Editor
     }
 
     private static void CreateScene(string path, TMP_FontAsset font, MenuHostConfig config,
-      MenuActionSetSO actions, InputActionAsset input, GalleryTheme theme)
+      MenuActionSetSO actions, InputActionAsset input, GalleryTheme theme, MToolKit.Runtime.Input.Prompts.InputPromptSettings promptSettings)
     {
       var previous = SceneManager.GetActiveScene();
       var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
@@ -650,6 +651,7 @@ namespace MToolKit.ContextMenus.Samples.Editor
         var host = canvasObject.AddComponent<ContextMenuHost>();
         var controller = canvasObject.AddComponent<MenuGalleryController>();
         controller.Host = host; controller.HostConfig = config; controller.ActionSet = actions; controller.InputActions = input;
+        controller.PromptSettings = promptSettings;
         controller.Canvas = canvas; controller.ScaleCanvas = scaling; controller.DarkTheme = theme.Dark; controller.LightTheme = theme.Light;
         var eventObject = new GameObject("Gallery Event System", typeof(EventSystem), typeof(InputSystemUIInputModule));
         controller.InputModule = eventObject.GetComponent<InputSystemUIInputModule>();
@@ -673,7 +675,7 @@ namespace MToolKit.ContextMenus.Samples.Editor
         }
         var callbacks = new UnityAction[] { controller.ToggleCommands, controller.ToggleSecondary, controller.InvalidateTarget,
           controller.RestoreTarget, controller.ToggleTheme, controller.DecreaseScale, controller.IncreaseScale, controller.OpenAtEdge };
-        string[] names = { "Toggle commands", "Toggle secondary", "Invalidate target", "Restore target", "Theme (F8)", "UI scale -", "UI scale +", "Open at edge" };
+        string[] names = { "Toggle commands", "Toggle secondary", "Invalidate target", "Restore target", "Theme", "UI scale -", "UI scale +", "Open at edge" };
         for (int i = 0; i < callbacks.Length; i++)
         {
           var button = Control(controls, font, names[i], new Vector2(120, -180 - i * 48), new Vector2(200, 40));

@@ -2,6 +2,7 @@ using System;
 using System.Runtime.ExceptionServices;
 using Cysharp.Threading.Tasks;
 using MToolKit.ContextMenus.Configuration;
+using MToolKit.Runtime.Input.Prompts;
 using MToolKit.Theme.Spacing;
 using MToolKit.Theme.Typeset;
 using R3;
@@ -70,7 +71,7 @@ namespace MToolKit.ContextMenus.Widgets
       if (!Owns(generation, state)) return;
       if (BindingHint != null && state.PromptService != null && state.BindingAction != null)
       {
-        var binding = state.PromptService.Bind(BindingHint, () => state.PromptService.Resolve(state.BindingAction));
+        var binding = state.PromptService.Bind(BindingHint, () => state.PromptService.Resolve(state.BindingAction, InputPromptStyle.Glyph));
         if (!Owns(generation, state)) { binding.Dispose(); return; }
         promptBinding = binding;
       }

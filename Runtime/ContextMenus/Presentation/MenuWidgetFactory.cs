@@ -122,6 +122,9 @@ namespace MToolKit.ContextMenus.Presentation
       var artwork = Artwork(content, 32);
       var label = Text("Label", content, 18);
       var labelSize = label.gameObject.AddComponent<LayoutElement>(); labelSize.flexibleWidth = 1;
+      var bindingHint = Text("Binding hint", content, 16);
+      var bindingSize = bindingHint.gameObject.AddComponent<LayoutElement>();
+      bindingSize.minWidth = bindingSize.preferredWidth = 28;
       var marker = Rect("Selected marker", root).gameObject.AddComponent<Image>();
       marker.raycastTarget = false;
       marker.rectTransform.anchorMin = new Vector2(0, 0);
@@ -137,6 +140,7 @@ namespace MToolKit.ContextMenus.Presentation
       widget.Background = image;
       widget.SpacingTargets = new[] { spacing };
       widget.Configure(label, icon, marker, check, button, actionImage: artwork);
+      widget.BindingHint = bindingHint;
       return new MenuWidgetInstance(root.gameObject, true);
     }
 

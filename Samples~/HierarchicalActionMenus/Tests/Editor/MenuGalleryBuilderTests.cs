@@ -10,6 +10,7 @@ using MToolKit.ContextMenus.Samples;
 using MToolKit.ContextMenus.Widgets;
 using MToolKit.Theme.Spacing;
 using MToolKit.Theme.Typeset;
+using MToolKit.Runtime.Input.Prompts;
 using TMPro;
 using MToolKit.ContextMenus.Samples.Editor;
 using NUnit.Framework;
@@ -114,6 +115,49 @@ namespace MToolKit.ContextMenus.Samples.Tests.Editor
       Assert.That(marker.ListWidth, Is.EqualTo(514));
       Assert.That(AssetDatabase.LoadAssetAtPath<SceneAsset>(output + "/ActionMenuGallery.unity"), Is.Null);
       Assert.That(caller.isDirty, Is.False);
+    }
+
+    [Test]
+    public void Generated_gallery_has_glyph_only_settings_and_native_keyboard_mouse_and_controller_assets()
+    {
+      var promptProperty = typeof(MenuGalleryController).GetProperty("PromptSettings");
+      Assert.That(promptProperty, Is.Not.Null, "Standalone prompts need an authored TMP glyph catalog/settings reference.");
+      string path = MenuGalleryAssetBuilder.Build(ownedRoot + "/GlyphGallery");
+      var scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Additive);
+      try
+      {
+        var controller = scene.GetRootGameObjects()
+          .SelectMany(root => root.GetComponentsInChildren<MenuGalleryController>(true)).Single();
+        var settings = promptProperty.GetValue(controller) as InputPromptSettings;
+        Assert.That(settings, Is.Not.Null);
+        Assert.That(settings.Style, Is.EqualTo(InputPromptStyle.Glyph));
+        Assert.That(settings.Catalog, Is.Not.Null);
+        var openAction = controller.InputActions.FindAction("Shared/OpenContext", true);
+        foreach (var binding in openAction.bindings)
+        {
+          string bindingPath = binding.effectivePath;
+          var family = bindingPath.StartsWith("<Gamepad>/", StringComparison.Ordinal)
+            ? InputGlyphFamily.Generic : InputGlyphFamily.KeyboardAndMouse;
+          string control = bindingPath.Substring(bindingPath.IndexOf('/') + 1);
+          Assert.That(settings.Catalog.Entries.Any(entry => entry.Family == family
+            && string.Equals(entry.ControlPath, control, StringComparison.OrdinalIgnoreCase)
+            && entry.SpriteAsset != null && !string.IsNullOrEmpty(entry.SpriteName)),
+            Is.True, "Missing OpenContext glyph for actual binding " + bindingPath);
+        }
+        foreach (string control in new[] { "enter", "escape", "tab", "q", "r", "e", "backspace", "pageUp", "pageDown", "f2", "f8", "minus", "equals", "leftButton", "rightButton" })
+          Assert.That(settings.Catalog.Entries.Any(entry => entry.Family == InputGlyphFamily.KeyboardAndMouse
+            && entry.ControlPath == control && entry.SpriteAsset != null && !string.IsNullOrEmpty(entry.SpriteName)),
+            Is.True, "Missing native keyboard/mouse glyph for " + control);
+        foreach (string control in new[] { "buttonSouth", "buttonEast", "buttonWest", "buttonNorth", "leftShoulder", "rightShoulder", "leftTrigger", "rightTrigger", "start", "rightStickPress" })
+          Assert.That(settings.Catalog.Entries.Any(entry => entry.Family == InputGlyphFamily.Generic
+            && entry.ControlPath == control && entry.SpriteAsset != null && !string.IsNullOrEmpty(entry.SpriteName)),
+            Is.True, "Missing neutral controller glyph for " + control);
+      }
+      finally
+      {
+        EditorSceneManager.CloseScene(scene, true);
+        SceneManager.SetActiveScene(caller);
+      }
     }
 
     [Test]

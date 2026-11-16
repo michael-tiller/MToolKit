@@ -54,6 +54,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Use native TMP glyph-only binding hints throughout default menu widgets, navigation and the saved gallery while preserving live rebinding and custom widget ownership. Author reusable keyboard, mouse and neutral controller glyph assets with unique, compact atlas names and protect existing sample assets during generation. (v1.25.1)
+
 - Keep independently wired icons and labels visible beneath optional artwork containers, including initially inactive custom prefabs and widget reuse. Continue collapsing empty dedicated artwork leaves. (v1.24.1)
 
 - Avoid invalidating every input prompt when menu routing enables or disables unchanged actions. Preserve synchronous binding, device and context refreshes; verify bulk, overlapping and deferred menu leases plus existing prompt ownership regressions. (v1.21.4)

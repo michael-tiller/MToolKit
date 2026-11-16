@@ -27,6 +27,7 @@ namespace MToolKit.ContextMenus.Samples
     [field: SerializeField] public MenuHostConfig HostConfig { get; set; }
     [field: SerializeField] public MenuActionSetSO ActionSet { get; set; }
     [field: SerializeField] public InputActionAsset InputActions { get; set; }
+    [field: SerializeField] public InputPromptSettings PromptSettings { get; set; }
     [field: SerializeField] public Canvas Canvas { get; set; }
     [field: SerializeField] public InputSystemUIInputModule InputModule { get; set; }
     [field: SerializeField] public TMP_Text Status { get; set; }
@@ -80,7 +81,7 @@ namespace MToolKit.ContextMenus.Samples
       themes = injectedThemes ?? (IThemeService)StandaloneTheme;
       priorTheme = themes?.Current;
       prompts = injectedPrompts;
-      if (prompts == null) prompts = ownedPrompts = new InputPromptService(actionSource: input, actions: input.RuntimeActions);
+      if (prompts == null) prompts = ownedPrompts = new InputPromptService(PromptSettings, actionSource: input, actions: input.RuntimeActions);
       service = new ContextMenuHostService(HostConfig, actions: input, prompts: prompts, themes: themes);
       Host.Construct(service);
       point = Required("UI/Point"); open = Required("Shared/OpenContext"); hold = Required("Shared/HoldWheel");
@@ -189,11 +190,12 @@ namespace MToolKit.ContextMenus.Samples
       string Hint(string path)
       {
         var action = Required(path);
-        return prompts?.Resolve(action, InputPromptStyle.GlyphAndName) ?? action.GetBindingDisplayString();
+        return prompts?.Resolve(action, InputPromptStyle.Glyph) ?? action.GetBindingDisplayString();
       }
       return "Open " + Hint("Shared/OpenContext") + "   Hold wheel " + Hint("Shared/HoldWheel")
         + "   Confirm " + Hint("Menu/Submit") + "   Back " + Hint("Menu/Back")
-        + "   Ring " + Hint("Menu/SwitchRing") + "   Variant " + Hint("Menu/Secondary");
+        + "   Ring " + Hint("Menu/SwitchRing") + "   Variant " + Hint("Menu/Secondary")
+        + "   Theme " + Hint("Shared/Theme") + "   Next style " + Hint("Shared/NextStyle");
     }
     private void RefreshStatus()
     {

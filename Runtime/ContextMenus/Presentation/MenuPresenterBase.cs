@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using MToolKit.ContextMenus.Configuration;
+using MToolKit.Runtime.Input.Prompts;
 using MToolKit.ContextMenus.Widgets;
 using MToolKit.Runtime.UI.Scaling;
 using R3;
@@ -356,7 +357,7 @@ namespace MToolKit.ContextMenus.Presentation
       var bindingReference = action.BindingHint != null ? action.BindingHint : bindingOverride ?? Profile.InputBindings.Submit;
       var bindingAction = Context.ResolveInputAction(bindingReference);
       string binding = Context.Prompts != null && bindingReference != null
-        ? Context.Prompts.Resolve(bindingAction) : string.Empty;
+        ? Context.Prompts.Resolve(bindingAction, InputPromptStyle.Glyph) : string.Empty;
       return new MenuWidgetState(action, availability, selected, Context.Resolve(action.Label), Context.Resolve(action.Description),
         Profile.Skin, Context.Themes, activate, () => SelectWidget(select), binding, secondaryStates,
         Context.Prompts, bindingAction, IsPointerHovered(action), entered => HoverWidget(action, entered, select), Profile.GetTheme(Context.Themes));
@@ -447,6 +448,7 @@ namespace MToolKit.ContextMenus.Presentation
       public MenuActionWidget Widget;
       public Action Activate;
       public string Label;
+      public InputActionReference Binding;
       public bool Enabled = true, Hovered;
     }
 
@@ -466,9 +468,15 @@ namespace MToolKit.ContextMenus.Presentation
           var navigation = button.navigation; navigation.mode = Navigation.Mode.None; button.navigation = navigation;
           label = MenuWidgetFactory.Text(name + " label", rect, 16);
           label.rectTransform.anchorMin = Vector2.zero; label.rectTransform.anchorMax = Vector2.one;
-          label.rectTransform.offsetMin = label.rectTransform.offsetMax = Vector2.zero;
+          label.rectTransform.offsetMin = new Vector2(6, 0); label.rectTransform.offsetMax = new Vector2(-34, 0);
+          var hint = MenuWidgetFactory.Text(name + " binding", rect, 16);
+          hint.rectTransform.anchorMin = hint.rectTransform.anchorMax = new Vector2(1, .5f);
+          hint.rectTransform.pivot = new Vector2(1, .5f);
+          hint.rectTransform.anchoredPosition = new Vector2(-4, 0);
+          hint.rectTransform.sizeDelta = new Vector2(28, 32);
           var widget = rect.gameObject.AddComponent<MenuActionWidget>(); widget.Background = image;
           widget.BackgroundRole = MenuVisualRole.Auxiliary; widget.Configure(label, null, null, null, button);
+          widget.BindingHint = hint;
           footerControls.Add(new FooterControl { Widget = widget, Activate = callback, Label = name });
           return button;
         }
@@ -485,8 +493,11 @@ namespace MToolKit.ContextMenus.Presentation
         MenuWidgetFactory.Place(rect, new Vector2(showPagination ? (i - 1) * itemWidth : 0, 0), new Vector2(itemWidth - 2, 36));
       }
       footerControls[0].Label = Session.Path.Count == 0 ? "Close" : "Back";
+      footerControls[0].Binding = Profile.InputBindings.Back;
       footerControls[1].Label = "Previous"; footerControls[1].Enabled = Session.PageIndex > 0;
+      footerControls[1].Binding = Profile.InputBindings.PageBackward;
       footerControls[2].Label = "Next " + (Session.PageIndex + 1) + "/" + Session.PageCount;
+      footerControls[2].Binding = Profile.InputBindings.PageForward;
       footerControls[2].Enabled = Session.PageIndex + 1 < Session.PageCount;
       ThemeFooterControls();
     }
@@ -502,10 +513,17 @@ namespace MToolKit.ContextMenus.Presentation
       if (!IsBound || control.Widget == null) return;
       var events = navigationLease?.Owner != null ? navigationLease.Owner : EventSystem.current;
       bool selected = events != null && events.currentSelectedGameObject == control.Widget.gameObject;
+      var action = Context.ResolveInputAction(control.Binding);
+      string hint = Context.Prompts != null && action != null
+        ? Context.Prompts.Resolve(action, InputPromptStyle.Glyph) : string.Empty;
+      bool showHint = !string.IsNullOrEmpty(hint);
+      if (control.Widget.BindingHint != null) control.Widget.BindingHint.gameObject.SetActive(showHint);
+      if (control.Widget.Label != null) control.Widget.Label.rectTransform.offsetMax = new Vector2(showHint ? -34 : -6, 0);
       control.Widget.Bind(new MenuWidgetState(null, new MenuActionState(true, control.Enabled), selected,
         label: control.Label, skin: Profile.Skin, themeService: Context.Themes,
         activate: control.Activate, select: ThemeFooterControls, isHovered: control.Hovered,
-        hoverChanged: hot => { control.Hovered = hot; ThemeFooter(control); }, theme: Profile.GetTheme(Context.Themes)));
+        hoverChanged: hot => { control.Hovered = hot; ThemeFooter(control); }, theme: Profile.GetTheme(Context.Themes),
+        bindingHint: hint, promptService: Context.Prompts, bindingAction: action));
     }
 
     private void CreateBackdrop()

@@ -47,6 +47,8 @@ namespace MToolKit.Tests.Editor.ContextMenus
       using var instance = center ? MenuWidgetFactory.CreateCenter(parent.transform) : MenuWidgetFactory.CreateItem(parent.transform);
       var widget = instance.DefaultWidget;
       Assert.That(widget.Icon, Is.Not.Null, "Default action and center widgets both support a compact icon.");
+      Assert.That(widget.BindingHint, Is.Not.Null,
+        "Default action, secondary and center widgets need an optional native TMP binding-glyph target.");
       var imageProperty = typeof(MenuActionWidget).GetProperty("ActionImage");
       Assert.That(imageProperty, Is.Not.Null, "An action's artwork needs an independent optional binding target.");
       var artwork = imageProperty.GetValue(widget) as Image;

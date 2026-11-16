@@ -254,7 +254,12 @@ the host omits unsupported legacy registration instead of retaining destroyed ac
 
 Default hint widgets own `IInputPromptService.Bind` subscriptions for the resolved runtime
 action, including foreign profile clones. Rebinding and device/locale changes update the
-bound hint; unbind disposes that subscription.
+bound hint; unbind disposes that subscription. Default menu widgets and navigation
+controls request `InputPromptStyle.Glyph` explicitly, leaving the application's
+shared prompt preference unchanged. Keep operation labels such as Back and Inspect;
+the binding beside them is native TMP sprite markup. An optional `BindingHint`
+text target is sufficient on an item, center or auxiliary widget. Missing targets
+are supported, and custom widgets retain control of their own composition.
 
 InputAction GUID alone does not establish ownership. MTK `InputService` resolves an
 action only when its asset is the authored asset it initialized; unrelated assets can
