@@ -29,20 +29,22 @@ namespace MToolKit.ContextMenus
       IMenuActionBehavior primary = null, IReadOnlyList<MenuAction> secondaryActions = null,
       Func<MenuContext, MenuActionState> state = null, MenuLabel description = default,
       Sprite icon = null, InputActionReference bindingHint = null, object metadata = null,
-      object presentationOverride = null)
+      object presentationOverride = null, Sprite image = null)
     {
       if (!id.IsValid) throw new ArgumentException("An action requires a stable identity.", nameof(id));
       Id = id; Label = label; Children = Snapshot(children);
       ChildrenProvider = childrenProvider; PrimaryBehavior = primary;
       Behavior = behavior ?? (HasChildren ? (IMenuActionBehavior)new MenuSubmenuBehavior() : new MenuHeaderBehavior());
       SecondaryActions = Snapshot(secondaryActions); this.state = state;
-      Description = description; Icon = icon; BindingHint = bindingHint; Metadata = metadata;
+      Description = description; Icon = icon; Image = image; BindingHint = bindingHint; Metadata = metadata;
       PresentationOverride = presentationOverride;
     }
     public MenuActionId Id { get; }
     public MenuLabel Label { get; }
     public MenuLabel Description { get; }
     public Sprite Icon { get; }
+    /// <summary>Optional artwork, independent of the compact themed icon.</summary>
+    public Sprite Image { get; }
     public InputActionReference BindingHint { get; }
     public object Metadata { get; }
     /// <summary>Opaque use-case override interpreted by the host; actions never inspect presenter types.</summary>

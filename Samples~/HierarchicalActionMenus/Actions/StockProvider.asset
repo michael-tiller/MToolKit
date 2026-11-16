@@ -14,3 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: MToolKit.ContextMenus.Samples::MToolKit.ContextMenus.Samples.GalleryChildrenProviderSO
   <IdPrefix>k__BackingField: gallery.stock
   <Icon>k__BackingField: {fileID: 21300000, guid: 996c53c5383eb0a469df9e7e6454dcfc, type: 3}
+  <Image>k__BackingField: {fileID: 21300000, guid: 174053b467139d040aa5ef1e7ea33bf7, type: 3}

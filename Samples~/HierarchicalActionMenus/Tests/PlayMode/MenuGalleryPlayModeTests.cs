@@ -215,6 +215,69 @@ namespace MToolKit.ContextMenus.Samples.Tests
     }
 
     [UnityTest]
+    public IEnumerator Independent_icons_and_images_bind_across_four_styles_dynamic_children_and_auxiliaries()
+    {
+      var imageProperty = typeof(MenuActionWidget).GetProperty("ActionImage");
+      Assert.That(imageProperty, Is.Not.Null, "The default widget must expose its artwork target.");
+      var actionImage = typeof(MenuAction).GetProperty("Image");
+      Assert.That(actionImage, Is.Not.Null, "Action artwork must be independent of the compact icon.");
+      string[] expectedIds = { "gallery.build", "gallery.equipment", "gallery.interactions", "gallery.settings", "gallery.unavailable" };
+      foreach (string style in new[] { MenuGalleryController.WheelContextMenu, MenuGalleryController.PieContextMenu,
+        MenuGalleryController.ListContextMenu, MenuGalleryController.NestedWheelContextMenu })
+      {
+        yield return Open(style);
+        var session = gallery.MenuService.Session;
+        Assert.That(session.Actions.Count, Is.EqualTo(expectedIds.Length), style);
+        for (int i = 0; i < expectedIds.Length; i++)
+          Assert.That(session.Actions[i].Id.Value, Is.EqualTo(expectedIds[i]), style);
+        int iconOnly = 0, imageOnly = 0, both = 0, neither = 0;
+        foreach (var widget in gallery.MenuService.Presenter.Root.GetComponentsInChildren<MenuActionWidget>())
+        {
+          if (widget is MenuCenterWidget || widget.BackgroundRole == MenuVisualRole.Auxiliary) continue;
+          var image = imageProperty.GetValue(widget) as Image;
+          Assert.That(image, Is.Not.Null, style + "/" + widget.name);
+          bool hasIcon = widget.Icon != null && widget.Icon.enabled && widget.Icon.sprite != null;
+          bool hasImage = image.enabled && image.gameObject.activeSelf && image.sprite != null;
+          if (hasIcon && hasImage) both++;
+          else if (hasIcon) iconOnly++;
+          else if (hasImage) imageOnly++;
+          else neither++;
+        }
+        Assert.That(new[] { iconOnly, imageOnly, both, neither }, Is.EqualTo(new[] { 1, 1, 2, 1 }), style);
+        AssertContained();
+      }
+
+      var active = gallery.MenuService.Session;
+      yield return active.EnterSubmenuAsync("gallery.equipment").ToCoroutine();
+      Assert.That(active.Select("gallery.equipment/gallery.equip-revolver"), Is.True);
+      yield return null; yield return null;
+      var center = gallery.MenuService.Presenter.Root.GetComponentInChildren<MenuCenterWidget>();
+      Assert.That(center, Is.Not.Null);
+      var centerImage = imageProperty.GetValue(center) as Image;
+      Assert.That(centerImage, Is.Not.Null);
+      Assert.That(centerImage.enabled && centerImage.sprite != null, Is.True, "Selected artwork did not reach the center.");
+      bool auxiliaryImage = false;
+      foreach (var widget in center.SecondaryContainer.GetComponentsInChildren<MenuActionWidget>())
+      {
+        var image = imageProperty.GetValue(widget) as Image;
+        auxiliaryImage |= image != null && image.enabled && image.gameObject.activeSelf && image.sprite != null;
+      }
+      Assert.That(auxiliaryImage, Is.True, "An independent secondary action image was lost.");
+
+      yield return Open(MenuGalleryController.ListContextMenu);
+      active = gallery.MenuService.Session;
+      yield return active.EnterSubmenuAsync("gallery.settings").ToCoroutine();
+      yield return active.EnterSubmenuAsync("gallery.settings/gallery.inventory").ToCoroutine();
+      Assert.That(active.Actions.Count, Is.GreaterThan(0));
+      foreach (var action in active.Actions)
+      {
+        Assert.That(action.Icon, Is.Not.Null);
+        Assert.That(actionImage.GetValue(action) as Sprite, Is.Not.Null, "Dynamic children dropped their image.");
+      }
+      AssertContained();
+    }
+
+    [UnityTest]
     public IEnumerator NestedWheelContextMenu_partial_arc_slides_through_three_authored_submenu_levels()
     {
       yield return Open(MenuGalleryController.NestedWheelContextMenu);

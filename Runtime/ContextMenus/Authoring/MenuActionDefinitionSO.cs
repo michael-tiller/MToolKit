@@ -16,6 +16,7 @@ namespace MToolKit.ContextMenus.Authoring
     public string DescriptionKey;
     public string TableName = "Default String Table";
     public Sprite Icon;
+    public Sprite Image;
     public InputActionReference BindingHint;
     public MenuActionDefinitionSO[] SecondaryActions = Array.Empty<MenuActionDefinitionSO>();
     public MenuLabel LabelDescriptor => new MenuLabel(Label, LabelKey, TableName);
@@ -42,7 +43,8 @@ namespace MToolKit.ContextMenus.Authoring
           MenuDefinitionPlacement.Prefix(source.ChildrenProvider, Id),
           source.PrimaryBehavior, MenuDefinitionPlacement.Prefix(secondary, Id + "/@secondary"),
           source.Evaluate, DescriptionDescriptor, Icon != null ? Icon : source.Icon,
-          BindingHint != null ? BindingHint : source.BindingHint, source.Metadata, source.PresentationOverride)
+          BindingHint != null ? BindingHint : source.BindingHint, source.Metadata, source.PresentationOverride,
+          Image != null ? Image : source.Image)
           .InheritChanges(source);
       }
       finally { creating.Remove(this); }

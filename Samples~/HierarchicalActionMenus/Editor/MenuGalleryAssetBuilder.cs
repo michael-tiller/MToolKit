@@ -134,6 +134,7 @@ namespace MToolKit.ContextMenus.Samples.Editor
       var input = CreateInput(outputRoot);
       var refs = CreateReferences(outputRoot, input);
       var icons = CreateIcons(outputRoot);
+      var artwork = CreateArtwork(outputRoot);
       var theme = CreateThemes(outputRoot, font);
       var secondary = SavePrefab(outputRoot, "SecondaryAction", () => SecondaryWidget(font, theme.Label));
       var row = SavePrefab(outputRoot, "ListRow", () => ActionWidget("List row", font, theme.Label, true, true, false));
@@ -166,7 +167,7 @@ namespace MToolKit.ContextMenus.Samples.Editor
         EditorUtility.SetDirty(profile);
         if (!profile.Validate(out string diagnostic)) throw new InvalidOperationException(profile.name + ": " + diagnostic);
       }
-      var actions = CreateActions(outputRoot, icons, refs, custom);
+      var actions = CreateActions(outputRoot, icons, artwork, refs, custom);
       var config = Asset<MenuHostConfig>(outputRoot + "/Profiles/GalleryHost.asset");
       config.DefaultProfile = concentric;
       config.Profiles = new[]
@@ -297,7 +298,7 @@ namespace MToolKit.ContextMenus.Samples.Editor
       return bindings;
     }
 
-    private static MenuActionSetSO CreateActions(string root, Sprite[] icons,
+    private static MenuActionSetSO CreateActions(string root, Sprite[] icons, Sprite artwork,
       IReadOnlyDictionary<string, InputActionReference> refs, MenuProfile replacement)
     {
       T Definition<T>(string id, string label, int icon = 0) where T : MenuActionDefinitionSO
@@ -319,12 +320,14 @@ namespace MToolKit.ContextMenus.Samples.Editor
         submenu.Children = children; submenu.Provider = null; submenu.Primary = null; submenu.ProfileOverride = null; return submenu;
       }
       var variant = Definition<GalleryVariantDefinitionSO>("cycle-variant", "Variant", 2);
+      variant.Icon = null; variant.Image = artwork;
       variant.Description = "Cycle variant: the same action in every presentation.";
       variant.BindingHint = refs["Menu/Secondary"];
       var inspect = Command("inspect", "Inspect", outcome: MenuActionOutcome.Refresh);
       inspect.Description = "Inspect selected item: the same action in every presentation.";
       inspect.BindingHint = refs["Menu/Inspect"];
       var revolver = Command("equip-revolver", "Revolver", "Equipment: sidearm");
+      revolver.Image = artwork;
       revolver.SecondaryActions = new MenuActionDefinitionSO[] { variant, inspect };
       revolver.Description = "Equip this item. Cycle its variant independently without closing the menu.";
       var bow = Command("equip-bow", "Bow", "Equipment: ranged"); bow.SecondaryActions = new MenuActionDefinitionSO[] { variant, inspect };
@@ -334,19 +337,24 @@ namespace MToolKit.ContextMenus.Samples.Editor
       var doors = Submenu("doors", "Doors", Command("wood-door", "Wooden door", "Cost: 3 timber"), metal);
       var build = Submenu("build", "Build", doors, Command("wall", "Wall", "Cost: 2 stone"),
         Command("floor", "Floor", "Cost: 2 timber"), Command("lamp", "Lamp", "Cost: 1 metal"));
+      build.Image = artwork;
       var social = Submenu("interactions", "Interactions", Command("greet", "Greet"), Command("chat", "Chat"),
         Submenu("conversation", "Conversation", Command("ask", "Ask a question"), Command("share", "Share an idea")));
       social.ProfileOverride = replacement;
+      social.Icon = null; social.Image = artwork;
       social.Description = "Opening this branch replaces the complete radial presenter with a custom card presenter.";
       var toggle = Definition<GalleryToggleDefinitionSO>("snap", "Snap to grid", 2);
       var careful = Definition<GalleryChoiceDefinitionSO>("careful", "Careful mode", 2); careful.Group = "mode"; careful.Value = "careful";
       var quick = Definition<GalleryChoiceDefinitionSO>("quick", "Quick mode", 2); quick.Group = "mode"; quick.Value = "quick";
       var header = Definition<MenuHeaderDefinitionSO>("preferences-header", "Settings and live state"); header.BindingHint = null; header.Icon = null;
-      var provider = Asset<GalleryChildrenProviderSO>(root + "/Actions/StockProvider.asset"); provider.Icon = icons[2]; provider.IdPrefix = "gallery.stock";
+      var provider = Asset<GalleryChildrenProviderSO>(root + "/Actions/StockProvider.asset");
+      provider.Icon = icons[2]; provider.Image = artwork; provider.IdPrefix = "gallery.stock";
       EditorUtility.SetDirty(provider);
       var inventory = Submenu("inventory", "Available inventory"); inventory.Provider = provider;
       var settings = Submenu("settings", "Preferences", header, toggle, careful, quick, inventory);
+      settings.Icon = null;
       var disabled = Command("unavailable", "Unavailable recipe", "Cost: unavailable"); disabled.UnavailableReason = "Requires an unavailable ingredient";
+      disabled.Image = artwork;
       var set = Asset<MenuActionSetSO>(root + "/Actions/GalleryActions.asset");
       set.Actions = new MenuActionDefinitionSO[] { build, equipment, social, settings, disabled };
       EditorUtility.SetDirty(set);
@@ -461,6 +469,39 @@ namespace MToolKit.ContextMenus.Samples.Editor
       return result;
     }
 
+    private static Sprite CreateArtwork(string root)
+    {
+      string path = root + "/Icons/ActionArtwork.png";
+      if (!File.Exists(path))
+      {
+        // Original full-color sample artwork: a supply crate against sky and grass.
+        // It intentionally differs from the monochrome semantic icon sprites.
+        var texture = new Texture2D(128, 96, TextureFormat.RGBA32, false);
+        try
+        {
+          for (int y = 0; y < texture.height; y++) for (int x = 0; x < texture.width; x++)
+          {
+            Color color = Color.Lerp(new Color(.08f, .25f, .5f), new Color(.18f, .65f, .82f), y / 95f);
+            if (y < 24) color = new Color(.12f, .42f, .26f);
+            if (x >= 34 && x < 94 && y >= 24 && y < 65) color = new Color(.92f, .52f, .18f);
+            if (x >= 31 && x < 97 && y >= 59 && y < 68) color = new Color(.99f, .73f, .32f);
+            if (((x >= 46 && x < 52) || (x >= 76 && x < 82)) && y >= 24 && y < 65)
+              color = new Color(.95f, .87f, .65f);
+            texture.SetPixel(x, y, color);
+          }
+          texture.Apply(); File.WriteAllBytes(path, texture.EncodeToPNG());
+        }
+        finally { Object.DestroyImmediate(texture); }
+        AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+        var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+        importer.textureType = TextureImporterType.Sprite; importer.spriteImportMode = SpriteImportMode.Single;
+        importer.spritePixelsPerUnit = 64; importer.mipmapEnabled = false; importer.sRGBTexture = true;
+        importer.SaveAndReimport();
+      }
+      return AssetDatabase.LoadAssetAtPath<Sprite>(path)
+        ?? throw new InvalidOperationException("The generated artwork is not a sprite: " + path);
+    }
+
     private static GameObject ActionWidget(string name, TMP_FontAsset font, Typeset labelTypeset,
       bool withLabel, bool withIcon, bool radial)
     {
@@ -488,9 +529,10 @@ namespace MToolKit.ContextMenus.Samples.Editor
         preset.SetOverrideTheme(true); preset.SetStart(labelTypeset);
       }
       else { Object.DestroyImmediate(widget.Label.gameObject); widget.Label = null; }
-      if (radial && withLabel)
+      if (radial)
       {
-        // The same factory supplies theming/preset contracts; this composition stacks icon and label.
+        // Artwork and the optional label stack; the compact icon overlays the artwork
+        // as an independent sibling, so hiding either sprite cannot hide the other.
         Object.DestroyImmediate(content.GetComponent<SpacingPreset>());
         Object.DestroyImmediate(content.GetComponent<HorizontalLayoutGroup>());
         var layout = content.gameObject.AddComponent<VerticalLayoutGroup>();
@@ -499,7 +541,16 @@ namespace MToolKit.ContextMenus.Samples.Editor
         layout.childForceExpandWidth = layout.childForceExpandHeight = false;
         var spacing = content.gameObject.AddComponent<SpacingPreset>(); spacing.ConfigureTarget(layout);
         widget.SpacingTargets = new[] { spacing };
-        widget.Label.rectTransform.sizeDelta = new Vector2(96, 28);
+        widget.ActionImage.rectTransform.sizeDelta = new Vector2(48, 36);
+        if (widget.Icon != null)
+        {
+          widget.Icon.GetComponent<LayoutElement>().ignoreLayout = true;
+          widget.Icon.rectTransform.anchorMin = widget.Icon.rectTransform.anchorMax = new Vector2(.5f, .5f);
+          widget.Icon.rectTransform.anchoredPosition = new Vector2(20, 20);
+          widget.Icon.rectTransform.sizeDelta = new Vector2(24, 24);
+          widget.Icon.transform.SetAsLastSibling();
+        }
+        if (widget.Label != null) widget.Label.rectTransform.sizeDelta = new Vector2(96, 20);
       }
       widget.Highlight.gameObject.name = "Selection marker";
       widget.Check.rectTransform.anchoredPosition = new Vector2(-5, -5);
@@ -509,8 +560,14 @@ namespace MToolKit.ContextMenus.Samples.Editor
     }
     private static GameObject SecondaryWidget(TMP_FontAsset font, Typeset labelTypeset)
     {
-      var root = ActionWidget("Secondary action", font, labelTypeset, true, false, false);
-      root.GetComponent<MenuActionWidget>().BackgroundRole = MenuVisualRole.Auxiliary;
+      var root = ActionWidget("Secondary action", font, labelTypeset, true, true, false);
+      var widget = root.GetComponent<MenuActionWidget>(); widget.BackgroundRole = MenuVisualRole.Auxiliary;
+      foreach (var media in new[] { widget.Icon, widget.ActionImage })
+      {
+        media.rectTransform.sizeDelta = new Vector2(16, 16);
+        var dimensions = media.GetComponent<LayoutElement>();
+        dimensions.minWidth = dimensions.preferredWidth = dimensions.minHeight = dimensions.preferredHeight = 16;
+      }
       ((RectTransform)root.transform).sizeDelta = new Vector2(98, 44);
       var label = root.GetComponent<MenuActionWidget>().Label.rectTransform;
       label.offsetMin = new Vector2(8, 0); label.offsetMax = new Vector2(-8, 0);

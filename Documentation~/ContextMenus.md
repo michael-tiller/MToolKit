@@ -55,8 +55,21 @@ not acquire a Unity player-loop dependency.
 ## Define behavior and state
 
 `MenuAction` is a runtime descriptor with a stable `MenuActionId`. Labels carry a
-literal fallback plus an optional localization key/table. Icons, binding hints,
+literal fallback plus an optional localization key/table. Icons, images, binding hints,
 descriptions, metadata and presentation overrides are optional.
+
+An action has two independent optional Sprite fields: `Icon` for a compact symbol
+and `Image` for artwork or a thumbnail. Assign either, both, or neither. Runtime
+callers pass named `icon:` and `image:` arguments to `MenuAction`; authored
+`MenuActionDefinitionSO` assets expose both fields. Child, dynamic-provider and
+secondary placements preserve both independently.
+
+`MenuWidgetState.Icon` and `.Image` expose the same data to every presentation.
+The supplied action and center widgets bind `Icon` and `ActionImage` targets.
+Icons use the semantic icon theme role; artwork retains its own authored color.
+An empty artwork child collapses, and a reused widget clears the prior sprite.
+Custom prefabs can omit either target or arrange both freely. A custom `IMenuWidget`
+can consume the same state without adopting the default component or layout.
 
 Supply an `IMenuActionBehavior`, use the command/toggle/choice/header behaviors, or
 implement an application behavior. Presenters do not switch over a gameplay action enum.

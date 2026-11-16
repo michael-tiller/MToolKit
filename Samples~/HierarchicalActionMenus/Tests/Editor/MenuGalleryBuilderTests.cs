@@ -190,6 +190,67 @@ namespace MToolKit.ContextMenus.Samples.Tests.Editor
         "The custom center deliberately supplies its own typography.");
     }
 
+    [Test]
+    public void Fresh_gallery_authors_independent_icons_images_and_optional_widget_targets()
+    {
+      string output = ownedRoot + "/MediaGallery";
+      MenuGalleryAssetBuilder.Build(output);
+      var artwork = AssetDatabase.LoadAssetAtPath<Sprite>(output + "/Icons/ActionArtwork.png");
+      Assert.That(artwork, Is.Not.Null, "The image example must use an authored reusable artwork sprite.");
+      var set = AssetDatabase.LoadAssetAtPath<MToolKit.ContextMenus.Authoring.MenuActionSetSO>(
+        output + "/Actions/GalleryActions.asset");
+      var actions = set.Create(new MenuContext(new MenuGalleryState()));
+      Assert.That(actions.Count, Is.EqualTo(5), "Adding media examples must preserve the action hierarchy.");
+      AssertMedia(actions[0], true, true, artwork, "Build");
+      AssertMedia(actions[1], true, false, artwork, "Equipment");
+      AssertMedia(actions[2], false, true, artwork, "Interactions");
+      AssertMedia(actions[3], false, false, artwork, "Preferences");
+      AssertMedia(actions[4], true, true, artwork, "Unavailable recipe");
+      var revolver = actions[1].Children[0];
+      AssertMedia(revolver, true, true, artwork, "Equipment selection");
+      Assert.That(revolver.SecondaryActions.Any(value => MediaImage(value) == artwork), Is.True,
+        "At least one independently bound auxiliary must demonstrate an image.");
+      var provider = AssetDatabase.LoadAssetAtPath<GalleryChildrenProviderSO>(output + "/Actions/StockProvider.asset");
+      Assert.That(provider.Icon, Is.Not.Null);
+      Assert.That(MediaImage(provider), Is.SameAs(artwork), "The dynamic provider must retain authored image data.");
+
+      foreach (string name in new[] { "ListRow", "RadialLabelIcon", "InteractionButton", "IconOnly", "SecondaryAction", "CenterInformation" })
+      {
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(output + "/Prefabs/" + name + ".prefab");
+        var widget = prefab.GetComponent<MenuActionWidget>();
+        var property = typeof(MenuActionWidget).GetProperty("ActionImage");
+        Assert.That(property, Is.Not.Null, "The default widget must expose its independent image target.");
+        var image = property.GetValue(widget) as Image;
+        Assert.That(image, Is.Not.Null, name + " cannot render an image-only action.");
+        Assert.That(image, Is.Not.SameAs(widget.Icon), name + " aliases the compact icon and artwork.");
+        Assert.That(image.raycastTarget, Is.False, name + " artwork must not take input ownership.");
+        if (widget.Icon != null)
+        {
+          Assert.That(widget.Icon.transform.IsChildOf(image.transform), Is.False,
+            name + " would hide its icon when its image is absent.");
+          Assert.That(image.transform.IsChildOf(widget.Icon.transform), Is.False,
+            name + " would hide its image when its icon is absent.");
+        }
+      }
+    }
+
+    private static Sprite MediaImage(object value)
+    {
+      var type = value.GetType();
+      var property = type.GetProperty("Image");
+      if (property != null) return property.GetValue(value) as Sprite;
+      var field = type.GetField("Image");
+      Assert.That(field, Is.Not.Null, type.Name + " must expose independent Image authoring.");
+      return field.GetValue(value) as Sprite;
+    }
+
+    private static void AssertMedia(MenuAction action, bool icon, bool image, Sprite artwork, string label)
+    {
+      Assert.That(action.Icon != null, Is.EqualTo(icon), label + " icon");
+      Assert.That(MediaImage(action), Is.SameAs(image ? artwork : null), label + " image");
+      if (image && icon) Assert.That(action.Icon, Is.Not.SameAs(artwork), label + " must use independent sprites.");
+    }
+
     private static void Folder(string path)
     {
       if (AssetDatabase.IsValidFolder(path)) return;

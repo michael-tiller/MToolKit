@@ -12,7 +12,7 @@ The five buttons open the same authored hierarchy with these configurations:
 
 | Profile | Composition |
 | --- | --- |
-| WheelContextMenu | Native ring with icon-only items, standard information center and independently enabled variant/inspect actions. Hold/release uses the configured input action. |
+| WheelContextMenu | Native ring with icons and artwork, a standard information center and independently enabled variant/inspect actions. Hold/release uses the configured input action. |
 | PieContextMenu | Individual button prefabs with no wedge background and no center. Interactions opens the custom child presenter. |
 | ListContextMenu | Accessible list with inline foldouts, checked-state indicators, bounded pagination and shared Back navigation. |
 | NestedWheelContextMenu | Default; independent parent/child rings, a 120-degree child arc, center information and secondary controls. Build > Doors > Metal doors demonstrates depth beyond two rings. |
@@ -43,6 +43,8 @@ This sample's controller creates and disposes its MTK `InputService`, prompt ser
 
 `GalleryCommandDefinitionSO`, `GalleryToggleDefinitionSO`, `GalleryChoiceDefinitionSO` and `GalleryVariantDefinitionSO` demonstrate the protected `CreateAction` extension point. `GalleryChildrenProviderSO` demonstrates cancellation-aware runtime children. `GalleryCenterWidget` intentionally owns its own visuals without global theme opt-in. `GalleryCustomPresenter` demonstrates a complete behavioral/layout replacement. Every optional visual is assigned through public component contracts, rather than framework access to private child transforms.
 
-The icons are generated original geometric PNG sprites. No Asset Store content, UI Extensions or Procedural UI Tool is required. The sample requires the same Unity Input System, TMP and MTK dependencies as the context-menu module.
+Every root style renders the same media examples: **Build** has both a compact icon and a full-color image, **Equipment** has only an icon, **Interactions** has only an image, and **Preferences** has neither. The disabled recipe also has both. The same independent image appears in the selected equipment center, an auxiliary variant action, and dynamically generated inventory choices. Icons consume the semantic icon color; images retain their original colors. Both are optional, independent sprite references on action definitions and runtime descriptors. Default item and center prefabs expose separate targets; custom widgets can opt into either.
+
+The icons and supply-crate artwork are generated original PNG sprites. No Asset Store content, UI Extensions or Procedural UI Tool is required. The sample requires the same Unity Input System, TMP and MTK dependencies as the context-menu module.
 
 The installed package's `Documentation~/ContextMenus.md` and `Documentation~/ContextMenusMigration.md` describe authoring, customization and migration. Run `MToolKit.ContextMenus.Samples.Tests.Editor` in Unity's EditMode Test Runner and `MToolKit.ContextMenus.Samples.Tests.PlayMode` in PlayMode. Inspect the saved scene at different viewport sizes and UI scales, and exercise the mouse, keyboard and physical-controller controls above. Include a development-player check for the input and rendering paths you ship. Compiling the source or generating assets alone does not exercise those interactions.

@@ -39,6 +39,25 @@ namespace MToolKit.Tests.Editor.ContextMenus
       return root;
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public void FactoryProvidesIndependentOptionalIconAndImageTargets(bool center)
+    {
+      var parent = Root("Visual channel parent");
+      using var instance = center ? MenuWidgetFactory.CreateCenter(parent.transform) : MenuWidgetFactory.CreateItem(parent.transform);
+      var widget = instance.DefaultWidget;
+      Assert.That(widget.Icon, Is.Not.Null, "Default action and center widgets both support a compact icon.");
+      var imageProperty = typeof(MenuActionWidget).GetProperty("ActionImage");
+      Assert.That(imageProperty, Is.Not.Null, "An action's artwork needs an independent optional binding target.");
+      var artwork = imageProperty.GetValue(widget) as Image;
+      Assert.That(artwork, Is.Not.Null);
+      Assert.That(artwork, Is.Not.SameAs(widget.Icon));
+      Assert.That(artwork.raycastTarget, Is.False, "Artwork cannot replace native wedge hit testing.");
+      Assert.That(widget.Icon.raycastTarget, Is.False);
+      Assert.That(artwork.preserveAspect, Is.True);
+      Assert.That(widget.Icon.preserveAspect, Is.True);
+    }
+
     [Test]
     public void AuthoredDefaultCenterUsesProfileSecondaryPrefabAndKeepsExecutionShared()
     {

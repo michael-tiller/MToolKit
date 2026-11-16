@@ -19,7 +19,8 @@ MonoBehaviour:
     custom card presenter.
   DescriptionKey: 
   TableName: Default String Table
-  Icon: {fileID: 21300000, guid: 245a196eaa773584eada5e949310c76f, type: 3}
+  Icon: {fileID: 0}
+  Image: {fileID: 21300000, guid: 174053b467139d040aa5ef1e7ea33bf7, type: 3}
   BindingHint: {fileID: 11400000, guid: 17f7ed4a12844af498544589d09ea1dd, type: 2}
   SecondaryActions: []
   Children:

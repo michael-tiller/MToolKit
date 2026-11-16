@@ -338,3 +338,21 @@ Describe 'Focused framework regression selection' {
   }
  }
 }
+
+Describe 'Focused action presentation integration selection' {
+ It 'selects the affected authored and runtime projection fixtures and requires their results' {
+  $tokens=$null;$errors=$null
+  $scriptPath=Join-Path $PSScriptRoot '../Invoke-LicensedMenuCI.ps1'
+  $ast=[Management.Automation.Language.Parser]::ParseFile($scriptPath,[ref]$tokens,[ref]$errors)
+  @($errors).Count|Should Be 0
+  $assignment=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left -is [Management.Automation.Language.VariableExpressionAst] -and $node.Left.VariablePath.UserPath -ceq 'integrationClasses'},$true))
+  $assignment.Count|Should Be 1
+  $selected=@($assignment[0].Right.FindAll({param($node) $node -is [Management.Automation.Language.StringConstantExpressionAst]},$true)|ForEach-Object{$_.Value})
+  foreach($fixture in @('Dirigible.Tests.Editor.Actions.ActionPresentationProjectionTests','Dirigible.Tests.Editor.Actions.AuthoredWorldContextMenuTests')) {
+   @($selected|Where-Object{$_ -ceq $fixture}).Count|Should Be 1
+  }
+  $integration=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Run-UnityStage' -and $node.CommandElements.Count -gt 1 -and $node.CommandElements[1].Value -eq 'integration'},$true))
+  $integration.Count|Should Be 1
+  $integration[0].CommandElements[4].VariablePath.UserPath|Should Be 'integrationClasses'
+ }
+}

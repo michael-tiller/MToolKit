@@ -12,6 +12,7 @@ namespace MToolKit.ContextMenus.Samples
   {
     [field: SerializeField] public string IdPrefix { get; set; } = "sample.dynamic";
     [field: SerializeField] public Sprite Icon { get; set; }
+    [field: SerializeField] public Sprite Image { get; set; }
     public override async UniTask<IReadOnlyList<MenuAction>> ResolveAsync(MenuContext context, CancellationToken cancellationToken)
     {
       // A genuine asynchronous boundary demonstrates the framework's stale-result and cancellation guards.
@@ -30,7 +31,7 @@ namespace MToolKit.ContextMenus.Samples
             current.Target is MenuGalleryState state && state.IsValid && state.CommandsEnabled && captured.Remaining > 0,
             disabledReason: "No stock available or commands disabled"),
           description: new MenuLabel("Take one item. Exhausted choices disappear without retaining a stale selection."),
-          icon: Icon, metadata: new MenuGalleryState.Details(model, "Available: " + entry.Remaining)));
+          icon: Icon, metadata: new MenuGalleryState.Details(model, "Available: " + entry.Remaining), image: Image));
       }
       return actions.AsReadOnly();
     }

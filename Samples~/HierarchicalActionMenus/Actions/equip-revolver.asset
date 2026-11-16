@@ -20,6 +20,7 @@ MonoBehaviour:
   DescriptionKey: 
   TableName: Default String Table
   Icon: {fileID: 21300000, guid: 841495e7cb2047e4486b157b54b2a34c, type: 3}
+  Image: {fileID: 21300000, guid: 174053b467139d040aa5ef1e7ea33bf7, type: 3}
   BindingHint: {fileID: 11400000, guid: 17f7ed4a12844af498544589d09ea1dd, type: 2}
   SecondaryActions:
   - {fileID: 11400000, guid: ea15eab1bd4158d4fb551c5fd77f7c30, type: 2}

@@ -21,6 +21,8 @@ namespace MToolKit.ContextMenus.Widgets
     [field: SerializeField] public TMP_Text Cost { get; set; }
     [field: SerializeField] public TMP_Text Variant { get; set; }
     [field: SerializeField] public Image Icon { get; set; }
+    /// <summary>Optional artwork target. Its authored tint is preserved independently of Icon theming.</summary>
+    [field: SerializeField] public Image ActionImage { get; set; }
     [field: SerializeField] public Image Progress { get; set; }
     [field: SerializeField] public Graphic Background { get; set; }
     [field: SerializeField] public Graphic Highlight { get; set; }
@@ -39,9 +41,10 @@ namespace MToolKit.ContextMenus.Widgets
     protected MenuWidgetState State { get; private set; }
 
     public void Configure(TMP_Text label, Image icon, Graphic highlight, Graphic check,
-      Button button, TMP_Text description = null)
+      Button button, TMP_Text description = null, Image actionImage = null)
     {
       Label = label; Icon = icon; Highlight = highlight; Check = check; Button = button; Description = description;
+      ActionImage = actionImage;
     }
 
     public virtual void Bind(MenuWidgetState state)
@@ -75,7 +78,7 @@ namespace MToolKit.ContextMenus.Widgets
 
     public virtual void Unbind()
     {
-      bindingGeneration++;
+      long generation = ++bindingGeneration;
       var oldTheme = themeSubscription; themeSubscription = null;
       var oldPrompt = promptBinding; promptBinding = null;
       var oldButton = subscribedButton; subscribedButton = null;
@@ -84,6 +87,9 @@ namespace MToolKit.ContextMenus.Widgets
       Exception failure = null;
       // Restore the old complete preset bindings before subscription disposal can bind a new owner.
       try { themeBindings.Restore(); } catch (Exception error) { failure = error; }
+      // Preset restoration can synchronously bind a replacement. Only the retired empty binding may clear visuals.
+      try { BindSprite(Icon, null, false, generation, null); } catch (Exception error) { failure ??= error; }
+      try { BindSprite(ActionImage, null, true, generation, null); } catch (Exception error) { failure ??= error; }
       try { oldTheme?.Dispose(); } catch (Exception error) { failure ??= error; }
       try { oldPrompt?.Dispose(); } catch (Exception error) { failure ??= error; }
       if (failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
@@ -140,7 +146,8 @@ namespace MToolKit.ContextMenus.Widgets
       if (BindingHint != null && promptBinding == null) BindingHint.text = state.BindingHint;
       if (Cost != null) Cost.text = state.Details?.CostText ?? string.Empty;
       if (Variant != null) Variant.text = state.Details?.VariantText ?? string.Empty;
-      if (Icon != null) { Icon.sprite = state.Icon; Icon.enabled = state.Icon != null; }
+      if (!BindSprite(Icon, state.Icon, false, generation, state)) return;
+      if (!BindSprite(ActionImage, state.Image, true, generation, state)) return;
       if (Highlight != null) Highlight.enabled = state.IsSelected;
       if (Check != null) Check.enabled = state.Availability.IsChecked;
       if (Button != null) Button.interactable = state.Availability.Visible && state.Availability.Enabled && state.Activate != null;
@@ -183,6 +190,23 @@ namespace MToolKit.ContextMenus.Widgets
         }
       }
       else themeBindings.ApplySpacing(GetComponent<SpacingPreset>(), token);
+    }
+
+    private bool BindSprite(Image target, Sprite sprite, bool collapseChild, long generation, MenuWidgetState state)
+    {
+      if (!Owns(generation, state)) return false;
+      if (target == null) return true;
+      target.sprite = sprite;
+      if (!Owns(generation, state)) return false;
+      if (target == null) return true;
+      bool visible = sprite != null;
+      target.enabled = visible;
+      if (!Owns(generation, state)) return false;
+      if (target == null) return true;
+      // Only this explicitly wired artwork child opts into collapse. Never deactivate the widget root.
+      if (collapseChild && target.gameObject != gameObject && target.gameObject.activeSelf != visible)
+        target.gameObject.SetActive(visible);
+      return Owns(generation, state);
     }
 
     protected void Tint(Graphic target, MenuVisualRole role, MenuThemeState? themeState = null)

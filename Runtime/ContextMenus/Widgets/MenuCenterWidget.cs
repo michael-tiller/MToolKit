@@ -32,9 +32,9 @@ namespace MToolKit.ContextMenus.Widgets
 
     public void Configure(TMP_Text title, TMP_Text description, Image icon = null,
       TMP_Text disabledReason = null, TMP_Text bindingHint = null,
-      RectTransform secondaryContainer = null, GameObject secondaryPrefab = null)
+      RectTransform secondaryContainer = null, GameObject secondaryPrefab = null, Image actionImage = null)
     {
-      base.Configure(title, icon, null, null, null, description);
+      base.Configure(title, icon, null, null, null, description, actionImage);
       DisabledReason = disabledReason; BindingHint = bindingHint;
       SecondaryContainer = secondaryContainer; SecondaryPrefab = secondaryPrefab;
     }
@@ -42,7 +42,7 @@ namespace MToolKit.ContextMenus.Widgets
     public override void Bind(MenuWidgetState state)
     {
       base.Bind(state);
-      if (state == null || SecondaryPrefab == null || SecondaryContainer == null) return;
+      if (state == null || !ReferenceEquals(State, state) || SecondaryPrefab == null || SecondaryContainer == null) return;
       if (pooledPrefab != SecondaryPrefab)
       {
         ClearPool();

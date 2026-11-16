@@ -39,7 +39,7 @@ namespace MToolKit.ContextMenus.Authoring
         actions[i] = new MenuAction(new MenuActionId(prefix + "/" + action.Id.Value), action.Label, action.Behavior,
           Prefix(action.Children, prefix), Prefix(action.ChildrenProvider, prefix), action.PrimaryBehavior,
           Prefix(action.SecondaryActions, prefix), action.Evaluate, action.Description, action.Icon,
-          action.BindingHint, action.Metadata, action.PresentationOverride).InheritChanges(action);
+          action.BindingHint, action.Metadata, action.PresentationOverride, action.Image).InheritChanges(action);
       }
       return Array.AsReadOnly(actions);
     }

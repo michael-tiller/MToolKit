@@ -58,6 +58,7 @@ namespace MToolKit.ContextMenus.Widgets
     public string Description { get; }
     public string BindingHint { get; }
     public Sprite Icon => Action?.Icon;
+    public Sprite Image => Action?.Image;
     public IMenuActionDetails Details => Action?.Metadata as IMenuActionDetails;
     public MenuSkin Skin { get; }
     public IThemeService ThemeService { get; }

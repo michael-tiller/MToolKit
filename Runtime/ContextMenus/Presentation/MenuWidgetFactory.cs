@@ -119,6 +119,7 @@ namespace MToolKit.ContextMenus.Presentation
       icon.rectTransform.sizeDelta = new Vector2(24, 24);
       var iconSize = icon.gameObject.AddComponent<LayoutElement>();
       iconSize.minWidth = iconSize.preferredWidth = 24; iconSize.minHeight = iconSize.preferredHeight = 24;
+      var artwork = Artwork(content, 32);
       var label = Text("Label", content, 18);
       var labelSize = label.gameObject.AddComponent<LayoutElement>(); labelSize.flexibleWidth = 1;
       var marker = Rect("Selected marker", root).gameObject.AddComponent<Image>();
@@ -135,7 +136,7 @@ namespace MToolKit.ContextMenus.Presentation
       var widget = root.gameObject.AddComponent<MenuActionWidget>();
       widget.Background = image;
       widget.SpacingTargets = new[] { spacing };
-      widget.Configure(label, icon, marker, check, button);
+      widget.Configure(label, icon, marker, check, button, actionImage: artwork);
       return new MenuWidgetInstance(root.gameObject, true);
     }
 
@@ -156,14 +157,26 @@ namespace MToolKit.ContextMenus.Presentation
       mainLayout.childControlWidth = true; mainLayout.childControlHeight = true;
       mainLayout.childForceExpandWidth = true; mainLayout.childForceExpandHeight = false;
       var mainSpacing = content.gameObject.AddComponent<SpacingPreset>(); mainSpacing.ConfigureTarget(mainLayout);
-      var title = Text("Title", content, 19);
+      var heading = Rect("Heading", content);
+      var headingLayout = heading.gameObject.AddComponent<HorizontalLayoutGroup>();
+      headingLayout.spacing = 4; headingLayout.childAlignment = TextAnchor.MiddleCenter;
+      headingLayout.childControlWidth = headingLayout.childControlHeight = true;
+      headingLayout.childForceExpandWidth = headingLayout.childForceExpandHeight = false;
+      heading.gameObject.AddComponent<LayoutElement>().preferredHeight = 32;
+      var artwork = Artwork(heading, 32);
+      var title = Text("Title", heading, 19);
+      title.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
+      var icon = Rect("Icon", heading).gameObject.AddComponent<Image>();
+      icon.raycastTarget = false; icon.preserveAspect = true;
+      var iconDimensions = icon.gameObject.AddComponent<LayoutElement>();
+      iconDimensions.minWidth = iconDimensions.preferredWidth = 24;
+      iconDimensions.minHeight = iconDimensions.preferredHeight = 24;
       var description = Text("Description", content, 16);
       var unavailable = Text("Availability", content, 16);
       var binding = Text("Binding", content, 16);
       Place(title.rectTransform, new Vector2(0, 48), new Vector2(160, 28));
       Place(description.rectTransform, new Vector2(0, 16), new Vector2(160, 48));
       description.textWrappingMode = TextWrappingModes.Normal;
-      title.gameObject.AddComponent<LayoutElement>().preferredHeight = 28;
       description.gameObject.AddComponent<LayoutElement>().preferredHeight = 48;
       unavailable.gameObject.AddComponent<LayoutElement>().preferredHeight = 28;
       binding.gameObject.AddComponent<LayoutElement>().preferredHeight = 28;
@@ -179,10 +192,23 @@ namespace MToolKit.ContextMenus.Presentation
       var widget = root.gameObject.AddComponent<MenuCenterWidget>();
       widget.Background = background;
       widget.SpacingTargets = new[] { mainSpacing, secondarySpacing };
-      widget.Configure(title, description, disabledReason: unavailable, bindingHint: binding, secondaryContainer: secondary);
+      widget.Configure(title, description, icon: icon, disabledReason: unavailable, bindingHint: binding,
+        secondaryContainer: secondary, actionImage: artwork);
       var result = new MenuWidgetInstance(root.gameObject, true);
       result.ConfigureSecondaryPrefab(secondaryPrefab);
       return result;
+    }
+
+    private static Image Artwork(Transform parent, float size)
+    {
+      var image = Rect("Action image", parent).gameObject.AddComponent<Image>();
+      image.raycastTarget = false; image.preserveAspect = true; image.enabled = false;
+      image.rectTransform.sizeDelta = new Vector2(size, size);
+      var dimensions = image.gameObject.AddComponent<LayoutElement>();
+      dimensions.minWidth = dimensions.preferredWidth = size;
+      dimensions.minHeight = dimensions.preferredHeight = size;
+      image.gameObject.SetActive(false);
+      return image;
     }
 
     private static MenuWidgetInstance Custom(Transform parent, GameObject prefab)
