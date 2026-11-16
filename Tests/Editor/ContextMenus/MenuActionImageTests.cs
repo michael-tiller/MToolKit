@@ -189,6 +189,52 @@ namespace MToolKit.Tests.Editor.ContextMenus
     }
 
     [Test]
+    public void ArtworkContainerDoesNotHideAnIndependentlyBoundDescendantIcon()
+    {
+      var widget = Widget(); widget.UseSkin = false;
+      var artwork = ImageTarget(widget);
+      widget.Icon.transform.SetParent(artwork.transform, false);
+      artwork.gameObject.SetActive(false); // Factory artwork starts inactive before the first bind.
+      var sprite = Sprite("Nested compact icon");
+      var state = new MenuWidgetState(Action("icon-only", icon: sprite), MenuActionState.Available);
+
+      widget.Bind(state);
+
+      Assert.That(artwork.enabled, Is.False);
+      Assert.That(artwork.gameObject.activeInHierarchy, Is.True, "An artwork container must preserve its independently wired child visuals.");
+      Assert.That(widget.Icon.sprite, Is.SameAs(sprite)); Assert.That(widget.Icon.enabled, Is.True);
+      Assert.That(widget.Icon.gameObject.activeInHierarchy, Is.True);
+      widget.Unbind();
+      Assert.That(widget.Icon.sprite, Is.Null); Assert.That(widget.Icon.enabled, Is.False);
+      Assert.That(artwork.gameObject.activeInHierarchy, Is.True);
+      widget.Bind(state);
+      Assert.That(widget.Icon.sprite, Is.SameAs(sprite)); Assert.That(widget.Icon.enabled, Is.True);
+      Assert.That(widget.Icon.gameObject.activeInHierarchy, Is.True);
+    }
+
+    [Test]
+    public void ArtworkContainerDoesNotHideAnIndependentlyBoundDescendantLabel()
+    {
+      var widget = Widget(); widget.UseSkin = false;
+      var artwork = ImageTarget(widget);
+      var label = new GameObject("Overlay label", typeof(RectTransform), typeof(CanvasRenderer), typeof(TMPro.TextMeshProUGUI));
+      label.transform.SetParent(artwork.transform, false);
+      widget.Label = label.GetComponent<TMPro.TextMeshProUGUI>();
+      artwork.gameObject.SetActive(false);
+      var action = Action("label-only");
+
+      widget.Bind(new MenuWidgetState(action, MenuActionState.Available, label: "First label"));
+
+      Assert.That(artwork.enabled, Is.False);
+      Assert.That(artwork.gameObject.activeInHierarchy, Is.True, "Hiding missing artwork must not hide the action label.");
+      Assert.That(widget.Label.text, Is.EqualTo("First label")); Assert.That(widget.Label.isActiveAndEnabled, Is.True);
+      widget.Unbind();
+      Assert.That(artwork.gameObject.activeInHierarchy, Is.True);
+      widget.Bind(new MenuWidgetState(action, MenuActionState.Available, label: "Second label"));
+      Assert.That(widget.Label.text, Is.EqualTo("Second label")); Assert.That(widget.Label.isActiveAndEnabled, Is.True);
+    }
+
+    [Test]
     public void MissingOptionalVisualTargetsStillBindAndUnbindBothSpriteChannels()
     {
       var state = new MenuWidgetState(Action("both", Sprite("Icon"), Sprite("Artwork")), MenuActionState.Available);

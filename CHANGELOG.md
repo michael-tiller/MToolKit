@@ -52,6 +52,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Keep independently wired icons and labels visible beneath optional artwork containers, including initially inactive custom prefabs and widget reuse. Continue collapsing empty dedicated artwork leaves. (v1.24.1)
+
 - Avoid invalidating every input prompt when menu routing enables or disables unchanged actions. Preserve synchronous binding, device and context refreshes; verify bulk, overlapping and deferred menu leases plus existing prompt ownership regressions. (v1.21.4)
 
 - Preserve Generic Image glyph fallback after Sprite destruction and refresh native UI materials after glyph atlas rebakes, retaining the accepted native regression fixture alongside hierarchical menus. (v1.21.3)

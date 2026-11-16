@@ -67,7 +67,9 @@ secondary placements preserve both independently.
 `MenuWidgetState.Icon` and `.Image` expose the same data to every presentation.
 The supplied action and center widgets bind `Icon` and `ActionImage` targets.
 Icons use the semantic icon theme role; artwork retains its own authored color.
-An empty artwork child collapses, and a reused widget clears the prior sprite.
+An empty dedicated artwork leaf collapses, and a reused widget clears the prior sprite.
+An artwork container with descendants stays active while its empty graphic is hidden,
+so independently wired overlay icons and labels remain visible.
 Custom prefabs can omit either target or arrange both freely. A custom `IMenuWidget`
 can consume the same state without adopting the default component or layout.
 

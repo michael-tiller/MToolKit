@@ -203,9 +203,11 @@ namespace MToolKit.ContextMenus.Widgets
       target.enabled = visible;
       if (!Owns(generation, state)) return false;
       if (target == null) return true;
-      // Only this explicitly wired artwork child opts into collapse. Never deactivate the widget root.
-      if (collapseChild && target.gameObject != gameObject && target.gameObject.activeSelf != visible)
-        target.gameObject.SetActive(visible);
+      // Collapse dedicated artwork leaves, while preserving independently wired overlay children.
+      // Never deactivate the widget root or hide child labels/icons with the optional graphic.
+      bool containerVisible = visible || target.transform.childCount > 0;
+      if (collapseChild && target.gameObject != gameObject && target.gameObject.activeSelf != containerVisible)
+        target.gameObject.SetActive(containerVisible);
       return Owns(generation, state);
     }
 
