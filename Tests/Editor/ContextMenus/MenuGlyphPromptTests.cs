@@ -132,7 +132,7 @@ namespace MToolKit.Tests.Editor.ContextMenus
     {
       using var fixture = new Fixture(wideFooterGlyphs: true);
       var profile = fixture.Profile(); profile.ShowCenter = false;
-      profile.ListWidth = 600; profile.MaximumVisibleItems = 3;
+      profile.ListWidth = 380; profile.MaximumVisibleItems = 3;
       profile.InputBindings.Configure(back: fixture.Reference(fixture.AuthoredBack),
         pageBackward: fixture.Reference(fixture.AuthoredPrevious), pageForward: fixture.Reference(fixture.AuthoredNext));
       var actions = new MenuAction[9];

@@ -525,6 +525,12 @@ namespace MToolKit.ContextMenus.Presentation
         activate: control.Activate, select: ThemeFooterControls, isHovered: control.Hovered,
         hoverChanged: hot => { control.Hovered = hot; ThemeFooter(control); }, theme: Profile.GetTheme(Context.Themes),
         bindingHint: hint, promptService: Context.Prompts, bindingAction: action));
+      if (control.Widget != null && control.Widget.BindingHint != null)
+      {
+        var text = control.Widget.BindingHint;
+        var layout = text.GetComponent<LayoutElement>();
+        if (layout != null) layout.minWidth = Mathf.Ceil(Mathf.Max(28, text.GetPreferredValues().x));
+      }
     }
 
     private void CreateBackdrop()

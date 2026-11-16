@@ -54,6 +54,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Reserve measured footer glyph widths as layout minima under compression; keep wide paging keycaps visible at default menu widths and release space on rebinding. Validate the default-width native mesh regression and actual saved-gallery footer. (v1.25.3)
+
 - Let native TMP glyph widths drive default footer layout so wide keyboard caps render, operation labels stay separate and rebinding releases extra space. Verify actual sprite meshes and layout with a focused native regression. (v1.25.2)
 
 - Use native TMP glyph-only binding hints throughout default menu widgets, navigation and the saved gallery while preserving live rebinding and custom widget ownership. Author reusable keyboard, mouse and neutral controller glyph assets with unique, compact atlas names and protect existing sample assets during generation. (v1.25.1)
