@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Add shared menu-style configuration assets and an editor wizard with specialized layout foldouts, guarded previews and in-place profile rebuilding. Expose sparse shared/per-style MTK Swatch, Typeset and Spacing overrides with skin fallback, visual states and a live backdrop role. Bind native widget content layouts and typography while preserving custom targets, callback ownership and pooled baselines. (v1.22.0)
+
 - Add the `MToolKit.ContextMenus` module with runtime/authored hierarchical actions, shared sessions, inline list foldouts, native annular rendering, replacement and partial-arc concentric presentations, configurable widgets/profiles, semantic input ownership, secondary actions, theme bindings and optional transitions. Ship ten editable presenter/widget prefabs, six menu profiles, a host config and saved gallery scene; retain a safe fresh-destination generator and authoring/migration documentation. Add optional scoped rebinder registration for runtime action instances. (v1.21.0)
 
 - Add per-key source-rectangle, alpha-bound and monochrome-ink sizing for central keycap artwork. Fit visible symbols without enlarging caps, retain source/importer identities and release prepared pixels on failure; verify actual authored arrows/Caps/Context art, legacy scale, colors and native rendering in Dirigible. (v1.20.0)
@@ -39,6 +41,10 @@ not a roadmap milestone.
 - Add persisted 75–300% reactive UI scaling above authored CanvasScaler resolution behavior, percentage controls and focused emergency recovery. Add runtime semantic accessibility floors, late-view typography and focus-to-scroll integration. Document migration for custom `IGraphicsSettings` implementations and keep scoped development INI isolation separate from normal settings persistence. (v1.9.0)
 
 - Add independent camera pan and zoom sensitivity settings with neutral defaults, finite 10–300% ranges, Apply/Cancel/default baselines and INI persistence. Preserve existing binding behavior and legacy files without the new keys. (v1.8.0)
+
+### Changed
+
+- Consolidate the sample into WheelContextMenu, PieContextMenu, ListContextMenu and NestedWheelContextMenu, retaining the optional custom-center and custom-presenter examples. Preserve renamed profile GUIDs, remove the redundant single-ring preset, and supply shared authoring sources and reproducible themed widget prefabs. (v1.22.0)
 
 ### Fixed
 

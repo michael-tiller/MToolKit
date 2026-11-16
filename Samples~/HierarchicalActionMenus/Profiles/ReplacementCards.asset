@@ -24,6 +24,8 @@ MonoBehaviour:
   <CenterPrefab>k__BackingField: {fileID: 0}
   <SecondaryPrefab>k__BackingField: {fileID: 0}
   <Skin>k__BackingField: {fileID: 11400000, guid: b560e13dba00ed24cb702bef4fdf21c7, type: 2}
+  <SharedThemeOverrides>k__BackingField: {fileID: 11400000, guid: 77fedbd12f5e6ec4db38674f303ce879, type: 2}
+  <ThemeOverrides>k__BackingField: {fileID: 0}
   <Navigation>k__BackingField: 1
   <Anchor>k__BackingField: 1
   <InnerRadius>k__BackingField: 165

@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.ExceptionServices;
 using Cysharp.Threading.Tasks;
 using MToolKit.ContextMenus.Configuration;
 using MToolKit.Theme.Spacing;
@@ -26,6 +27,10 @@ namespace MToolKit.ContextMenus.Widgets
     [field: SerializeField] public Graphic Check { get; set; }
     [field: SerializeField] public Button Button { get; set; }
     [field: SerializeField] public bool UseSkin { get; set; } = true;
+    [field: SerializeField] public MenuVisualRole BackgroundRole { get; set; } = MenuVisualRole.Normal;
+    [field: SerializeField] public SpacingPreset[] SpacingTargets { get; set; } = Array.Empty<SpacingPreset>();
+
+    private readonly MenuWidgetThemeBindings themeBindings = new();
 
     private IDisposable themeSubscription;
     private IDisposable promptBinding;
@@ -41,32 +46,51 @@ namespace MToolKit.ContextMenus.Widgets
 
     public virtual void Bind(MenuWidgetState state)
     {
+      long retiring = bindingGeneration;
       Unbind();
-      if (state == null) return;
+      if (state == null || bindingGeneration != retiring + 1 || State != null) return;
       State = state;
-      bindingGeneration++;
+      long generation = ++bindingGeneration;
       if (Button != null)
       {
         subscribedButton = Button;
         subscribedButton.onClick.AddListener(Activate);
       }
       var service = MenuSkin.Service(state.ThemeService);
-      if (UseSkin && service != null) themeSubscription = service.OnThemeUpdated.Subscribe(_ => ApplyThemeOnMainThread());
+      if (UseSkin && service != null)
+      {
+        var subscription = service.OnThemeUpdated.Subscribe(_ => ApplyThemeOnMainThread());
+        if (!Owns(generation, state)) { subscription.Dispose(); return; }
+        themeSubscription = subscription;
+      }
       ApplyVisuals();
+      if (!Owns(generation, state)) return;
       if (BindingHint != null && state.PromptService != null && state.BindingAction != null)
-        promptBinding = state.PromptService.Bind(BindingHint, () => state.PromptService.Resolve(state.BindingAction));
+      {
+        var binding = state.PromptService.Bind(BindingHint, () => state.PromptService.Resolve(state.BindingAction));
+        if (!Owns(generation, state)) { binding.Dispose(); return; }
+        promptBinding = binding;
+      }
     }
 
     public virtual void Unbind()
     {
       bindingGeneration++;
-      themeSubscription?.Dispose();
-      themeSubscription = null;
-      promptBinding?.Dispose(); promptBinding = null;
-      if (subscribedButton != null) subscribedButton.onClick.RemoveListener(Activate);
-      subscribedButton = null;
+      var oldTheme = themeSubscription; themeSubscription = null;
+      var oldPrompt = promptBinding; promptBinding = null;
+      var oldButton = subscribedButton; subscribedButton = null;
       State = null;
+      if (oldButton != null) oldButton.onClick.RemoveListener(Activate);
+      Exception failure = null;
+      // Restore the old complete preset bindings before subscription disposal can bind a new owner.
+      try { themeBindings.Restore(); } catch (Exception error) { failure = error; }
+      try { oldTheme?.Dispose(); } catch (Exception error) { failure ??= error; }
+      try { oldPrompt?.Dispose(); } catch (Exception error) { failure ??= error; }
+      if (failure != null) ExceptionDispatchInfo.Capture(failure).Throw();
     }
+
+    private bool Owns(long generation, MenuWidgetState state)
+      => generation == bindingGeneration && ReferenceEquals(State, state);
 
     private void ApplyThemeOnMainThread()
     {
@@ -110,6 +134,7 @@ namespace MToolKit.ContextMenus.Widgets
     {
       var state = State;
       if (state == null) return;
+      long generation = bindingGeneration;
       if (Label != null) Label.text = state.Label;
       if (Description != null) Description.text = state.Description;
       if (BindingHint != null && promptBinding == null) BindingHint.text = state.BindingHint;
@@ -125,45 +150,51 @@ namespace MToolKit.ContextMenus.Widgets
         Progress.enabled = progress.HasValue;
         if (progress.HasValue) Progress.fillAmount = Mathf.Clamp01(progress.Value);
       }
-      if (!UseSkin) return;
+      if (!UseSkin) { themeBindings.Restore(); return; }
       var role = !state.Availability.Enabled ? MenuVisualRole.Disabled :
         state.IsHovered ? MenuVisualRole.Hovered : state.IsSelected ? MenuVisualRole.Selected : MenuVisualRole.Normal;
-      Tint(Background, role);
+      Tint(Background, BackgroundRole == MenuVisualRole.Normal ? role : BackgroundRole);
       Tint(Highlight, MenuVisualRole.Selected);
-      Tint(Check, MenuVisualRole.Label);
+      Tint(Check, MenuVisualRole.Checked, state.Availability.Enabled ? MenuThemeState.Checked : MenuThemeState.Disabled);
       Tint(Icon, MenuVisualRole.Icon);
       Tint(Label, MenuVisualRole.Label);
       Tint(Description, MenuVisualRole.Description);
       Tint(BindingHint, MenuVisualRole.Description);
       Tint(Cost, MenuVisualRole.Description);
       Tint(Variant, MenuVisualRole.Description);
+      Tint(Progress, MenuVisualRole.Icon);
       ApplyTypeset(Label, false);
+      if (!Owns(generation, state)) return;
       ApplyTypeset(Description, true);
-      var spacing = GetComponent<SpacingPreset>();
-      var token = state.Skin != null ? state.Skin.GetSpacing(state.ThemeService) : null;
-      if (spacing != null && token != null)
+      if (!Owns(generation, state)) return;
+      ApplyTypeset(BindingHint, true);
+      if (!Owns(generation, state)) return;
+      ApplyTypeset(Cost, true);
+      if (!Owns(generation, state)) return;
+      ApplyTypeset(Variant, true);
+      if (!Owns(generation, state)) return;
+      var token = state.Theme.GetSpacing();
+      if (SpacingTargets != null && SpacingTargets.Length > 0)
       {
-        spacing.SetOverrideTheme(true);
-        spacing.SetStart(token);
+        for (int i = 0; i < SpacingTargets.Length; i++)
+        {
+          themeBindings.ApplySpacing(SpacingTargets[i], token);
+          if (!Owns(generation, state)) return;
+        }
       }
+      else themeBindings.ApplySpacing(GetComponent<SpacingPreset>(), token);
     }
 
-    protected void Tint(Graphic target, MenuVisualRole role)
+    protected void Tint(Graphic target, MenuVisualRole role, MenuThemeState? themeState = null)
     {
       if (target == null || State == null) return;
-      target.color = State.Skin != null ? State.Skin.GetColor(role, State.ThemeService) : MenuSkin.DefaultColor(role);
+      target.color = State.Theme.GetColor(role, themeState ?? State.ThemeState);
     }
 
-    private void ApplyTypeset(TMP_Text target, bool description)
+    protected void ApplyTypeset(TMP_Text target, bool description)
     {
-      if (target == null || State?.Skin == null) return;
-      var token = State.Skin.GetTypeset(description, State.ThemeService);
-      var preset = target.GetComponent<TypesetPreset>();
-      if (preset == null || token == null) return;
-      // This widget resolves the injected theme before binding the existing preset. It remains the
-      // typography/accessibility implementation; its own global callback cannot override this snapshot.
-      preset.SetOverrideTheme(true);
-      preset.SetStart(token);
+      if (target == null || State == null) return;
+      themeBindings.ApplyTypography(target, State.Theme.GetTypeset(description, State.ThemeState));
     }
 
     protected virtual void OnDisable() => Unbind();

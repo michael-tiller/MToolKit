@@ -1,0 +1,207 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5dec4117f1bc4f0f8de2c887770e2263, type: 3}
+  m_Name: GalleryMenuStyles
+  m_EditorClassIdentifier: MToolKit.Editor.ContextMenus::MToolKit.Editor.ContextMenus.MenuStyleConfig
+  Common: {fileID: 11400000, guid: 9a1b9ba23eb3b4c4c9d75f39086d31cb, type: 2}
+  OutputFolder: Assets/MToolKit/Menus/CustomizedMenuStyles
+  Styles:
+  - rid: 6067106620727623818
+  - rid: 6067106620727623820
+  - rid: 6067106620727623821
+  - rid: 6067106620727623822
+  - rid: 6067106620727623823
+  generatedListPresenter: {fileID: 0}
+  generatedRadialPresenter: {fileID: 0}
+  references:
+    version: 2
+    RefIds:
+    - rid: 6067106620727623818
+      type: {class: ConcentricMenuStyleRecipe, ns: MToolKit.Editor.ContextMenus, asm: MToolKit.Editor.ContextMenus}
+      data:
+        Id: 172925a7b0374f6d9535360f7492c4b8
+        AssetName: NestedWheelContextMenu
+        Output: {fileID: 11400000, guid: 4c23063f321e9204981e2930064a17fe, type: 2}
+        PresenterPrefab: {fileID: 0}
+        ItemPrefab: {fileID: 0}
+        CenterPrefab: {fileID: 0}
+        SecondaryPrefab: {fileID: 0}
+        ThemeOverrides: {fileID: 0}
+        Skin: {fileID: 0}
+        OverrideShowCenter: 0
+        ShowCenter: 0
+        OverrideInputBindings: 0
+        InputBindings:
+          navigate: {fileID: 0}
+          point: {fileID: 0}
+          click: {fileID: 0}
+          submit: {fileID: 0}
+          back: {fileID: 0}
+          cancel: {fileID: 0}
+          pageForward: {fileID: 0}
+          pageBackward: {fileID: 0}
+          switchRing: {fileID: 0}
+          hold: {fileID: 0}
+          secondary: []
+          useNativeUguiNavigation: 0
+          routePointerClick: 0
+        MaximumVisibleItems: 8
+        WidgetSize: {x: 96, y: 64}
+        InnerRadius: 165
+        RingWidth: 60
+        StartAngle: 90
+        Clockwise: 1
+        AngularGap: 3
+        DrawSegments: 1
+        RingGap: 10
+        ChildRingWidth: 55
+        ChildArcDegrees: 120
+    - rid: 6067106620727623820
+      type: {class: SingleRingMenuStyleRecipe, ns: MToolKit.Editor.ContextMenus, asm: MToolKit.Editor.ContextMenus}
+      data:
+        Id: 8ea49a3ecc744c39a5c6f725a4eb67f8
+        AssetName: WheelContextMenu
+        Output: {fileID: 11400000, guid: 0b88131ef93900346adef97f88f27b66, type: 2}
+        PresenterPrefab: {fileID: 0}
+        ItemPrefab: {fileID: 0}
+        CenterPrefab: {fileID: 0}
+        SecondaryPrefab: {fileID: 0}
+        ThemeOverrides: {fileID: 0}
+        Skin: {fileID: 0}
+        OverrideShowCenter: 0
+        ShowCenter: 0
+        OverrideInputBindings: 0
+        InputBindings:
+          navigate: {fileID: 0}
+          point: {fileID: 0}
+          click: {fileID: 0}
+          submit: {fileID: 0}
+          back: {fileID: 0}
+          cancel: {fileID: 0}
+          pageForward: {fileID: 0}
+          pageBackward: {fileID: 0}
+          switchRing: {fileID: 0}
+          hold: {fileID: 0}
+          secondary: []
+          useNativeUguiNavigation: 0
+          routePointerClick: 0
+        MaximumVisibleItems: 8
+        WidgetSize: {x: 96, y: 64}
+        InnerRadius: 165
+        RingWidth: 80
+        StartAngle: 90
+        Clockwise: 1
+        AngularGap: 5
+        DrawSegments: 1
+    - rid: 6067106620727623821
+      type: {class: ReplacementMenuStyleRecipe, ns: MToolKit.Editor.ContextMenus, asm: MToolKit.Editor.ContextMenus}
+      data:
+        Id: 999bb9d8b5e642db8563e98ab0ee5c20
+        AssetName: PieContextMenu
+        Output: {fileID: 11400000, guid: db373e584d0eef742a832d0de1b0efa0, type: 2}
+        PresenterPrefab: {fileID: 0}
+        ItemPrefab: {fileID: 0}
+        CenterPrefab: {fileID: 0}
+        SecondaryPrefab: {fileID: 0}
+        ThemeOverrides: {fileID: 0}
+        Skin: {fileID: 0}
+        OverrideShowCenter: 1
+        ShowCenter: 0
+        OverrideInputBindings: 0
+        InputBindings:
+          navigate: {fileID: 0}
+          point: {fileID: 0}
+          click: {fileID: 0}
+          submit: {fileID: 0}
+          back: {fileID: 0}
+          cancel: {fileID: 0}
+          pageForward: {fileID: 0}
+          pageBackward: {fileID: 0}
+          switchRing: {fileID: 0}
+          hold: {fileID: 0}
+          secondary: []
+          useNativeUguiNavigation: 0
+          routePointerClick: 0
+        MaximumVisibleItems: 8
+        WidgetSize: {x: 144, y: 56}
+        InnerRadius: 90
+        RingWidth: 150
+        StartAngle: 90
+        Clockwise: 1
+        AngularGap: 3
+        DrawSegments: 0
+    - rid: 6067106620727623822
+      type: {class: ListMenuStyleRecipe, ns: MToolKit.Editor.ContextMenus, asm: MToolKit.Editor.ContextMenus}
+      data:
+        Id: d0de1f2fc50f4d73b51c6ce013174aac
+        AssetName: ListContextMenu
+        Output: {fileID: 11400000, guid: 489661d106aa95f45a67a85df6a70bc6, type: 2}
+        PresenterPrefab: {fileID: 0}
+        ItemPrefab: {fileID: 0}
+        CenterPrefab: {fileID: 0}
+        SecondaryPrefab: {fileID: 0}
+        ThemeOverrides: {fileID: 0}
+        Skin: {fileID: 0}
+        OverrideShowCenter: 1
+        ShowCenter: 0
+        OverrideInputBindings: 0
+        InputBindings:
+          navigate: {fileID: 0}
+          point: {fileID: 0}
+          click: {fileID: 0}
+          submit: {fileID: 0}
+          back: {fileID: 0}
+          cancel: {fileID: 0}
+          pageForward: {fileID: 0}
+          pageBackward: {fileID: 0}
+          switchRing: {fileID: 0}
+          hold: {fileID: 0}
+          secondary: []
+          useNativeUguiNavigation: 0
+          routePointerClick: 0
+        MaximumVisibleItems: 10
+        WidgetSize: {x: 96, y: 64}
+        ListWidth: 380
+        RowHeight: 48
+        Navigation: 0
+    - rid: 6067106620727623823
+      type: {class: CustomMenuStyleRecipe, ns: MToolKit.Editor.ContextMenus, asm: MToolKit.Editor.ContextMenus}
+      data:
+        Id: b68c268990744e0fb2649c88ea4dfb5a
+        AssetName: ReplacementCards
+        Output: {fileID: 11400000, guid: 7ccf45f9f13d0bd41b061867d8308437, type: 2}
+        PresenterPrefab: {fileID: 0}
+        ItemPrefab: {fileID: 0}
+        CenterPrefab: {fileID: 0}
+        SecondaryPrefab: {fileID: 0}
+        ThemeOverrides: {fileID: 0}
+        Skin: {fileID: 11400000, guid: b560e13dba00ed24cb702bef4fdf21c7, type: 2}
+        OverrideShowCenter: 1
+        ShowCenter: 0
+        OverrideInputBindings: 0
+        InputBindings:
+          navigate: {fileID: 0}
+          point: {fileID: 0}
+          click: {fileID: 0}
+          submit: {fileID: 0}
+          back: {fileID: 0}
+          cancel: {fileID: 0}
+          pageForward: {fileID: 0}
+          pageBackward: {fileID: 0}
+          switchRing: {fileID: 0}
+          hold: {fileID: 0}
+          secondary: []
+          useNativeUguiNavigation: 0
+          routePointerClick: 0
+        MaximumVisibleItems: 8
+        WidgetSize: {x: 96, y: 64}
+        Navigation: 1

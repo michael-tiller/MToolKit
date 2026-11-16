@@ -1,6 +1,6 @@
 # Hierarchical action menus
 
-Import **Hierarchical Action Menus** from the MToolKit Package Manager samples, import TMP Essentials if needed, open the included `ActionMenuGallery.unity` scene and enter Play Mode. The saved gallery ships ten presenter/widget prefabs, six menu profiles, a host config, semantic themes, reusable actions and Input System assets. The five root styles share one action set; the sixth profile supplies the custom replacement presenter. You do not need to run the generator to open the imported sample.
+Import **Hierarchical Action Menus** from the MToolKit Package Manager samples, import TMP Essentials if needed, open the included `ActionMenuGallery.unity` scene and enter Play Mode. The saved gallery ships ten presenter/widget prefabs, five menu profiles, a host config, semantic themes, reusable actions and Input System assets. Four root styles share one action set; the fifth profile supplies the custom child presenter. You do not need to run the generator to open the imported sample.
 
 To create another editable gallery, call `MenuGalleryAssetBuilder.Build("Assets/MyMenuGallery")` with a fresh destination. The **Tools > MToolKit > Samples > Create Action Menu Gallery** command targets `Assets/Samples/MToolKit/<version>/HierarchicalActionMenus`; it refuses that folder once it contains the shipped gallery. Edit the imported assets directly or use a new destination instead of generating over them.
 
@@ -12,17 +12,18 @@ The five buttons open the same authored hierarchy with these configurations:
 
 | Profile | Composition |
 | --- | --- |
-| Excalidraw Concentric | Default; independent parent/child rings, a 120-degree child arc, standard center information and secondary controls. Build > Doors > Metal doors demonstrates depth beyond two rings. |
-| Rust Build Wheel | Full native ring with labels/icons; a custom `GalleryCenterWidget` displays description, costs, variant and binding hints. |
-| GTA Equipment Wheel | Icon-only sectors, standard information center and independently enabled variant/inspect actions. Hold/release operation is available through the configured input action. |
-| Sims Interactions | Individual button prefabs with no wedge background and no center. Interactions opens a completely different custom card presenter. |
-| Traditional List | Accessible list with inline foldouts, checked-state indicators, bounded pagination and shared Back navigation. |
+| WheelContextMenu | Native ring with icon-only items, standard information center and independently enabled variant/inspect actions. Hold/release uses the configured input action. |
+| PieContextMenu | Individual button prefabs with no wedge background and no center. Interactions opens the custom child presenter. |
+| ListContextMenu | Accessible list with inline foldouts, checked-state indicators, bounded pagination and shared Back navigation. |
+| NestedWheelContextMenu | Default; independent parent/child rings, a 120-degree child arc, center information and secondary controls. Build > Doors > Metal doors demonstrates depth beyond two rings. |
+
+The wheel's center is a configuration choice. Assign `Prefabs/CustomCenter.prefab` to its profile's `CenterPrefab` for the fully custom `GalleryCenterWidget`, which displays description, resource cost, variant and binding hints. It uses the same wheel profile and action hierarchy.
 
 **Interactions** carries an authored child-profile override in every profile. It replaces the complete presenter with `GalleryCustomPresenter`, whose own two-column card layout uses the shared session and execution path. The child skin supplies a local selected-color override while retaining semantic theme tokens. Returning to the parent restores its presentation. This branch demonstrates actual presenter replacement; the other branches retain each chosen style.
 
 The state is a plain `MenuGalleryState` stored in `MenuContext.Target`. Reusable ScriptableObjects contain definitions only. Preferences includes a noninteractive header, toggle, exclusive choices, and an asynchronous inventory provider. Taking the last inventory item removes that choice on refresh. The disabled recipe displays a structured availability reason. Equipment has independently enabled variant actions, whose refresh updates the center without dismissing the menu.
 
-The side controls change command/secondary availability, invalidate/restore the target, switch light/dark MTK themes, adjust MTK UI scale, and open at a screen edge. Invalidating the target retires the session. Restore the target before opening another menu. At constrained viewport sizes the radial profiles use the configured list fallback; text and targets are not silently shrunk. The scene uses a 1280 x 900 CanvasScaler reference; a 1600 x 1000 viewport accommodates the authored two-ring composition. `CanvasScaler` and `UserUiScaleCanvas` own resolution and preference scaling.
+The side controls change command/secondary availability, invalidate/restore the target, switch light/dark MTK themes, adjust MTK UI scale, and open at a screen edge. Invalidating the target retires the session. Restore the target before opening another menu. At constrained viewport sizes the radial profiles use the configured list fallback; text and targets are not silently shrunk. The scene uses a 1600 x 1000 CanvasScaler reference; that viewport accommodates the authored two-ring composition. `CanvasScaler` and `UserUiScaleCanvas` own resolution and preference scaling.
 
 | Operation | Keyboard/mouse default | Controller default |
 | --- | --- | --- |

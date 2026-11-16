@@ -213,9 +213,10 @@ namespace MToolKit.ContextMenus.Presentation
         bool selected = ringIndex == 0 && OuterGeometry != null ? action == Session.ParentSelected
           : hasTarget && action == Session.Selected;
         var availability = action.Evaluate(Session.Context);
+        var state = MenuThemeContext.SelectState(availability, selected, IsPointerHovered(action));
         graphic.color = ColorFor(!availability.Enabled ? MenuVisualRole.Disabled : IsPointerHovered(action)
-          ? MenuVisualRole.Hovered : selected ? MenuVisualRole.Selected : MenuVisualRole.Normal);
-        graphic.BorderColor = ColorFor(selected ? MenuVisualRole.Label : MenuVisualRole.OuterBorder);
+          ? MenuVisualRole.Hovered : selected ? MenuVisualRole.Selected : MenuVisualRole.Normal, state);
+        graphic.BorderColor = ColorFor(selected ? MenuVisualRole.Label : MenuVisualRole.OuterBorder, state);
         graphic.BorderWidth = selected ? 3 : 1;
         var item = Item(index);
         MenuWidgetFactory.Place(item.Rect, geometry.ContentAnchor, Profile.WidgetSize);
@@ -303,7 +304,7 @@ namespace MToolKit.ContextMenus.Presentation
       if (!Profile.DrawSegments)
       {
         // A button-only composition owns its complete authored widget hit shape. The annulus remains
-        // the directional keyboard/controller layout, but cannot clip a visible Sims-style button.
+        // the directional keyboard/controller layout, but cannot clip a visible PieContextMenu button.
         for (int i = VisibleWidgetCount - 1; i >= 0; i--)
         {
           var item = Item(i);

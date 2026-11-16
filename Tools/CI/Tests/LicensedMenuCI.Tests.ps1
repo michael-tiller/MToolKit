@@ -321,3 +321,20 @@ Describe 'Fresh Unity XML is the CI authority' {
     $safe.revision | Should Be ('a'*40)
   }
 }
+
+Describe 'Focused framework regression selection' {
+ It 'selects the authoring namespace and both affected prompt fixtures and requires their results' {
+  $tokens=$null;$errors=$null
+  $scriptPath=Join-Path $PSScriptRoot '../Invoke-LicensedMenuCI.ps1'
+  $ast=[Management.Automation.Language.Parser]::ParseFile($scriptPath,[ref]$tokens,[ref]$errors)
+  @($errors).Count|Should Be 0
+  $framework=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Run-UnityStage' -and $node.CommandElements.Count -gt 1 -and $node.CommandElements[1].Value -eq 'framework'},$true))
+  $framework.Count|Should Be 1
+  $selected=@($framework[0].CommandElements[3].SafeGetValue().Split(';'))
+  $required=@($framework[0].CommandElements[4].SafeGetValue())
+  foreach($scope in @('MToolKit.Tests.Editor.ContextMenus','MToolKit.ContextMenus.Samples.Tests.Editor','MToolKit.Editor.ContextMenus.Tests','MToolKit.Tests.Editor.Runtime.Input.InputPromptServiceTests','MToolKit.Tests.Editor.Runtime.Input.InputPromptForeignObservationReviewTests')) {
+   ($selected -contains $scope)|Should Be $true
+   ($required -contains $scope)|Should Be $true
+  }
+ }
+}

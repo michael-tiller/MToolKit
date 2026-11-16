@@ -28,6 +28,7 @@ namespace MToolKit.Theme
     [ShowInInspector]
     [ReadOnly]
     private TAsset cached;
+    private long bindingRevision;
 
     private readonly CompositeDisposable _disposables = new();
 
@@ -36,6 +37,10 @@ namespace MToolKit.Theme
     ///   resolve), otherwise the theme-resolved <c>cached</c>.
     /// </summary>
     protected TAsset Current => !overrideTheme && cached != null ? cached : start;
+
+    /// <summary>The authored binding anchor, before active-theme resolution.</summary>
+    public TAsset ConfiguredAsset => start;
+    public bool OverridesTheme => overrideTheme;
 
     /// <summary>Look up the same-Id asset in <paramref name="theme" />; which registry is asset-specific.</summary>
     protected abstract TAsset Resolve(Theme theme, string id);
@@ -75,14 +80,18 @@ namespace MToolKit.Theme
     private void ApplyTheme(Theme theme)
     {
       if (start == null) return;
+      long revision = bindingRevision;
+      var anchor = start;
 
       if (!overrideTheme) // emergency hatch: when overriding, always show the configured `start`
       {
-        TAsset next = theme != null ? Resolve(theme, start.Id) : null; // Id is the stable semantic token across themes
+        TAsset next = theme != null ? Resolve(theme, anchor.Id) : null; // Id is the stable semantic token across themes
+        if (revision != bindingRevision) return;
         if (next != null) cached = next;
         else if (cached == null) cached = start; // no match in the new theme -> keep what we have
       }
 
+      if (revision != bindingRevision) return;
       Apply(Current);
     }
 
@@ -95,9 +104,17 @@ namespace MToolKit.Theme
     /// Swap the wired asset at runtime and re-apply. The new asset becomes the resolve key
     /// for future theme changes. Use for active-state feedback (e.g. button tint swaps).
     /// </summary>
-    public void SetStart(TAsset asset)
+    public void SetStart(TAsset asset) => SetBinding(asset, overrideTheme);
+
+    /// <summary>Explicit local-style precedence for composed widgets and custom prefabs.</summary>
+    public void SetOverrideTheme(bool value) => SetBinding(start, value);
+
+    /// <summary>Sets one complete binding before applying it. Reentrant callbacks can replace it without a retired caller writing again.</summary>
+    public void SetBinding(TAsset asset, bool overridesTheme)
     {
+      bindingRevision++;
       start = asset;
+      overrideTheme = overridesTheme;
       cached = null;
       if (CurrentTheme.HasInstance)
         ApplyTheme(CurrentTheme.Instance.Current);
@@ -105,15 +122,5 @@ namespace MToolKit.Theme
         ApplyCurrent();
     }
 
-    /// <summary>Explicit local-style precedence for composed widgets and custom prefabs.</summary>
-    public void SetOverrideTheme(bool value)
-    {
-      overrideTheme = value;
-      cached = null;
-      if (CurrentTheme.HasInstance)
-        ApplyTheme(CurrentTheme.Instance.Current);
-      else
-        ApplyCurrent();
-    }
   }
 }

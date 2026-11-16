@@ -29,15 +29,16 @@ namespace MToolKit.ContextMenus.Widgets
       string label = null, string description = null, MenuSkin skin = null, IThemeService themeService = null,
       Action activate = null, Action select = null, string bindingHint = null,
       IReadOnlyList<MenuWidgetState> secondaryStates = null, IInputPromptService promptService = null,
-      InputAction bindingAction = null, bool isHovered = false, Action<bool> hoverChanged = null)
+      InputAction bindingAction = null, bool isHovered = false, Action<bool> hoverChanged = null, MenuThemeContext? theme = null)
     {
       Action = action;
       Availability = availability;
       IsSelected = selected;
       Label = label ?? action?.Label.ToString() ?? string.Empty;
       Description = description ?? action?.Description.ToString() ?? string.Empty;
-      Skin = skin;
-      ThemeService = themeService;
+      Skin = skin != null ? skin : theme?.Skin;
+      ThemeService = themeService ?? theme?.ThemeService;
+      Theme = new MenuThemeContext(Skin, theme?.SharedOverrides, theme?.Overrides, ThemeService);
       Activate = activate;
       Select = select;
       BindingHint = bindingHint ?? string.Empty;
@@ -60,6 +61,8 @@ namespace MToolKit.ContextMenus.Widgets
     public IMenuActionDetails Details => Action?.Metadata as IMenuActionDetails;
     public MenuSkin Skin { get; }
     public IThemeService ThemeService { get; }
+    public MenuThemeContext Theme { get; }
+    public MenuThemeState ThemeState => MenuThemeContext.SelectState(Availability, IsSelected, IsHovered);
     public Action Activate { get; }
     public Action Select { get; }
     public IReadOnlyList<MenuWidgetState> SecondaryStates { get; }
@@ -67,6 +70,6 @@ namespace MToolKit.ContextMenus.Widgets
     public InputAction BindingAction { get; }
     public MenuWidgetState WithLabel(string label)
       => new MenuWidgetState(Action, Availability, IsSelected, label, Description, Skin, ThemeService,
-        Activate, Select, BindingHint, SecondaryStates, PromptService, BindingAction, IsHovered, HoverChanged);
+        Activate, Select, BindingHint, SecondaryStates, PromptService, BindingAction, IsHovered, HoverChanged, Theme);
   }
 }

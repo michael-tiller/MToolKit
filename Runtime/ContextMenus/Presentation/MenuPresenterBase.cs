@@ -27,6 +27,7 @@ namespace MToolKit.ContextMenus.Presentation
     private GameObject backdrop, footer;
     private TMP_Text backLabel, previousLabel, nextLabel;
     private Button previousButton, nextButton;
+    private readonly List<FooterControl> footerControls = new();
     private GameObject previousFocus;
     private bool refreshing, analogLatched, holding;
     private long bindingGeneration;
@@ -99,6 +100,7 @@ namespace MToolKit.ContextMenus.Presentation
       Session = null; Profile = null; Context = null;
       themes = null; prompts = null; scaleCanvas = null; previousFocus = null;
       center = null; secondaryTemplate = null; backdrop = null; footer = null;
+      footerControls.Clear();
       navigationLease = null; transition = null; transitionCancellation = null; transitionAsset = null;
       transitionGeneration++; hasTransitionSnapshot = false;
       transitionPath.Clear(); transitionRows.Clear();
@@ -163,7 +165,7 @@ namespace MToolKit.ContextMenus.Presentation
       string diagnostic = PlacementDiagnostic;
       var focusedControl = FocusedControl<ISubmitHandler>();
       refreshing = true;
-      try { Render(layout); }
+      try { UpdateBackdrop(); Render(layout); }
       finally { refreshing = false; }
       if (generation == bindingGeneration && IsBound && FitsViewport) UpdateTransition();
       if (generation == bindingGeneration && focusedControl != null && focusedControl.activeInHierarchy &&
@@ -357,7 +359,7 @@ namespace MToolKit.ContextMenus.Presentation
         ? Context.Prompts.Resolve(bindingAction) : string.Empty;
       return new MenuWidgetState(action, availability, selected, Context.Resolve(action.Label), Context.Resolve(action.Description),
         Profile.Skin, Context.Themes, activate, () => SelectWidget(select), binding, secondaryStates,
-        Context.Prompts, bindingAction, IsPointerHovered(action), entered => HoverWidget(action, entered, select));
+        Context.Prompts, bindingAction, IsPointerHovered(action), entered => HoverWidget(action, entered, select), Profile.GetTheme(Context.Themes));
     }
 
     protected bool IsPointerHovered(MenuAction action)
@@ -406,6 +408,7 @@ namespace MToolKit.ContextMenus.Presentation
         if (Profile.SecondaryPrefab == null && Session.Selected.SecondaryActions.Count > 0 && secondaryTemplate == null)
         {
           secondaryTemplate = MenuWidgetFactory.CreateItem(Root);
+          secondaryTemplate.DefaultWidget.BackgroundRole = MenuVisualRole.Auxiliary;
           MenuWidgetFactory.Place(secondaryTemplate.Rect, Vector2.zero,
             new Vector2(160, Math.Max(36, Profile.MinimumTargetSize)));
           secondaryTemplate.GameObject.SetActive(false);
@@ -416,8 +419,7 @@ namespace MToolKit.ContextMenus.Presentation
       if (center.DefaultWidget != null) MenuWidgetFactory.Place(center.Rect, Vector2.zero, new Vector2(170, 150));
       else center.Rect.anchoredPosition = Vector2.zero;
       center.Bind(StateFor(Session.Selected, true, secondary: true));
-      if (center.DefaultWidget != null && center.DefaultWidget.Background != null)
-        center.DefaultWidget.Background.color = ColorFor(MenuVisualRole.Center);
+
     }
 
     protected void SelectAction(MenuAction action)
@@ -432,8 +434,16 @@ namespace MToolKit.ContextMenus.Presentation
     }
     protected Action PointerActivation(MenuAction action)
       => Profile.InputBindings.RoutePointerClick || !action.Behavior.IsInteractive ? null : () => ActivateAction(action);
-    protected Color ColorFor(MenuVisualRole role) => Profile.Skin != null
-      ? Profile.Skin.GetColor(role, Context.Themes) : MenuSkin.DefaultColor(role);
+    protected Color ColorFor(MenuVisualRole role, MenuThemeState state = MenuThemeState.Any)
+      => Profile.GetTheme(Context.Themes).GetColor(role, state);
+
+    private sealed class FooterControl
+    {
+      public MenuActionWidget Widget;
+      public Action Activate;
+      public string Label;
+      public bool Enabled = true, Hovered;
+    }
 
     protected void SetFooter(Vector2 position, float width)
     {
@@ -446,11 +456,13 @@ namespace MToolKit.ContextMenus.Presentation
           var image = rect.gameObject.AddComponent<Image>();
           var button = rect.gameObject.AddComponent<Button>();
           button.targetGraphic = image; button.transition = Selectable.Transition.None;
-          button.onClick.AddListener(() => callback());
           var navigation = button.navigation; navigation.mode = Navigation.Mode.None; button.navigation = navigation;
           label = MenuWidgetFactory.Text(name + " label", rect, 16);
           label.rectTransform.anchorMin = Vector2.zero; label.rectTransform.anchorMax = Vector2.one;
           label.rectTransform.offsetMin = label.rectTransform.offsetMax = Vector2.zero;
+          var widget = rect.gameObject.AddComponent<MenuActionWidget>(); widget.Background = image;
+          widget.BackgroundRole = MenuVisualRole.Auxiliary; widget.Configure(label, null, null, null, button);
+          footerControls.Add(new FooterControl { Widget = widget, Activate = callback, Label = name });
           return button;
         }
         Button("Back", Back, out backLabel);
@@ -463,13 +475,29 @@ namespace MToolKit.ContextMenus.Presentation
       {
         var rect = (RectTransform)footer.transform.GetChild(i);
         MenuWidgetFactory.Place(rect, new Vector2((i - 1) * itemWidth, 0), new Vector2(itemWidth - 2, 36));
-        rect.GetComponent<Image>().color = ColorFor(MenuVisualRole.Auxiliary);
       }
-      backLabel.text = Session.Path.Count == 0 ? "Close" : "Back";
-      previousLabel.text = "Previous";
-      nextLabel.text = "Next " + (Session.PageIndex + 1) + "/" + Session.PageCount;
-      previousButton.interactable = Session.PageIndex > 0;
-      nextButton.interactable = Session.PageIndex + 1 < Session.PageCount;
+      footerControls[0].Label = Session.Path.Count == 0 ? "Close" : "Back";
+      footerControls[1].Label = "Previous"; footerControls[1].Enabled = Session.PageIndex > 0;
+      footerControls[2].Label = "Next " + (Session.PageIndex + 1) + "/" + Session.PageCount;
+      footerControls[2].Enabled = Session.PageIndex + 1 < Session.PageCount;
+      ThemeFooterControls();
+    }
+
+    private void ThemeFooterControls()
+    {
+      if (!IsBound) return;
+      for (int i = 0; i < footerControls.Count; i++) ThemeFooter(footerControls[i]);
+    }
+
+    private void ThemeFooter(FooterControl control)
+    {
+      if (!IsBound || control.Widget == null) return;
+      var events = navigationLease?.Owner != null ? navigationLease.Owner : EventSystem.current;
+      bool selected = events != null && events.currentSelectedGameObject == control.Widget.gameObject;
+      control.Widget.Bind(new MenuWidgetState(null, new MenuActionState(true, control.Enabled), selected,
+        label: control.Label, skin: Profile.Skin, themeService: Context.Themes,
+        activate: control.Activate, select: ThemeFooterControls, isHovered: control.Hovered,
+        hoverChanged: hot => { control.Hovered = hot; ThemeFooter(control); }, theme: Profile.GetTheme(Context.Themes)));
     }
 
     private void CreateBackdrop()
@@ -480,11 +508,18 @@ namespace MToolKit.ContextMenus.Presentation
       rect.offsetMin = rect.offsetMax = Vector2.zero;
       rect.SetSiblingIndex(Root.GetSiblingIndex());
       var image = backdrop.AddComponent<Image>();
-      image.color = Profile.Backdrop ? new Color(0, 0, 0, .35f) : Color.clear;
+      image.color = Profile.Backdrop ? ColorFor(MenuVisualRole.Backdrop) : Color.clear;
       var button = backdrop.AddComponent<Button>();
       button.targetGraphic = image; button.transition = Selectable.Transition.None;
       var navigation = button.navigation; navigation.mode = Navigation.Mode.None; button.navigation = navigation;
       button.onClick.AddListener(Cancel);
+    }
+
+    private void UpdateBackdrop()
+    {
+      if (backdrop == null || Profile == null || Context == null) return;
+      var image = backdrop.GetComponent<Image>();
+      if (image != null) image.color = Profile.Backdrop ? ColorFor(MenuVisualRole.Backdrop) : Color.clear;
     }
 
     public virtual void Navigate(Vector2 direction, bool analog)

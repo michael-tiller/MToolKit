@@ -126,7 +126,7 @@ try {
   }
  }
  Run-UnityStage 'setup' 'EditMode' 'MToolKit.Tests.Editor.ContextMenus' @() -Setup
- Run-UnityStage 'framework' 'EditMode' 'MToolKit.Tests.Editor.ContextMenus;MToolKit.ContextMenus.Samples.Tests.Editor' @('MToolKit.Tests.Editor.ContextMenus','MToolKit.ContextMenus.Samples.Tests.Editor')
+ Run-UnityStage 'framework' 'EditMode' 'MToolKit.Tests.Editor.ContextMenus;MToolKit.ContextMenus.Samples.Tests.Editor;MToolKit.Editor.ContextMenus.Tests;MToolKit.Tests.Editor.Runtime.Input.InputPromptServiceTests;MToolKit.Tests.Editor.Runtime.Input.InputPromptForeignObservationReviewTests' @('MToolKit.Tests.Editor.ContextMenus','MToolKit.ContextMenus.Samples.Tests.Editor','MToolKit.Editor.ContextMenus.Tests','MToolKit.Tests.Editor.Runtime.Input.InputPromptServiceTests','MToolKit.Tests.Editor.Runtime.Input.InputPromptForeignObservationReviewTests')
  if(-not $isFramework){
   $integrationClasses=@('Dirigible.Tests.Editor.UI.ContextMenu','Dirigible.Tests.Editor.UI.ContextPriorityFanTests','Dirigible.Tests.Editor.UI.ContextMenuAccessibleInputTests','Dirigible.Tests.Editor.Actions.ControllerContextActivationTests','Dirigible.Tests.Editor.Actions.ActionMenuOwnershipTests','Dirigible.Tests.Editor.Actions.ActionInteractionOwnershipTests','Dirigible.Tests.Editor.Actions.ActionInputConsumerTests','Dirigible.Tests.Editor.Actions.WorldContextDispatcherTests')
   Run-UnityStage 'integration' 'EditMode' ($integrationClasses -join ';') $integrationClasses

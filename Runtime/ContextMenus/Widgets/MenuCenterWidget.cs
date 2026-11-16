@@ -87,6 +87,7 @@ namespace MToolKit.ContextMenus.Widgets
       {
         Tint(Background, MenuVisualRole.Center);
         Tint(DisabledReason, MenuVisualRole.Description);
+        ApplyTypeset(DisabledReason, true);
       }
     }
 

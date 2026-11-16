@@ -21,8 +21,8 @@ namespace MToolKit.ContextMenus.Samples
   /// <summary>Standalone, event-driven gallery for one shared action hierarchy and interchangeable presentations.</summary>
   public sealed class MenuGalleryController : MonoBehaviour
   {
-    public const string Rust = "Rust Build Wheel", Gta = "GTA Equipment Wheel", Sims = "Sims Interactions",
-      Concentric = "Excalidraw Concentric", List = "Traditional List";
+    public const string WheelContextMenu = "WheelContextMenu", PieContextMenu = "PieContextMenu",
+      ListContextMenu = "ListContextMenu", NestedWheelContextMenu = "NestedWheelContextMenu";
     [field: SerializeField] public ContextMenuHost Host { get; set; }
     [field: SerializeField] public MenuHostConfig HostConfig { get; set; }
     [field: SerializeField] public MenuActionSetSO ActionSet { get; set; }
@@ -50,7 +50,7 @@ namespace MToolKit.ContextMenus.Samples
     private InputAction point, open, hold, fire, move, themeAction, scaleUpAction, scaleDownAction, styleAction;
     private Vector2 pointer;
     private bool hasPointer, initialized, changedTheme;
-    private string selectedStyle = Concentric;
+    private string selectedStyle = NestedWheelContextMenu;
     private MenuContext currentContext;
     public MenuGalleryState State => state;
     public IContextMenuHostService MenuService => service;
@@ -65,7 +65,7 @@ namespace MToolKit.ContextMenus.Samples
     {
       Initialize();
       await UniTask.Yield(PlayerLoopTiming.LastPostLateUpdate, this.GetCancellationTokenOnDestroy());
-      await OpenAsync(Concentric, ScreenCenter());
+      await OpenAsync(NestedWheelContextMenu, ScreenCenter());
     }
 
     private void Initialize()
@@ -125,7 +125,7 @@ namespace MToolKit.ContextMenus.Samples
     }
     private void OnHold(InputAction.CallbackContext context)
     {
-      if (!service.IsOpen) OpenAsync(Gta, ScreenCenter(), true).Forget(Report);
+      if (!service.IsOpen) OpenAsync(WheelContextMenu, ScreenCenter(), true).Forget(Report);
     }
     private void OnGameplayFire(InputAction.CallbackContext _) => state.RecordGameplayFire();
     private void OnGameplayMove(InputAction.CallbackContext _) => state.RecordGameplayMove();
@@ -134,7 +134,7 @@ namespace MToolKit.ContextMenus.Samples
     private void OnScaleDown(InputAction.CallbackContext _) => DecreaseScale();
     private void OnNextStyle(InputAction.CallbackContext _)
     {
-      string[] styles = { Concentric, Rust, Gta, Sims, List };
+      string[] styles = { WheelContextMenu, PieContextMenu, ListContextMenu, NestedWheelContextMenu };
       int index = Array.IndexOf(styles, selectedStyle);
       OpenStyle(styles[(index + 1) % styles.Length]);
     }

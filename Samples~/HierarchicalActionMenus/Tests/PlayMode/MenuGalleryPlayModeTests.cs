@@ -149,10 +149,10 @@ namespace MToolKit.ContextMenus.Samples.Tests
     }
 
     [UnityTest]
-    public IEnumerator Five_saved_profiles_create_their_authored_widgets_and_native_meshes()
+    public IEnumerator Four_saved_profiles_and_a_custom_center_configuration_create_native_presentations()
     {
-      string[] styles = { MenuGalleryController.Rust, MenuGalleryController.Gta, MenuGalleryController.Sims,
-        MenuGalleryController.Concentric, MenuGalleryController.List };
+      string[] styles = { MenuGalleryController.WheelContextMenu, MenuGalleryController.PieContextMenu,
+        MenuGalleryController.ListContextMenu, MenuGalleryController.NestedWheelContextMenu };
       foreach (string style in styles)
       {
         yield return Open(style);
@@ -161,24 +161,26 @@ namespace MToolKit.ContextMenus.Samples.Tests
         Assert.That(AssetDatabase.GetAssetPath(profile.PresenterPrefab), Does.EndWith(".prefab"));
         Assert.That(AssetDatabase.GetAssetPath(profile.ItemPrefab), Does.EndWith(".prefab"));
         var presenter = gallery.MenuService.Presenter;
-        if (style == MenuGalleryController.List) Assert.That(presenter, Is.TypeOf<ListMenuPresenter>());
+        if (style == MenuGalleryController.ListContextMenu) Assert.That(presenter, Is.TypeOf<ListMenuPresenter>());
         else Assert.That(presenter, Is.TypeOf<RadialMenuPresenter>(),
           style + " fell back to a list; run with enough viewport space for the authored radial profile");
         AssertContained();
         var widgets = presenter.Root.GetComponentsInChildren<MenuActionWidget>();
-        Assert.That(widgets.Length, Is.GreaterThanOrEqualTo(5), style + " has no authored action widgets");
+        int actionWidgetCount = 0;
         bool anyLabel = false, anyIcon = false;
         foreach (var widget in widgets)
         {
-          if (widget is MenuCenterWidget) continue;
+          if (widget is MenuCenterWidget || widget.BackgroundRole == MenuVisualRole.Auxiliary) continue;
+          actionWidgetCount++;
           anyLabel |= widget.Label != null && !string.IsNullOrEmpty(widget.Label.text);
           anyIcon |= widget.Icon != null && widget.Icon.enabled && widget.Icon.sprite != null;
         }
+        Assert.That(actionWidgetCount, Is.GreaterThanOrEqualTo(5), style + " has no authored action widgets");
         Assert.That(anyIcon, Is.True, style);
-        if (style == MenuGalleryController.Gta) Assert.That(anyLabel, Is.False, "GTA item prefab is deliberately icon-only");
+        if (style == MenuGalleryController.WheelContextMenu) Assert.That(anyLabel, Is.False, "WheelContextMenu item prefab is deliberately icon-only");
         else Assert.That(anyLabel, Is.True, style);
         var graphics = presenter.Root.GetComponentsInChildren<NativeRadialGraphic>();
-        if (style == MenuGalleryController.Sims || style == MenuGalleryController.List)
+        if (style == MenuGalleryController.PieContextMenu || style == MenuGalleryController.ListContextMenu)
           Assert.That(graphics.Length, Is.Zero, style + " should not render background wedges");
         else
         {
@@ -188,12 +190,34 @@ namespace MToolKit.ContextMenus.Samples.Tests
           Assert.That(mesh.vertexCount, Is.GreaterThan(0), style + " produced an empty uGUI sector mesh");
         }
       }
+      // Richer center information is a configuration of the canonical wheel, not another root style.
+      var canonicalWheel = gallery.HostConfig.Resolve(MenuGalleryController.WheelContextMenu);
+      string profilePath = AssetDatabase.GetAssetPath(canonicalWheel);
+      int profileFolder = profilePath.LastIndexOf("/Profiles/", StringComparison.Ordinal);
+      Assert.That(profileFolder, Is.GreaterThanOrEqualTo(0));
+      var customCenter = AssetDatabase.LoadAssetAtPath<GameObject>(profilePath.Substring(0, profileFolder) + "/Prefabs/CustomCenter.prefab");
+      Assert.That(customCenter, Is.Not.Null);
+      var configuredWheel = Object.Instantiate(canonicalWheel);
+      ownedObjects.Add(configuredWheel);
+      configuredWheel.CenterPrefab = customCenter;
+      var context = new MenuContext(gallery.State);
+      yield return gallery.MenuService.OpenAsync(new MenuOpenRequest(gallery.ActionSet.Create(context), context,
+        gallery.Canvas, new Vector2(Screen.width * .5f, Screen.height * .5f), profile: configuredWheel)).ToCoroutine();
+      yield return gallery.MenuService.Session.EnterSubmenuAsync("gallery.build").ToCoroutine();
+      Assert.That(gallery.MenuService.Session.Select("gallery.build/gallery.wall"), Is.True);
+      yield return null; yield return null;
+      var boundCenter = gallery.MenuService.Presenter.Root.GetComponentInChildren<GalleryCenterWidget>();
+      Assert.That(boundCenter, Is.Not.Null);
+      Assert.That(boundCenter.BoundAction, Is.EqualTo("gallery.build/gallery.wall"));
+      Assert.That(boundCenter.Title.text, Is.EqualTo("Wall"));
+      Assert.That(boundCenter.Details.text, Does.Contain("Cost: 2 stone"));
+      AssertContained();
     }
 
     [UnityTest]
-    public IEnumerator Concentric_partial_arc_slides_through_three_authored_submenu_levels()
+    public IEnumerator NestedWheelContextMenu_partial_arc_slides_through_three_authored_submenu_levels()
     {
-      yield return Open(MenuGalleryController.Concentric);
+      yield return Open(MenuGalleryController.NestedWheelContextMenu);
       string[] path = { "gallery.build", "gallery.build/gallery.doors", "gallery.build/gallery.doors/gallery.metal-doors" };
       for (int depth = 0; depth < path.Length; depth++)
       {
@@ -231,9 +255,9 @@ namespace MToolKit.ContextMenus.Samples.Tests
     }
 
     [UnityTest]
-    public IEnumerator Sims_branch_replaces_the_whole_presenter_and_restores_it_after_recursive_Back()
+    public IEnumerator PieContextMenu_branch_replaces_the_whole_presenter_and_restores_it_after_recursive_Back()
     {
-      yield return Open(MenuGalleryController.Sims);
+      yield return Open(MenuGalleryController.PieContextMenu);
       Assert.That(gallery.MenuService.Session.Select("gallery.interactions"), Is.True);
       yield return Tap(GamepadButton.South);
       yield return WaitFor(() => gallery.MenuService.Presenter is GalleryCustomPresenter, "Authored branch did not replace the entire presenter");
@@ -249,7 +273,7 @@ namespace MToolKit.ContextMenus.Samples.Tests
       Assert.That(gallery.MenuService.Session.Path.Count, Is.EqualTo(1));
       Assert.That(gallery.MenuService.Presenter, Is.TypeOf<GalleryCustomPresenter>());
       yield return Tap(GamepadButton.East);
-      yield return WaitFor(() => gallery.MenuService.Presenter is RadialMenuPresenter, "Back did not restore the original Sims presenter");
+      yield return WaitFor(() => gallery.MenuService.Presenter is RadialMenuPresenter, "Back did not restore the original PieContextMenu presenter");
       Assert.That(gallery.MenuService.Session.Path.Count, Is.Zero);
       Assert.That(gallery.State.CommandsExecuted, Is.Zero);
       AssertContained();
@@ -258,7 +282,7 @@ namespace MToolKit.ContextMenus.Samples.Tests
     [UnityTest]
     public IEnumerator List_gamepad_foldout_renders_live_structured_check_state()
     {
-      yield return Open(MenuGalleryController.List);
+      yield return Open(MenuGalleryController.ListContextMenu);
       Assert.That(gallery.MenuService.Session.Select("gallery.settings"), Is.True);
       yield return Tap(GamepadButton.South);
       Assert.That(gallery.MenuService.Session.Path.Count, Is.Zero, "Default list navigation must expand inline");
@@ -281,7 +305,7 @@ namespace MToolKit.ContextMenus.Samples.Tests
     [UnityTest]
     public IEnumerator Gamepad_analog_ring_focus_and_secondary_use_the_real_rebindable_sample_actions()
     {
-      yield return Open(MenuGalleryController.Concentric);
+      yield return Open(MenuGalleryController.NestedWheelContextMenu);
       var radial = (RadialMenuPresenter)gallery.MenuService.Presenter;
       yield return Aim(radial.InnerGeometry.Segments[1]);
       Assert.That(gallery.MenuService.Session.Selected.Id.ToString(), Is.EqualTo("gallery.equipment"));
@@ -361,7 +385,7 @@ namespace MToolKit.ContextMenus.Samples.Tests
     {
       gallery.Host.Close(); yield return Neutral();
       yield return Hold(GamepadButton.LeftShoulder, true);
-      yield return WaitFor(() => gallery.MenuService.IsOpen, "Hold did not open the authored GTA profile");
+      yield return WaitFor(() => gallery.MenuService.IsOpen, "Hold did not open the authored WheelContextMenu profile");
       yield return Hold(GamepadButton.LeftShoulder, false);
       yield return WaitFor(() => !gallery.MenuService.IsOpen, "Neutral hold release did not cancel");
       Assert.That(gallery.State.CommandsExecuted, Is.Zero);
@@ -371,7 +395,7 @@ namespace MToolKit.ContextMenus.Samples.Tests
     [UnityTest]
     public IEnumerator Rendered_center_secondary_owns_an_overlapping_wedge_click_and_executes_once()
     {
-      var profile = Object.Instantiate(gallery.HostConfig.Resolve(MenuGalleryController.Gta));
+      var profile = Object.Instantiate(gallery.HostConfig.Resolve(MenuGalleryController.WheelContextMenu));
       ownedObjects.Add(profile);
       // This supported composition deliberately overlaps its standard center with the ring.
       profile.InnerRadius = 40; profile.RingWidth = 160;
@@ -401,9 +425,9 @@ namespace MToolKit.ContextMenus.Samples.Tests
     }
 
     [UnityTest]
-    public IEnumerator Rendered_Sims_button_accepts_its_visible_corner_outside_the_annulus()
+    public IEnumerator Rendered_PieContextMenu_button_accepts_its_visible_corner_outside_the_annulus()
     {
-      var profile = Object.Instantiate(gallery.HostConfig.Resolve(MenuGalleryController.Sims));
+      var profile = Object.Instantiate(gallery.HostConfig.Resolve(MenuGalleryController.PieContextMenu));
       ownedObjects.Add(profile);
       // At the authored 90..240 band a 144x56 first button has no out-of-band
       // corner. A supported size override provides a clear native hit beyond it.
@@ -429,7 +453,7 @@ namespace MToolKit.ContextMenus.Samples.Tests
             && (local.sqrMagnitude < band.InnerRadius * band.InnerRadius || local.sqrMagnitude >= band.OuterRadius * band.OuterRadius)
             && radial.InnerGeometry.HitTest(local) == -1) { point = candidate; found = true; break; }
       }
-      Assert.That(found, Is.True, "The authored Sims button needs a visible corner outside the circular hit bands");
+      Assert.That(found, Is.True, "The authored PieContextMenu button needs a visible corner outside the circular hit bands");
       AssertTopRaycastIsInside(point, build.transform);
       yield return MouseClick(point);
       Assert.That(gallery.MenuService.Session.Path.Count, Is.EqualTo(1), pointerTrace);
@@ -451,7 +475,7 @@ namespace MToolKit.ContextMenus.Samples.Tests
       var failures = new List<string>();
       try
       {
-        foreach (string style in new[] { MenuGalleryController.List, MenuGalleryController.Gta })
+        foreach (string style in new[] { MenuGalleryController.ListContextMenu, MenuGalleryController.WheelContextMenu })
         {
           gallery.Host.Close(); yield return Neutral();
           EventSystem.current.SetSelectedGameObject(priorControl.gameObject);
@@ -484,7 +508,7 @@ namespace MToolKit.ContextMenus.Samples.Tests
     [UnityTest]
     public IEnumerator Live_theme_and_UI_scale_changes_preserve_viewport_containment_at_the_screen_edge()
     {
-      yield return Open(MenuGalleryController.Rust);
+      yield return Open(MenuGalleryController.WheelContextMenu);
       var graphics = gallery.MenuService.Presenter.Root.GetComponentsInChildren<NativeRadialGraphic>();
       NativeRadialGraphic normal = null;
       foreach (var graphic in graphics) if (graphic.Geometry.SegmentIndex == 1) { normal = graphic; break; }

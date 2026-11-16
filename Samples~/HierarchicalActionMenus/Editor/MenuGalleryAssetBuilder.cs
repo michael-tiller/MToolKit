@@ -139,31 +139,29 @@ namespace MToolKit.ContextMenus.Samples.Editor
       var row = SavePrefab(outputRoot, "ListRow", () => ActionWidget("List row", font, theme.Label, true, true, false));
       var radial = SavePrefab(outputRoot, "RadialLabelIcon", () => ActionWidget("Radial label and icon", font, theme.Label, true, true, true));
       var iconOnly = SavePrefab(outputRoot, "IconOnly", () => ActionWidget("Icon only", font, theme.Label, false, true, true));
-      var sims = SavePrefab(outputRoot, "InteractionButton", () => ActionWidget("Interaction button", font, theme.Label, true, true, false));
+      var pieItem = SavePrefab(outputRoot, "InteractionButton", () => ActionWidget("Interaction button", font, theme.Label, true, true, false));
       var center = SavePrefab(outputRoot, "CenterInformation", () => Center(font, theme.Label, theme.Description, secondary));
-      var customCenter = SavePrefab(outputRoot, "CustomCenter", () => CustomCenter(font));
+      SavePrefab(outputRoot, "CustomCenter", () => CustomCenter(font));
       var listPresenter = Presenter<ListMenuPresenter>(outputRoot, "ListPresenter");
       var radialPresenter = Presenter<RadialMenuPresenter>(outputRoot, "RadialPresenter");
       var customPresenter = Presenter<GalleryCustomPresenter>(outputRoot, "CustomCardPresenter");
       var bindings = Bindings(refs);
-      var list = Profile(outputRoot, "TraditionalList", listPresenter, row, null, theme.Skin, bindings);
+      var list = Profile(outputRoot, "ListContextMenu", listPresenter, row, null, theme.Skin, bindings);
       list.Navigation = MenuNavigationPolicy.Inline; list.ShowCenter = false; list.MaximumVisibleItems = 10;
       list.ListWidth = 380; list.RowHeight = 48; list.Anchor = MenuAnchorPolicy.Centered;
-      var rust = Profile(outputRoot, "RustBuildWheel", radialPresenter, radial, center, theme.Skin, bindings);
-      rust.CenterPrefab = customCenter; rust.SecondaryPrefab = secondary;
-      var gta = Profile(outputRoot, "GtaEquipmentWheel", radialPresenter, iconOnly, center, theme.Skin, bindings);
-      gta.SecondaryPrefab = secondary; gta.AngularGap = 5;
-      var interactions = Profile(outputRoot, "SimsInteractions", radialPresenter, sims, null, theme.Skin, bindings);
+      var wheel = Profile(outputRoot, "WheelContextMenu", radialPresenter, iconOnly, center, theme.Skin, bindings);
+      wheel.SecondaryPrefab = secondary; wheel.AngularGap = 5;
+      var interactions = Profile(outputRoot, "PieContextMenu", radialPresenter, pieItem, null, theme.Skin, bindings);
       interactions.DrawSegments = false; interactions.ShowCenter = false; interactions.WidgetSize = new Vector2(144, 56);
       interactions.InnerRadius = 90; interactions.RingWidth = 150;
-      var concentric = Profile(outputRoot, "ExcalidrawConcentric", radialPresenter, radial, center, theme.Skin, bindings);
+      var concentric = Profile(outputRoot, "NestedWheelContextMenu", radialPresenter, radial, center, theme.Skin, bindings);
       concentric.Navigation = MenuNavigationPolicy.Concentric; concentric.RingWidth = 60; concentric.RingGap = 10;
       concentric.ChildRingWidth = 55; concentric.ChildArcDegrees = 120; concentric.SecondaryPrefab = secondary;
-      var custom = Profile(outputRoot, "ReplacementCards", customPresenter, sims, null, theme.LocalSkin, bindings);
+      var custom = Profile(outputRoot, "ReplacementCards", customPresenter, pieItem, null, theme.LocalSkin, bindings);
       custom.Navigation = MenuNavigationPolicy.Replacement; custom.ListWidth = 380; custom.RowHeight = 80;
       custom.MaximumVisibleItems = 8; custom.ShowCenter = false;
-      foreach (var profile in new[] { rust, gta, interactions, concentric, custom }) profile.FallbackProfile = list;
-      foreach (var profile in new[] { list, rust, gta, interactions, concentric, custom })
+      foreach (var profile in new[] { wheel, interactions, concentric, custom }) profile.FallbackProfile = list;
+      foreach (var profile in new[] { list, wheel, interactions, concentric, custom })
       {
         EditorUtility.SetDirty(profile);
         if (!profile.Validate(out string diagnostic)) throw new InvalidOperationException(profile.name + ": " + diagnostic);
@@ -173,11 +171,10 @@ namespace MToolKit.ContextMenus.Samples.Editor
       config.DefaultProfile = concentric;
       config.Profiles = new[]
       {
-        new NamedMenuProfile { Name = MenuGalleryController.Rust, Profile = rust },
-        new NamedMenuProfile { Name = MenuGalleryController.Gta, Profile = gta },
-        new NamedMenuProfile { Name = MenuGalleryController.Sims, Profile = interactions },
-        new NamedMenuProfile { Name = MenuGalleryController.Concentric, Profile = concentric },
-        new NamedMenuProfile { Name = MenuGalleryController.List, Profile = list }
+        new NamedMenuProfile { Name = MenuGalleryController.WheelContextMenu, Profile = wheel },
+        new NamedMenuProfile { Name = MenuGalleryController.PieContextMenu, Profile = interactions },
+        new NamedMenuProfile { Name = MenuGalleryController.ListContextMenu, Profile = list },
+        new NamedMenuProfile { Name = MenuGalleryController.NestedWheelContextMenu, Profile = concentric }
       };
       EditorUtility.SetDirty(config);
       SaveOwnedAssets(outputRoot);
@@ -467,40 +464,53 @@ namespace MToolKit.ContextMenus.Samples.Editor
     private static GameObject ActionWidget(string name, TMP_FontAsset font, Typeset labelTypeset,
       bool withLabel, bool withIcon, bool radial)
     {
-      var root = Rect(name, null); root.sizeDelta = new Vector2(radial ? 96 : 240, radial ? 64 : 48);
-      var background = root.gameObject.AddComponent<Image>(); background.color = new Color(.12f, .14f, .18f, radial ? 0 : .95f);
+      var created = MenuWidgetFactory.CreateItem(null);
+      var root = created.Rect; root.name = name;
+      root.sizeDelta = new Vector2(radial ? 96 : 240, radial ? 64 : 48);
+      var widget = created.DefaultWidget;
+      var background = root.GetComponent<Image>(); background.color = new Color(.12f, .14f, .18f, radial ? 0 : .95f);
       background.raycastTarget = !radial; // Native wedges own hit testing for icon/label sectors.
-      var button = root.gameObject.AddComponent<Button>(); button.targetGraphic = background; button.transition = Selectable.Transition.None;
-      var widget = root.gameObject.AddComponent<MenuActionWidget>();
-      widget.Button = button; widget.Background = radial ? null : background;
+      widget.Background = radial ? null : background;
+      var content = (RectTransform)root.Find("Content");
       if (withIcon)
       {
-        var icon = Rect("Icon", root).gameObject.AddComponent<Image>(); icon.raycastTarget = false; icon.preserveAspect = true;
-        Place(icon.rectTransform, radial ? new Vector2(0, withLabel ? 10 : 0) : new Vector2(22, 0), new Vector2(28, 28));
-        if (!radial) icon.rectTransform.anchorMin = icon.rectTransform.anchorMax = new Vector2(0, .5f);
-        widget.Icon = icon;
+        var icon = widget.Icon;
+        icon.rectTransform.sizeDelta = new Vector2(28, 28);
+        var element = icon.GetComponent<LayoutElement>();
+        element.minWidth = element.preferredWidth = element.minHeight = element.preferredHeight = 28;
       }
+      else { Object.DestroyImmediate(widget.Icon.gameObject); widget.Icon = null; }
       if (withLabel)
       {
-        var label = Text("Label", root, font, 18); widget.Label = label;
-        if (radial) Place(label.rectTransform, new Vector2(0, -20), new Vector2(96, 28));
-        else { Stretch(label.rectTransform, new Vector2(withIcon ? 44 : 8, 4), new Vector2(12, 4)); label.alignment = TextAlignmentOptions.MidlineLeft; }
-        var preset = label.gameObject.AddComponent<TypesetPreset>();
-        Set(preset, Backing("Text"), p => p.objectReferenceValue = label);
+        widget.Label.font = font;
+        widget.Label.alignment = radial ? TextAlignmentOptions.Center : TextAlignmentOptions.MidlineLeft;
+        var preset = widget.Label.GetComponent<TypesetPreset>(); preset.ConfigureTarget(widget.Label);
         preset.SetOverrideTheme(true); preset.SetStart(labelTypeset);
       }
-      var selected = Rect("Selection marker", root).gameObject.AddComponent<Image>(); selected.raycastTarget = false;
-      selected.rectTransform.anchorMin = new Vector2(0, 0); selected.rectTransform.anchorMax = new Vector2(0, 1);
-      selected.rectTransform.pivot = new Vector2(0, .5f); selected.rectTransform.sizeDelta = new Vector2(4, 0); widget.Highlight = selected;
-      var check = Rect("Checked marker", root).gameObject.AddComponent<Image>(); check.raycastTarget = false;
-      check.rectTransform.anchorMin = check.rectTransform.anchorMax = new Vector2(1, 1);
-      check.rectTransform.anchoredPosition = new Vector2(-5, -5); check.rectTransform.sizeDelta = new Vector2(8, 8); widget.Check = check;
+      else { Object.DestroyImmediate(widget.Label.gameObject); widget.Label = null; }
+      if (radial && withLabel)
+      {
+        // The same factory supplies theming/preset contracts; this composition stacks icon and label.
+        Object.DestroyImmediate(content.GetComponent<SpacingPreset>());
+        Object.DestroyImmediate(content.GetComponent<HorizontalLayoutGroup>());
+        var layout = content.gameObject.AddComponent<VerticalLayoutGroup>();
+        layout.childAlignment = TextAnchor.MiddleCenter; layout.spacing = 2;
+        layout.childControlWidth = layout.childControlHeight = false;
+        layout.childForceExpandWidth = layout.childForceExpandHeight = false;
+        var spacing = content.gameObject.AddComponent<SpacingPreset>(); spacing.ConfigureTarget(layout);
+        widget.SpacingTargets = new[] { spacing };
+        widget.Label.rectTransform.sizeDelta = new Vector2(96, 28);
+      }
+      widget.Highlight.gameObject.name = "Selection marker";
+      widget.Check.rectTransform.anchoredPosition = new Vector2(-5, -5);
+      widget.Check.rectTransform.sizeDelta = new Vector2(8, 8);
       root.gameObject.AddComponent<LayoutElement>().preferredHeight = 40;
       return root.gameObject;
     }
     private static GameObject SecondaryWidget(TMP_FontAsset font, Typeset labelTypeset)
     {
       var root = ActionWidget("Secondary action", font, labelTypeset, true, false, false);
+      root.GetComponent<MenuActionWidget>().BackgroundRole = MenuVisualRole.Auxiliary;
       ((RectTransform)root.transform).sizeDelta = new Vector2(98, 44);
       var label = root.GetComponent<MenuActionWidget>().Label.rectTransform;
       label.offsetMin = new Vector2(8, 0); label.offsetMax = new Vector2(-8, 0);
@@ -510,25 +520,33 @@ namespace MToolKit.ContextMenus.Samples.Editor
     }
     private static GameObject Center(TMP_FontAsset font, Typeset labelTypeset, Typeset descriptionTypeset, GameObject secondary)
     {
-      var root = Rect("Center information", null); root.sizeDelta = new Vector2(220, 220);
-      var background = root.gameObject.AddComponent<Image>(); background.raycastTarget = false;
-      var title = Text("Title", root, font, 19); Place(title.rectTransform, new Vector2(0, 90), new Vector2(200, 32));
-      var description = Text("Description", root, font, 16); Place(description.rectTransform, new Vector2(0, 36), new Vector2(200, 72));
-      var unavailable = Text("Availability", root, font, 16); Place(unavailable.rectTransform, new Vector2(0, -12), new Vector2(200, 20));
-      var cost = Text("Cost", root, font, 16); Place(cost.rectTransform, new Vector2(0, -34), new Vector2(200, 20));
-      var variant = Text("Variant", root, font, 16); Place(variant.rectTransform, new Vector2(0, -56), new Vector2(200, 20));
-      var hint = Text("Binding", root, font, 16); Place(hint.rectTransform, new Vector2(0, -77), new Vector2(200, 18));
-      foreach (var text in new[] { title, description })
+      var created = MenuWidgetFactory.CreateCenter(null, secondaryPrefab: secondary);
+      var root = created.Rect; root.name = "Center information"; root.sizeDelta = new Vector2(220, 220);
+      var widget = (MenuCenterWidget)created.DefaultWidget;
+      var content = (RectTransform)root.Find("Main content");
+      content.anchorMin = content.anchorMax = content.pivot = new Vector2(.5f, .5f);
+      content.anchoredPosition = new Vector2(0, 10); content.sizeDelta = new Vector2(200, 192);
+      var mainLayout = content.GetComponent<VerticalLayoutGroup>();
+      mainLayout.padding = new RectOffset(); mainLayout.spacing = 2;
+      var cost = MenuWidgetFactory.Text("Cost", content, 16); widget.Cost = cost;
+      var variant = MenuWidgetFactory.Text("Variant", content, 16); widget.Variant = variant;
+      cost.transform.SetSiblingIndex(3); variant.transform.SetSiblingIndex(4);
+      foreach (var text in new[] { widget.Label, widget.Description, widget.DisabledReason, cost, variant, widget.BindingHint })
       {
-        var preset = text.gameObject.AddComponent<TypesetPreset>(); Set(preset, Backing("Text"), p => p.objectReferenceValue = text);
-        preset.SetOverrideTheme(true); preset.SetStart(text == title ? labelTypeset : descriptionTypeset);
+        text.font = font;
+        var element = text.GetComponent<LayoutElement>() ?? text.gameObject.AddComponent<LayoutElement>();
+        element.minHeight = 0; element.preferredHeight = text == widget.Description ? 72 : -1; element.flexibleHeight = 0;
+        var preset = text.GetComponent<TypesetPreset>(); preset.ConfigureTarget(text);
+        preset.SetOverrideTheme(true); preset.SetStart(text == widget.Label ? labelTypeset : descriptionTypeset);
       }
-      var container = Rect("Secondary actions", root); Place(container, new Vector2(0, -109), new Vector2(200, 44));
+      var container = widget.SecondaryContainer; Place(container, new Vector2(0, -109), new Vector2(200, 44));
+      var mainSpacing = widget.SpacingTargets[0];
+      Object.DestroyImmediate(container.GetComponent<SpacingPreset>());
+      Object.DestroyImmediate(container.GetComponent<VerticalLayoutGroup>());
       var layout = container.gameObject.AddComponent<HorizontalLayoutGroup>(); layout.spacing = 4;
       layout.childControlWidth = layout.childControlHeight = true; layout.childForceExpandWidth = layout.childForceExpandHeight = true;
-      var widget = root.gameObject.AddComponent<MenuCenterWidget>(); widget.Configure(title, description, disabledReason: unavailable,
-        bindingHint: hint, secondaryContainer: container, secondaryPrefab: secondary);
-      widget.Cost = cost; widget.Variant = variant; widget.Background = background;
+      var secondarySpacing = container.gameObject.AddComponent<SpacingPreset>(); secondarySpacing.ConfigureTarget(layout);
+      widget.SpacingTargets = new[] { mainSpacing, secondarySpacing }; widget.BackgroundRole = MenuVisualRole.Center;
       return root.gameObject;
     }
     private static GameObject CustomCenter(TMP_FontAsset font)
@@ -587,13 +605,13 @@ namespace MToolKit.ContextMenus.Samples.Editor
         controls.anchorMin = Vector2.zero; controls.anchorMax = Vector2.one; controls.offsetMin = controls.offsetMax = Vector2.zero;
         var overlay = controls.gameObject.AddComponent<Canvas>(); overlay.overrideSorting = true; overlay.sortingOrder = 1000;
         controls.gameObject.AddComponent<GraphicRaycaster>();
-        var title = Text("Title", controls, font, 24); title.text = "One action hierarchy - five presentations";
+        var title = Text("Title", controls, font, 24); title.text = "One action hierarchy - four presentations";
         AnchorTop(title.rectTransform, new Vector2(0, -24), new Vector2(900, 40));
-        string[] styles = { MenuGalleryController.Concentric, MenuGalleryController.Rust, MenuGalleryController.Gta,
-          MenuGalleryController.Sims, MenuGalleryController.List };
+        string[] styles = { MenuGalleryController.WheelContextMenu, MenuGalleryController.PieContextMenu,
+          MenuGalleryController.ListContextMenu, MenuGalleryController.NestedWheelContextMenu };
         for (int i = 0; i < styles.Length; i++)
         {
-          var button = Control(controls, font, styles[i], new Vector2((i - 2) * 230, -66), new Vector2(220, 40));
+          var button = Control(controls, font, styles[i], new Vector2((i - (styles.Length - 1) * .5f) * 230, -66), new Vector2(220, 40));
           UnityEventTools.AddStringPersistentListener(button.onClick, controller.OpenStyle, styles[i]);
         }
         var callbacks = new UnityAction[] { controller.ToggleCommands, controller.ToggleSecondary, controller.InvalidateTarget,

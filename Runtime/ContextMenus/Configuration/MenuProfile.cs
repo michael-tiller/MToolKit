@@ -24,6 +24,8 @@ namespace MToolKit.ContextMenus.Configuration
     [field: SerializeField] public GameObject CenterPrefab { get; set; }
     [field: SerializeField] public GameObject SecondaryPrefab { get; set; }
     [field: SerializeField] public MenuSkin Skin { get; set; }
+    [field: SerializeField] public MenuSkin SharedThemeOverrides { get; set; }
+    [field: SerializeField] public MenuSkin ThemeOverrides { get; set; }
     [field: SerializeField] public MenuNavigationPolicy Navigation { get; set; } = MenuNavigationPolicy.Inline;
     [field: SerializeField] public MenuAnchorPolicy Anchor { get; set; } = MenuAnchorPolicy.CursorTopLeft;
     [field: SerializeField] public float InnerRadius { get; set; } = 90;
@@ -47,6 +49,9 @@ namespace MToolKit.ContextMenus.Configuration
     [field: SerializeField] public MenuInputBindings InputBindings { get; set; } = new MenuInputBindings();
     [field: SerializeField] public float AnalogDeadZone { get; set; } = .25f;
     [field: SerializeField] public float AnalogHysteresis { get; set; } = 5;
+
+    public MenuThemeContext GetTheme(MToolKit.Theme.IThemeService themeService = null)
+      => new MenuThemeContext(Skin, SharedThemeOverrides, ThemeOverrides, themeService);
 
     /// <summary>Authoring diagnostics never silently clamp hit targets or replace a caller's custom component.</summary>
     public bool Validate(out string diagnostic, bool requirePresenter = true)

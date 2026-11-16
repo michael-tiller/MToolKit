@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 105f2247dc6c45f5881619153453f370, type: 3}
+  m_Name: GalleryCommonSettings
+  m_EditorClassIdentifier: MToolKit.Editor.ContextMenus::MToolKit.Editor.ContextMenus.MenuCommonSettings
+  ThemeOverrides: {fileID: 11400000, guid: 77fedbd12f5e6ec4db38674f303ce879, type: 2}
+  Skin: {fileID: 11400000, guid: 4d622ddd0ed61e845a7cc53f387753f4, type: 2}
+  InputBindings:
+    navigate: {fileID: 11400000, guid: a3be1d8671042f24285032f3aad44223, type: 2}
+    point: {fileID: 11400000, guid: 6b1b8f13b75197445aebbc86e9a63a94, type: 2}
+    click: {fileID: 11400000, guid: 925fd16f992982a43ac04b474d239402, type: 2}
+    submit: {fileID: 11400000, guid: 17f7ed4a12844af498544589d09ea1dd, type: 2}
+    back: {fileID: 11400000, guid: 7d9467f3ae6027049ab738c1cf1429f0, type: 2}
+    cancel: {fileID: 11400000, guid: e7d270b52a150254ca04b68d3ab4b4c7, type: 2}
+    pageForward: {fileID: 11400000, guid: 7fb50e68f8c3659419c49c3df8495339, type: 2}
+    pageBackward: {fileID: 11400000, guid: 9fc5bedb272dc9940a9d2286da1b950e, type: 2}
+    switchRing: {fileID: 11400000, guid: 42c56011cd9c68849b7d36e59eb5c172, type: 2}
+    hold: {fileID: 11400000, guid: 8b742f6ae21fc8a4898ffa1c69ea7977, type: 2}
+    secondary:
+    - {fileID: 11400000, guid: 420737ea4fb50d145b7b3e112691c4bd, type: 2}
+    - {fileID: 11400000, guid: bbc49c7aa7d06bb4bac7dd9f6e470529, type: 2}
+    useNativeUguiNavigation: 0
+    routePointerClick: 1
+  Transition: {fileID: 0}
+  Anchor: 1
+  ItemPrefab: {fileID: 0}
+  CenterPrefab: {fileID: 0}
+  SecondaryPrefab: {fileID: 0}
+  FallbackProfile: {fileID: 0}
+  ShowCenter: 1
+  Backdrop: 1
+  ReducedMotion: 1
+  MinimumTargetSize: 40
+  AnalogDeadZone: 0.25
+  AnalogHysteresis: 6

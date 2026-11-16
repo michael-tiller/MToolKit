@@ -5,7 +5,8 @@ Gameplay assemblies do not need to reference a presenter. The runtime module ref
 MTK Runtime and Theme; it does not reference Dirigible or an optional graphics package.
 
 This guide covers the runtime API, authoring and extension points. See
-[architecture](ContextMenusArchitecture.md) and [migration](ContextMenusMigration.md).
+[architecture](ContextMenusArchitecture.md), [migration](ContextMenusMigration.md),
+and the [shared style settings and rebuild wizard](ContextMenuAuthoring.md).
 
 ## Open a runtime hierarchy
 
@@ -281,7 +282,7 @@ growth to the host; it does not shrink or rearrange a custom widget's private ch
 Import **Hierarchical Action Menus** from the Package Manager samples, import TMP
 Essentials if the project needs them, open `ActionMenuGallery.unity` in the imported
 folder and enter Play Mode. The sample ships ten editable presenter/widget prefabs,
-six menu profiles (five root styles and a custom replacement), a host config, input,
+five menu profiles (four root styles and a custom child presentation), a host config, input,
 theme/action assets and the saved scene. No generation step is needed to open it.
 Its [README](../Samples~/HierarchicalActionMenus/README.md) describes bindings,
 fresh-destination generation and the recorded checks. For another gallery, call
@@ -319,7 +320,7 @@ for request/canvas lifetime and active-prefab replacement behavior.
 
 After importing the sample, run `MToolKit.ContextMenus.Samples.Tests.Editor` in EditMode
 and `MToolKit.ContextMenus.Samples.Tests.PlayMode` in PlayMode. Open the saved gallery
-for visual inspection of the five root styles, nested custom replacement, long labels,
+for visual inspection of the four root styles, nested custom replacement, long labels,
 theme/scale changes and constrained viewport fallback. Exercise mouse, keyboard and an
 actual controller, including hold/release, secondary actions, ring focus and gameplay
 input restoration. Repeat the relevant interaction checks in a development player.

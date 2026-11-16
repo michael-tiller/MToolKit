@@ -3,13 +3,21 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using System.IO;
+using System.Linq;
 using MToolKit.ContextMenus.Configuration;
+using MToolKit.ContextMenus.Hosting;
+using MToolKit.ContextMenus.Samples;
+using MToolKit.ContextMenus.Widgets;
+using MToolKit.Theme.Spacing;
+using MToolKit.Theme.Typeset;
+using TMPro;
 using MToolKit.ContextMenus.Samples.Editor;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace MToolKit.ContextMenus.Samples.Tests.Editor
 {
@@ -136,6 +144,50 @@ namespace MToolKit.ContextMenus.Samples.Tests.Editor
       Assert.That(File.ReadAllText(path), Is.EqualTo(diskBefore), "Sample generation wrote unrelated asset content");
       Assert.That(AssetDatabase.IsValidFolder(ownedRoot + "/Gallery"), Is.False, "Preflight created output before refusing the dirty edit");
       Assert.That(Directory.Exists(ownedRoot + "/Gallery"), Is.False);
+    }
+
+    [Test]
+    public void Fresh_gallery_authors_four_canonical_root_styles_and_one_custom_child()
+    {
+      string output = ownedRoot + "/CanonicalGallery";
+      MenuGalleryAssetBuilder.Build(output);
+      var config = AssetDatabase.LoadAssetAtPath<MenuHostConfig>(output + "/Profiles/GalleryHost.asset");
+      Assert.That(config, Is.Not.Null);
+      string[] expected = { "WheelContextMenu", "PieContextMenu", "ListContextMenu", "NestedWheelContextMenu" };
+
+      Assert.That(config.Profiles.Length, Is.EqualTo(4), "Visual variations of one wheel are configurations, not duplicate style roots.");
+      Assert.That(config.Profiles.Select(value => value.Name), Is.EquivalentTo(expected));
+      var files = AssetDatabase.FindAssets("t:MenuProfile", new[] { output + "/Profiles" })
+        .Select(AssetDatabase.GUIDToAssetPath).Select(Path.GetFileNameWithoutExtension).ToArray();
+      Assert.That(files, Is.EquivalentTo(expected.Concat(new[] { "ReplacementCards" })),
+        "The custom presentation remains a child demo; no duplicate wheel profile should be generated.");
+      foreach (string name in new[] { "ListRow", "RadialLabelIcon", "InteractionButton", "IconOnly", "SecondaryAction", "CenterInformation" })
+      {
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(output + "/Prefabs/" + name + ".prefab");
+        Assert.That(prefab, Is.Not.Null, name);
+        var widget = prefab.GetComponent<MenuActionWidget>();
+        Assert.That(widget, Is.Not.Null, name);
+        Assert.That(widget.SpacingTargets, Is.Not.Null.And.Not.Empty,
+          name + " must expose concrete layout targets for authored theme spacing.");
+        foreach (var spacing in widget.SpacingTargets)
+        {
+          Assert.That(spacing, Is.Not.Null, name);
+          Assert.That(spacing.LayoutGroup, Is.Not.Null, name + " has an unwired spacing preset.");
+          Assert.That(spacing.GetComponent<LayoutGroup>(), Is.SameAs(spacing.LayoutGroup), name);
+        }
+        foreach (var text in prefab.GetComponentsInChildren<TMP_Text>(true))
+        {
+          var typography = text.GetComponent<TypesetPreset>();
+          Assert.That(typography, Is.Not.Null, name + "/" + text.name + " lacks an authorable typeset preset.");
+          Assert.That(typography.Text, Is.SameAs(text), name + "/" + text.name + " targets different text.");
+        }
+      }
+      var customCenter = AssetDatabase.LoadAssetAtPath<GameObject>(output + "/Prefabs/CustomCenter.prefab");
+      Assert.That(customCenter.GetComponent<GalleryCenterWidget>(), Is.Not.Null);
+      Assert.That(customCenter.GetComponentsInChildren<SpacingPreset>(true), Is.Empty,
+        "The custom center retains ownership of its private layout.");
+      Assert.That(customCenter.GetComponentsInChildren<TypesetPreset>(true), Is.Empty,
+        "The custom center deliberately supplies its own typography.");
     }
 
     private static void Folder(string path)
