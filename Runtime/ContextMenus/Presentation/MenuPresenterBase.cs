@@ -466,14 +466,16 @@ namespace MToolKit.ContextMenus.Presentation
           var button = rect.gameObject.AddComponent<Button>();
           button.targetGraphic = image; button.transition = Selectable.Transition.None;
           var navigation = button.navigation; navigation.mode = Navigation.Mode.None; button.navigation = navigation;
+          var layout = rect.gameObject.AddComponent<HorizontalLayoutGroup>();
+          layout.padding = new RectOffset(6, 6, 0, 0); layout.spacing = 6;
+          layout.childAlignment = TextAnchor.MiddleCenter;
+          layout.childControlWidth = layout.childControlHeight = true;
+          layout.childForceExpandWidth = layout.childForceExpandHeight = false;
           label = MenuWidgetFactory.Text(name + " label", rect, 16);
-          label.rectTransform.anchorMin = Vector2.zero; label.rectTransform.anchorMax = Vector2.one;
-          label.rectTransform.offsetMin = new Vector2(6, 0); label.rectTransform.offsetMax = new Vector2(-34, 0);
+          label.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
           var hint = MenuWidgetFactory.Text(name + " binding", rect, 16);
-          hint.rectTransform.anchorMin = hint.rectTransform.anchorMax = new Vector2(1, .5f);
-          hint.rectTransform.pivot = new Vector2(1, .5f);
-          hint.rectTransform.anchoredPosition = new Vector2(-4, 0);
-          hint.rectTransform.sizeDelta = new Vector2(28, 32);
+          var hintLayout = hint.gameObject.AddComponent<LayoutElement>();
+          hintLayout.minWidth = 28; hintLayout.preferredWidth = -1;
           var widget = rect.gameObject.AddComponent<MenuActionWidget>(); widget.Background = image;
           widget.BackgroundRole = MenuVisualRole.Auxiliary; widget.Configure(label, null, null, null, button);
           widget.BindingHint = hint;
@@ -518,7 +520,6 @@ namespace MToolKit.ContextMenus.Presentation
         ? Context.Prompts.Resolve(action, InputPromptStyle.Glyph) : string.Empty;
       bool showHint = !string.IsNullOrEmpty(hint);
       if (control.Widget.BindingHint != null) control.Widget.BindingHint.gameObject.SetActive(showHint);
-      if (control.Widget.Label != null) control.Widget.Label.rectTransform.offsetMax = new Vector2(showHint ? -34 : -6, 0);
       control.Widget.Bind(new MenuWidgetState(null, new MenuActionState(true, control.Enabled), selected,
         label: control.Label, skin: Profile.Skin, themeService: Context.Themes,
         activate: control.Activate, select: ThemeFooterControls, isHovered: control.Hovered,

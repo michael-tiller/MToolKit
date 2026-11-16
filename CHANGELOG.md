@@ -54,6 +54,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Let native TMP glyph widths drive default footer layout so wide keyboard caps render, operation labels stay separate and rebinding releases extra space. Verify actual sprite meshes and layout with a focused native regression. (v1.25.2)
+
 - Use native TMP glyph-only binding hints throughout default menu widgets, navigation and the saved gallery while preserving live rebinding and custom widget ownership. Author reusable keyboard, mouse and neutral controller glyph assets with unique, compact atlas names and protect existing sample assets during generation. (v1.25.1)
 
 - Keep independently wired icons and labels visible beneath optional artwork containers, including initially inactive custom prefabs and widget reuse. Continue collapsing empty dedicated artwork leaves. (v1.24.1)

@@ -260,6 +260,8 @@ shared prompt preference unchanged. Keep operation labels such as Back and Inspe
 the binding beside them is native TMP sprite markup. An optional `BindingHint`
 text target is sufficient on an item, center or auxiliary widget. Missing targets
 are supported, and custom widgets retain control of their own composition.
+Framework-owned footer controls use native TMP preferred widths in their uGUI
+layout, so wide keycaps remain visible and rebinding can release unused space.
 
 InputAction GUID alone does not establish ownership. MTK `InputService` resolves an
 action only when its asset is the authored asset it initialized; unrelated assets can

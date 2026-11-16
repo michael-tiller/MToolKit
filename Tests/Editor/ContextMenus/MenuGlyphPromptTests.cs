@@ -127,6 +127,42 @@ namespace MToolKit.Tests.Editor.ContextMenus
       Assert.That(fixture.FooterText(presenter, "Next"), Does.Contain(fixture.Tag("keyboard-page-down")));
     }
 
+    [Test]
+    public void Footer_wide_keycaps_render_native_mesh_and_reflow_after_rebinding()
+    {
+      using var fixture = new Fixture(wideFooterGlyphs: true);
+      var profile = fixture.Profile(); profile.ShowCenter = false;
+      profile.ListWidth = 600; profile.MaximumVisibleItems = 3;
+      profile.InputBindings.Configure(back: fixture.Reference(fixture.AuthoredBack),
+        pageBackward: fixture.Reference(fixture.AuthoredPrevious), pageForward: fixture.Reference(fixture.AuthoredNext));
+      var actions = new MenuAction[9];
+      for (int i = 0; i < actions.Length; i++)
+        actions[i] = new MenuAction("wide-action" + i, new MenuLabel("Action " + i), new MenuCommandBehavior(_ => { }));
+      var presenter = fixture.Presenter<ListMenuPresenter>(profile, actions);
+      fixture.RebuildFooter(presenter);
+      string[] operations = { "Back", "Previous", "Next" };
+      string[] sprites = { "keyboard-escape", "keyboard-page-up", "keyboard-page-down" };
+      for (int i = 0; i < operations.Length; i++)
+      {
+        var widget = fixture.FooterWidget(presenter, operations[i]);
+        var hint = widget.BindingHint;
+        Assert.That(hint, Is.Not.Null);
+        Assert.That(hint.GetPreferredValues().x, Is.GreaterThan(28), "The native keycap must exceed the previously fixed hint width.");
+        fixture.AssertSprite(hint, sprites[i]);
+        Assert.That(hint.rectTransform.rect.width + .1f, Is.GreaterThanOrEqualTo(hint.GetPreferredValues().x),
+          "The visible glyph must receive its natural width rather than being elided.");
+        var labelBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(widget.transform, widget.Label.rectTransform);
+        var hintBounds = RectTransformUtility.CalculateRelativeRectTransformBounds(widget.transform, hint.rectTransform);
+        Assert.That(labelBounds.max.x, Is.LessThanOrEqualTo(hintBounds.min.x + .1f), "Operation text and its keycap must not overlap.");
+      }
+      var back = fixture.FooterWidget(presenter, "Back").BindingHint;
+      float wideWidth = back.rectTransform.rect.width;
+      fixture.Back.ApplyBindingOverride(0, "<Keyboard>/tab");
+      fixture.RebuildFooter(presenter);
+      fixture.AssertSprite(back, "keyboard-tab");
+      Assert.That(back.rectTransform.rect.width, Is.LessThan(wideWidth), "Rebinding to a compact glyph must release its extra layout width.");
+    }
+
     private sealed class RecordingPrompts : IInputPromptService, IDisposable
     {
       private readonly Subject<Unit> changed = new();
@@ -183,7 +219,7 @@ namespace MToolKit.Tests.Editor.ContextMenus
       public InputAction Secondary => runtime.FindAction(AuthoredSecondary.id);
       public InputAction Back => runtime.FindAction(AuthoredBack.id);
 
-      public Fixture()
+      public Fixture(bool wideFooterGlyphs = false)
       {
         previousMode = inputSettings.updateMode;
         previousFeature = (bool)typeof(InputSettings).GetMethod("IsFeatureEnabled", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -209,7 +245,7 @@ namespace MToolKit.Tests.Editor.ContextMenus
           AuthoredNext = Action("Next", "pageDown", "rightShoulder");
           runtime = Own(Object.Instantiate(authored)); runtime.devices = new InputDevice[] { Keyboard, Pad }; runtime.Enable();
           foreach (var action in runtime) _ = action.controls.Count;
-          sprites = SpriteAsset();
+          sprites = SpriteAsset(wideFooterGlyphs);
           Catalog = Own(ScriptableObject.CreateInstance<InputGlyphCatalog>());
           var entries = new List<InputGlyphCatalog.Entry>();
           void Entry(InputGlyphFamily family, string path, string name, string literal)
@@ -300,9 +336,22 @@ namespace MToolKit.Tests.Editor.ContextMenus
         }
         Assert.Fail("Missing footer operation: " + operation); return null;
       }
+      public MenuActionWidget FooterWidget(Component presenter, string operation)
+      {
+        foreach (var button in presenter.GetComponentsInChildren<Button>(true))
+          if (button.gameObject.name == operation) return button.GetComponent<MenuActionWidget>();
+        Assert.Fail("Missing footer operation: " + operation); return null;
+      }
+      public void RebuildFooter(Component presenter)
+      {
+        // uGUI skips descendants when a manually positioned parent has no layout controller.
+        // Each footer control is an independent layout root, as in the normal canvas pass.
+        foreach (string operation in new[] { "Back", "Previous", "Next" })
+          LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)FooterWidget(presenter, operation).transform);
+      }
       public void KeyboardState(KeyboardState value) { InputSystem.QueueStateEvent(Keyboard, value); InputSystem.Update(); }
       public void GamepadState(GamepadState value) { InputSystem.QueueStateEvent(Pad, value); InputSystem.Update(); }
-      private TMP_SpriteAsset SpriteAsset()
+      private TMP_SpriteAsset SpriteAsset(bool wideFooterGlyphs)
       {
         var asset = Own(ScriptableObject.CreateInstance<TMP_SpriteAsset>()); asset.name = "MTK_MenuGlyphTest_" + Guid.NewGuid().ToString("N");
         var serialized = new SerializedObject(asset); serialized.FindProperty("m_Version").stringValue = "1.1.0";
@@ -315,7 +364,8 @@ namespace MToolKit.Tests.Editor.ContextMenus
         string[] names = { "keyboard-enter", "keyboard-tab", "keyboard-escape", "keyboard-page-up", "keyboard-page-down", "gamepad-south" };
         for (int i = 0; i < names.Length; i++)
         {
-          var glyph = new TMP_SpriteGlyph((uint)i, new UnityEngine.TextCore.GlyphMetrics(2, 2, 0, 2, 2),
+          float width = wideFooterGlyphs && (names[i] == "keyboard-escape" || names[i] == "keyboard-page-up" || names[i] == "keyboard-page-down") ? 8 : 2;
+          var glyph = new TMP_SpriteGlyph((uint)i, new UnityEngine.TextCore.GlyphMetrics(width, 2, 0, 2, width),
             new UnityEngine.TextCore.GlyphRect(0, 0, 2, 2), 1, 0, sprite);
           asset.spriteGlyphTable.Add(glyph); asset.spriteCharacterTable.Add(new TMP_SpriteCharacter((uint)(0xe000 + i), glyph) { name = names[i] });
         }
