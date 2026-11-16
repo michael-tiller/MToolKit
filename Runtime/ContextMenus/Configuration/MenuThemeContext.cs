@@ -27,11 +27,12 @@ namespace MToolKit.ContextMenus.Configuration
           TryTypeset(Skin, description, state, out token)) return token;
       return null;
     }
-    public Spacing GetSpacing()
+    public Spacing GetSpacing() => GetSpacing(MenuThemeState.Any);
+    public Spacing GetSpacing(MenuThemeState state)
     {
-      if (Overrides != null && Overrides.Spacing != null) return Overrides.GetSpacing(ThemeService);
-      if (SharedOverrides != null && SharedOverrides.Spacing != null) return SharedOverrides.GetSpacing(ThemeService);
-      return Skin != null ? Skin.GetSpacing(ThemeService) : null;
+      if (TrySpacing(Overrides, state, out var token) || TrySpacing(SharedOverrides, state, out token) ||
+          TrySpacing(Skin, state, out token)) return token;
+      return null;
     }
     private bool TryColor(MenuSkin layer, MenuVisualRole role, MenuThemeState state, out Color color)
     {
@@ -44,6 +45,12 @@ namespace MToolKit.ContextMenus.Configuration
       token = null;
       return layer != null && (layer.TryGetTypeset(description, state, out token, ThemeService) ||
         state != MenuThemeState.Any && layer.TryGetTypeset(description, MenuThemeState.Any, out token, ThemeService));
+    }
+    private bool TrySpacing(MenuSkin layer, MenuThemeState state, out Spacing token)
+    {
+      token = null;
+      return layer != null && (layer.TryGetSpacing(state, out token, ThemeService) ||
+        state != MenuThemeState.Any && layer.TryGetSpacing(MenuThemeState.Any, out token, ThemeService));
     }
     public static MenuThemeState SelectState(MenuActionState availability, bool selected, bool hovered)
       => !availability.Enabled ? MenuThemeState.Disabled : hovered ? MenuThemeState.Hovered :

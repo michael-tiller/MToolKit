@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Add reusable MTK Theme style-set assets and compact menu state slots with independent Swatch, Typeset and Spacing tokens. Add typed Wheel, Nested Wheel, Pie and List presentation theme sources, preserving runtime profile identities and input ownership. Preview token-preserving legacy conversion, retain ambiguous/raw overrides, and fence rebuilds against edits to referenced style assets. (v1.23.0)
+
 - Add shared menu-style configuration assets and an editor wizard with specialized layout foldouts, guarded previews and in-place profile rebuilding. Expose sparse shared/per-style MTK Swatch, Typeset and Spacing overrides with skin fallback, visual states and a live backdrop role. Bind native widget content layouts and typography while preserving custom targets, callback ownership and pooled baselines. (v1.22.0)
 
 - Add the `MToolKit.ContextMenus` module with runtime/authored hierarchical actions, shared sessions, inline list foldouts, native annular rendering, replacement and partial-arc concentric presentations, configurable widgets/profiles, semantic input ownership, secondary actions, theme bindings and optional transitions. Ship ten editable presenter/widget prefabs, six menu profiles, a host config and saved gallery scene; retain a safe fresh-destination generator and authoring/migration documentation. Add optional scoped rebinder registration for runtime action instances. (v1.21.0)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using MToolKit.ContextMenus.Configuration;
 using UnityEditor;
 using UnityEngine;
@@ -8,13 +9,16 @@ using ThemeTypeset = MToolKit.Theme.Typeset.Typeset;
 
 namespace MToolKit.Editor.ContextMenus
 {
-  /// <summary>Edits the existing MTK token assets through a sparse MenuSkin layer.</summary>
-  internal sealed class MenuThemeOverridesGUI
+  /// <summary>Compact typed state slots; referenced asset details are drawn only on explicit expansion.</summary>
+  internal sealed class MenuThemeOverridesGUI : IDisposable
   {
     private static readonly MenuThemeState[] States = (MenuThemeState[])Enum.GetValues(typeof(MenuThemeState));
     private static readonly MenuVisualRole[] Roles = (MenuVisualRole[])Enum.GetValues(typeof(MenuVisualRole));
     private readonly Dictionary<string, bool> foldouts = new Dictionary<string, bool>();
     private readonly Dictionary<string, string> errors = new Dictionary<string, string>();
+    private readonly Dictionary<string, MenuStyleSetConversionPlan> conversions = new Dictionary<string, MenuStyleSetConversionPlan>();
+    private UnityEditor.Editor details;
+    private string expanded;
 
     internal bool Draw(SerializedProperty reference, string key, string label, string assetName, string outputFolder)
     {
@@ -22,66 +26,157 @@ namespace MToolKit.Editor.ContextMenus
       EditorGUILayout.LabelField(label, EditorStyles.boldLabel);
       EditorGUILayout.BeginHorizontal();
       EditorGUI.BeginChangeCheck();
-      EditorGUILayout.PropertyField(reference, new GUIContent("Override asset"));
+      EditorGUILayout.PropertyField(reference, new GUIContent("State style layer"));
       bool changed = EditorGUI.EndChangeCheck();
-      bool create = GUILayout.Button("Create overrides", GUILayout.Width(115));
-      EditorGUILayout.EndHorizontal();
-      if (create)
+      if (GUILayout.Button("New layer", GUILayout.Width(80)))
       {
-        string folder = AssetDatabase.IsValidFolder(outputFolder) && !IsEditorFolder(outputFolder) ? outputFolder : "Assets";
-        string path = EditorUtility.SaveFilePanelInProject("Create runtime MTK theme overrides", assetName,
-          "asset", "Choose a new runtime MenuSkin asset outside Editor folders.", folder);
+        string path = EditorUtility.SaveFilePanelInProject("Create runtime menu state layer", assetName,
+          "asset", "Choose a new runtime MenuSkin layer outside Editor folders.", RuntimeFolder(outputFolder));
         if (!string.IsNullOrEmpty(path))
-        {
-          try
-          {
-            reference.objectReferenceValue = MenuStyleAuthoring.CreateThemeOverrideAsset(path);
-            changed = true;
-            errors.Remove(key);
-          }
+          try { reference.objectReferenceValue = MenuStyleAuthoring.CreateThemeOverrideAsset(path); changed = true; errors.Remove(key); }
           catch (Exception error) { errors[key] = error.Message; }
-        }
       }
-      if (errors.TryGetValue(key, out var diagnostic)) EditorGUILayout.HelpBox(diagnostic, MessageType.Error);
+      EditorGUILayout.EndHorizontal();
       var layer = reference.objectReferenceValue as MenuSkin;
       if (layer == null)
       {
-        EditorGUILayout.HelpBox("No local tokens. Inherit from the next theme layer.", MessageType.None);
-        return changed;
+        EditorGUILayout.HelpBox("Inherits the next layer. Assign or create a layer to configure reusable state style assets.", MessageType.None);
+        DrawError(key); return changed;
       }
-      EditorGUILayout.HelpBox("Assign MTK Swatch, Typeset and Spacing assets below. Empty tokens inherit. " +
-        "Reference changes apply on Rebuild. Direct asset-value edits take effect on the next bind, refresh or MTK theme update.", MessageType.None);
+      EditorGUILayout.HelpBox("One reusable menu style asset per state. Empty slots inherit. Open Details only when editing that asset.", MessageType.None);
       using (var data = new SerializedObject(layer))
       {
         data.Update();
-        var colors = Property(data, nameof(MenuSkin.Colors));
-        var typography = Property(data, nameof(MenuSkin.Typography));
-        var direct = Property(data, nameof(MenuSkin.OverrideTheme));
-        bool resolve = EditorGUILayout.Toggle(new GUIContent("Resolve active MTK theme",
-          "Resolve Swatch and Typeset semantic IDs through the active IThemeService. Local color overrides always retain their explicit value."), !direct.boolValue);
-        if (direct.boolValue == resolve) direct.boolValue = !resolve;
-        EditorGUILayout.PropertyField(Property(data, nameof(MenuSkin.Spacing)), new GUIContent("Spacing (all states)"));
-        if (GUILayout.Button("Open MTK Theme tools")) EditorApplication.ExecuteMenuItem("Tools/MToolKit/Theme Configurator");
-        EditorGUILayout.HelpBox("Native item and wedge fills use Normal for enabled/checked, Hovered for pointer hover, " +
-          "Selected for selection and Disabled for unavailable actions. Center and Auxiliary use their named roles; " +
-          "labels, descriptions, icons and check markers keep their roles within each state. Custom presenters can use every role.", MessageType.None);
+        var slots = Property(data, nameof(MenuSkin.StateStyles));
         foreach (var state in States)
         {
-          string stateKey = key + ":" + state;
-          if (!Foldout(stateKey, StateLabel(state), state == MenuThemeState.Any)) continue;
-          using (new EditorGUI.IndentLevelScope())
+          int index = FindSlot(slots, state);
+          var previous = index >= 0 ? Field(slots.GetArrayElementAtIndex(index), nameof(MenuSkinStyle.Style)).objectReferenceValue as MenuStyleSet : null;
+          string slotKey = key + ":slot:" + state;
+          EditorGUILayout.BeginHorizontal();
+          EditorGUI.BeginChangeCheck();
+          var next = EditorGUILayout.ObjectField(StateLabel(state), previous, typeof(MenuStyleSet), false) as MenuStyleSet;
+          if (EditorGUI.EndChangeCheck()) { SetSlot(slots, state, next); changed = true; }
+          if (GUILayout.Button("New", GUILayout.Width(42)))
           {
-            EditorGUILayout.LabelField("Swatches", EditorStyles.miniBoldLabel);
-            changed |= DrawColors(colors, state, stateKey);
-            EditorGUILayout.LabelField("Typography", EditorStyles.miniBoldLabel);
-            changed |= DrawTypography(data, typography, state, false);
-            changed |= DrawTypography(data, typography, state, true);
+            string layerFolder = Path.GetDirectoryName(AssetDatabase.GetAssetPath(layer))?.Replace('\\', '/');
+            string path = EditorUtility.SaveFilePanelInProject("Create reusable menu state style", assetName + "_" + state,
+              "asset", "The style contains MTK token references and can be reused in other state slots.", RuntimeFolder(layerFolder));
+            if (!string.IsNullOrEmpty(path))
+              try { next = MenuStyleAuthoring.CreateMenuStyleSetAsset(path); SetSlot(slots, state, next); changed = true; errors.Remove(key); }
+              catch (Exception error) { errors[key] = error.Message; }
+          }
+          using (new EditorGUI.DisabledScope(next == null))
+            if (GUILayout.Button(expanded == slotKey ? "Hide" : "Details", GUILayout.Width(58)))
+              expanded = expanded == slotKey ? null : slotKey;
+          EditorGUILayout.EndHorizontal();
+          if (expanded == slotKey && next != null)
+          {
+            using (new EditorGUI.IndentLevelScope())
+            {
+              EditorGUILayout.HelpBox("Editing this shared asset changes every slot that references it. Values apply on the next bind, refresh or theme update.", MessageType.None);
+              UnityEditor.Editor.CreateCachedEditor(next, typeof(MenuStyleSetEditor), ref details);
+              EditorGUI.BeginChangeCheck(); details.OnInspectorGUI(); changed |= EditorGUI.EndChangeCheck();
+            }
           }
         }
         changed |= data.ApplyModifiedProperties();
       }
+      int count = LegacyCount(layer);
+      if (Foldout(key + ":legacy", "Advanced legacy overrides (" + count + ")", false))
+      {
+        using (new EditorGUI.IndentLevelScope())
+        {
+          changed |= DrawLegacy(layer, key);
+          changed |= DrawConversion(layer, key);
+        }
+      }
+      DrawError(key);
       return changed;
     }
+
+    private bool DrawLegacy(MenuSkin layer, string key)
+    {
+      EditorGUILayout.HelpBox("These existing direct values win over the style in the same exact state. Convert representable tokens to state assets, or retain deliberate overrides here. Raw local colors remain advanced.", MessageType.None);
+      using (var data = new SerializedObject(layer))
+      {
+        data.Update();
+        var direct = Property(data, nameof(MenuSkin.OverrideTheme));
+        EditorGUILayout.PropertyField(direct, new GUIContent("Lock entire layer to authored tokens"));
+        EditorGUILayout.PropertyField(Property(data, nameof(MenuSkin.Spacing)), new GUIContent("Legacy default Spacing"));
+        var colors = Property(data, nameof(MenuSkin.Colors));
+        var typography = Property(data, nameof(MenuSkin.Typography));
+        bool changed = false;
+        foreach (var state in States)
+        {
+          string stateKey = key + ":legacy:" + state;
+          if (!Foldout(stateKey, StateLabel(state), false)) continue;
+          using (new EditorGUI.IndentLevelScope())
+          {
+            changed |= DrawColors(colors, state, stateKey);
+            changed |= DrawTypography(data, typography, state, false);
+            changed |= DrawTypography(data, typography, state, true);
+          }
+        }
+        return data.ApplyModifiedProperties() || changed;
+      }
+    }
+
+    private bool DrawConversion(MenuSkin layer, string key)
+    {
+      bool changed = false;
+      if (GUILayout.Button("Preview legacy conversion"))
+      {
+        string current = Path.GetDirectoryName(AssetDatabase.GetAssetPath(layer))?.Replace('\\', '/');
+        string start = Path.Combine(Directory.GetParent(Application.dataPath).FullName, RuntimeFolder(current));
+        string folder = EditorUtility.OpenFolderPanel("Choose an existing runtime folder for new state styles", start, "");
+        if (!string.IsNullOrEmpty(folder))
+        {
+          string project = FileUtil.GetProjectRelativePath(folder);
+          conversions[key] = MenuStyleAuthoring.PreviewStyleSetConversion(layer, project);
+        }
+      }
+      if (!conversions.TryGetValue(key, out var plan) || plan.Source != layer) return false;
+      foreach (var entry in plan.Entries) EditorGUILayout.LabelField(entry.State.ToString(), entry.OutputPath);
+      foreach (var diagnostic in plan.Diagnostics) EditorGUILayout.HelpBox(diagnostic, MessageType.Error);
+      if (plan.Entries.Count == 0 && plan.CanConvert) EditorGUILayout.HelpBox("No convertible legacy tokens in empty state slots.", MessageType.None);
+      using (new EditorGUI.DisabledScope(!plan.CanConvert || plan.Entries.Count == 0))
+        if (GUILayout.Button("Convert previewed tokens"))
+          try { MenuStyleAuthoring.ConvertStyleSets(plan); conversions.Remove(key); errors.Remove(key); changed = true; }
+          catch (Exception error) { errors[key] = error.Message; }
+      return changed;
+    }
+
+    private static int FindSlot(SerializedProperty slots, MenuThemeState state)
+    {
+      for (int i = slots.arraySize - 1; i >= 0; i--)
+        if (Field(slots.GetArrayElementAtIndex(i), nameof(MenuSkinStyle.State)).intValue == (int)state) return i;
+      return -1;
+    }
+    private static void SetSlot(SerializedProperty slots, MenuThemeState state, MenuStyleSet style)
+    {
+      for (int i = slots.arraySize - 1; i >= 0; i--)
+        if (Field(slots.GetArrayElementAtIndex(i), nameof(MenuSkinStyle.State)).intValue == (int)state) slots.DeleteArrayElementAtIndex(i);
+      if (style == null) return;
+      int index = slots.arraySize++;
+      var entry = slots.GetArrayElementAtIndex(index);
+      Field(entry, nameof(MenuSkinStyle.State)).intValue = (int)state;
+      Field(entry, nameof(MenuSkinStyle.Style)).objectReferenceValue = style;
+    }
+    private static int LegacyCount(MenuSkin layer)
+    {
+      int count = layer.OverrideTheme ? 1 : 0;
+      if (layer.Colors != null) foreach (var entry in layer.Colors) if (entry != null && (entry.OverrideColor || entry.Swatch != null)) count++;
+      if (layer.Typography != null) foreach (var entry in layer.Typography) if (entry?.Typeset != null) count++;
+      if (layer.LabelTypeset != null) count++; if (layer.DescriptionTypeset != null) count++; if (layer.Spacing != null) count++;
+      return count;
+    }
+    private static string RuntimeFolder(string path)
+      => !string.IsNullOrEmpty(path) && AssetDatabase.IsValidFolder(path) && !IsEditorFolder(path) ? path : "Assets";
+    private void DrawError(string key)
+    { if (errors.TryGetValue(key, out var error)) EditorGUILayout.HelpBox(error, MessageType.Error); }
+    public void Dispose()
+    { if (details != null) UnityEngine.Object.DestroyImmediate(details); details = null; }
 
     private bool DrawColors(SerializedProperty colors, MenuThemeState state, string key)
     {

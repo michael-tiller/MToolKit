@@ -3,6 +3,8 @@
 This record explains the module boundaries, extension contracts and ownership decisions.
 See [the usage guide](ContextMenus.md) for authoring and validation instructions and
 [the migration guide](ContextMenusMigration.md) for the Dirigible compatibility boundary.
+The [style authoring guide](ContextMenuAuthoring.md) describes the shared settings,
+typed presentation sources and explicit profile rebuild workflow.
 
 ## Repository and source boundary
 
@@ -148,7 +150,34 @@ There is currently no MTK-wide focus/input lease service. Keep this feature's ow
 
 Use semantic Swatch, Typeset and Spacing assets. ThemePreset resolves the authored token Id against the active theme and SetStart changes the active-state token. SwatchPreset already supports any Graphic, including the new MaskableGraphic sectors; no global graphics binder is necessary. TypesetPreset supplies font/material/spacing and accessible typography. SpacingPreset applies standard LayoutGroups; radial radii/angular spacing remain profile geometry, with semantic spacing used where meaningful.
 
-`MenuSkin.GetColor` applies explicit local color first, then the active theme's matching semantic token, then the authored token/readable default. `OverrideTheme` keeps authored swatches/typesets/spacing local. Default widgets resolve the provided theme service and reuse `TypesetPreset` and `SpacingPreset` with the supported `ThemePreset.SetOverrideTheme` API; they do not reflect into private preset state. Framework-created buttons disable competing color transitions. `MenuActionWidget.UseSkin=false` and a custom widget/presenter permit deliberate visual ownership. Theme/prompt/locale changes update visible state; main-thread dispatch and binding generations reject stale callbacks.
+`MenuSkin.GetColor` applies explicit local color first, then the active theme's matching semantic token, then the authored token/readable default. Default widgets resolve the provided theme service and reuse `TypesetPreset` and `SpacingPreset` through supported preset binding APIs, including atomic `ThemePreset.SetBinding`; they do not reflect into private preset state. Framework-created buttons disable competing color transitions. `MenuActionWidget.UseSkin=false` and a custom widget/presenter permit deliberate visual ownership. Theme/prompt/locale changes update visible state; main-thread dispatch and binding generations reject stale callbacks.
+
+### A4 decision — 2026-11-15: shared state packs and typed presentation sources
+
+Reusable visual state assets and presentation geometry have separate owners. Michael selected a shared MTK Theme abstraction with concrete typed assets, following the existing abstract ScriptableObject/concrete authoring patterns. A menu state pack is one reusable asset, such as `NegativeSelected` or `PositiveInactive`; those names are project content, not members of a global type or action enum.
+
+`MToolKit.Theme.ThemeStyleSet` is the abstract shared ScriptableObject. It contains optional semantic `Background`, `Foreground`, `Description`, `Icon` and `Border` Swatch references, label/description Typesets, Spacing and `OverrideTheme`. `MToolKit.ContextMenus.Configuration.MenuStyleSet` is its concrete menu type. It adds the menu-specific normal/hovered/selected/disabled fills, panel/center/auxiliary/backdrop channels, independent inner/outer borders, separator and checked feedback. Normal item fills may inherit the common Background, and outlines may inherit Border. The check marker first searches the Checked channel across all layers, then falls back to the fully resolved label color; a higher Foreground alone does not mask a lower explicit Checked value. Common item Background never implicitly becomes the panel, center, auxiliary control or fullscreen backdrop.
+
+The dependency remains ContextMenus → Theme. The shared abstraction contains no menu roles, geometry, input state or gameplay dependency. Existing `IThemeService` and semantic token registries resolve its referenced assets; no style registry, service locator, reflection dispatch or runtime asset cloning is introduced. Other UI modules can supply their own concrete style types without making Theme depend on ContextMenus.
+
+`MenuSkin.StateStyles` associates reusable `MenuStyleSet` references with the existing Any, Normal, Hovered, Selected, Disabled and Checked slots. `GetStyle` and `SetStyle` address an exact authored slot. Null sets or token references inherit per property; the same set can be referenced by multiple configurations. Existing direct color/typography/spacing fields remain available as advanced overrides and preserve authored local colors, including transparent values. See [reusable state style sets](ContextMenuAuthoring.md#reusable-state-style-sets) for the compact authoring controls.
+
+For each property, resolution visits `MenuProfile.ThemeOverrides`, then `SharedThemeOverrides`, then the optional fallback `Skin`. Within one layer, the order is exact-state direct property, exact-state style channel, Any direct property, then Any style channel. A local Any therefore remains above a shared exact state. A style set's `OverrideTheme` locks only tokens supplied by that set; `MenuSkin.OverrideTheme` locks the whole layer. Missing semantic IDs retain the authored token. Interaction priority and independent checked feedback remain the existing session/widget behavior.
+
+Typed presentation sources live in the Editor assembly, under `MToolKit.Editor.ContextMenus.MenuPresentationThemeSet`:
+
+| Source asset | Presentation-specific authoring |
+| --- | --- |
+| `WheelMenuThemeSet` | Single-ring dimensions and composition. |
+| `NestedWheelMenuThemeSet` | Parent/child ring dimensions, inter-ring gap and partial child arc. |
+| `PieMenuThemeSet` | Replacement navigation and separately composed interaction buttons. |
+| `ListMenuThemeSet` | List dimensions and nested-list presentation settings. |
+
+Each recipe's `ThemeSet` field accepts its matching family type. These source assets reuse visual state packs while allowing wheel, nested wheel, pie and list layouts to differ. Their settings bake into the existing runtime `MenuProfile` through the authoring workflow; the profile remains the presenter and hit-testing contract. Runtime profiles do not reference Editor source assets. Assigned output profiles retain their identity, and legacy inline recipe settings remain the compatibility path when no typed source is assigned. This adds authoring composition rather than another runtime geometry system; see [typed presentation themes](ContextMenuAuthoring.md#typed-presentation-themes) for source selection, preview and rebuild details.
+
+State packs contain no radii, sector counts, row sizes, item hit sizes or navigation geometry. A state's Spacing token changes content padding and gap through existing explicit `SpacingPreset` targets; it does not replace the configured action hit rectangle. The legacy `MenuSkin.GetSpacing(IThemeService)` and `MenuThemeContext.GetSpacing()` APIs retain their Any/default behavior. State-aware overloads accept `MenuThemeState`, and default widgets pass their active ThemeState so typography, color and content spacing can change together. Sharing the same spacing token between states avoids unintended content movement. Custom widgets retain their existing target bindings and visual opt-out.
+
+Dirigible's `Button Large Primary.prefab` and `TweenAnimatedButton` are design references: fill, border and label have distinct values for their interaction states. That supports a multi-channel shared style abstraction rather than a foreground-only color. A button overhaul, button-specific style consumer and migration of its Pressed/tween behavior are outside A4; the menu feature does not claim to implement them or add a Dirigible dependency to MTK Theme.
 
 ### Transition ownership
 

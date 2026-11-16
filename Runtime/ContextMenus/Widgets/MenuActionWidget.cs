@@ -173,7 +173,7 @@ namespace MToolKit.ContextMenus.Widgets
       if (!Owns(generation, state)) return;
       ApplyTypeset(Variant, true);
       if (!Owns(generation, state)) return;
-      var token = state.Theme.GetSpacing();
+      var token = state.Theme.GetSpacing(state.ThemeState);
       if (SpacingTargets != null && SpacingTargets.Length > 0)
       {
         for (int i = 0; i < SpacingTargets.Length; i++)

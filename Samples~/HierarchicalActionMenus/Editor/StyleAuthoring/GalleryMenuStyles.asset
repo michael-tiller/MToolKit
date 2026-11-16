@@ -62,6 +62,7 @@ MonoBehaviour:
         Clockwise: 1
         AngularGap: 3
         DrawSegments: 1
+        ThemeSet: {fileID: 11400000, guid: 4cba1222dd1f1564fa3246f8cd4c16f8, type: 2}
         RingGap: 10
         ChildRingWidth: 55
         ChildArcDegrees: 120
@@ -102,6 +103,7 @@ MonoBehaviour:
         Clockwise: 1
         AngularGap: 5
         DrawSegments: 1
+        ThemeSet: {fileID: 11400000, guid: cae3d29aff137f242ba0400228353ba2, type: 2}
     - rid: 6067106620727623821
       type: {class: ReplacementMenuStyleRecipe, ns: MToolKit.Editor.ContextMenus, asm: MToolKit.Editor.ContextMenus}
       data:
@@ -139,6 +141,7 @@ MonoBehaviour:
         Clockwise: 1
         AngularGap: 3
         DrawSegments: 0
+        ThemeSet: {fileID: 11400000, guid: e0978b0758b135349b250308115a85b4, type: 2}
     - rid: 6067106620727623822
       type: {class: ListMenuStyleRecipe, ns: MToolKit.Editor.ContextMenus, asm: MToolKit.Editor.ContextMenus}
       data:
@@ -170,6 +173,7 @@ MonoBehaviour:
           routePointerClick: 0
         MaximumVisibleItems: 10
         WidgetSize: {x: 96, y: 64}
+        ThemeSet: {fileID: 11400000, guid: 7f45e6a526fc2d34b82def88266b9ebd, type: 2}
         ListWidth: 380
         RowHeight: 48
         Navigation: 0

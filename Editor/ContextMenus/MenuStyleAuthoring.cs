@@ -35,28 +35,60 @@ namespace MToolKit.Editor.ContextMenus
     internal string Fingerprint;
   }
 
-  public static class MenuStyleAuthoring
+  public sealed class MenuStyleSetConversionEntry
   {
+    public MenuThemeState State { get; internal set; }
+    public string OutputPath { get; internal set; }
+  }
+
+  public sealed class MenuStyleSetConversionPlan
+  {
+    public IReadOnlyList<MenuStyleSetConversionEntry> Entries { get; internal set; }
+    public IReadOnlyList<string> Diagnostics { get; internal set; }
+    public bool CanConvert => Diagnostics != null && Diagnostics.Count == 0;
+    internal MenuSkin Source;
+    internal string OutputFolder;
+    internal string Fingerprint;
+  }
+
+  public static partial class MenuStyleAuthoring
+  {
+    /// <summary>Creates a concrete typed Editor source without adopting existing asset paths.</summary>
+    public static MenuPresentationThemeSet CreatePresentationThemeSetAsset(Type themeType, string path)
+    {
+      if (themeType == null || !typeof(MenuPresentationThemeSet).IsAssignableFrom(themeType) ||
+          themeType.IsAbstract || themeType.ContainsGenericParameters)
+        throw new InvalidOperationException("Choose a concrete menu presentation theme source type.");
+      return (MenuPresentationThemeSet)CreateThemeAsset(themeType, path, false);
+    }
+
+    /// <summary>Creates a typed reusable runtime menu style without adopting existing paths.</summary>
+    public static MenuStyleSet CreateMenuStyleSetAsset(string path)
+      => (MenuStyleSet)CreateThemeAsset(typeof(MenuStyleSet), path, true);
+
     /// <summary>Creates a new runtime MenuSkin override asset without adopting existing paths or metadata.</summary>
     public static MenuSkin CreateThemeOverrideAsset(string path)
+      => (MenuSkin)CreateThemeAsset(typeof(MenuSkin), path, true);
+
+    private static ScriptableObject CreateThemeAsset(Type type, string path, bool runtime)
     {
       if (EditorApplication.isPlayingOrWillChangePlaymode)
-        throw new InvalidOperationException("Stop Play Mode before creating theme override assets.");
+        throw new InvalidOperationException("Stop Play Mode before creating theme assets.");
       if (string.IsNullOrWhiteSpace(path) || !path.StartsWith("Assets/", StringComparison.Ordinal)
         || !path.EndsWith(".asset", StringComparison.OrdinalIgnoreCase) || path.Contains('\\'))
-        throw new InvalidOperationException("Choose a new runtime .asset path under Assets, outside Editor folders.");
+        throw new InvalidOperationException("Choose a new .asset path under Assets.");
       string parent = Parent(path);
       if ((parent != "Assets" && !ValidFolder(parent)) || !ValidName(Path.GetFileNameWithoutExtension(path))
-        || path.Split('/').Any(part => string.Equals(part, "Editor", StringComparison.OrdinalIgnoreCase)))
-        throw new InvalidOperationException("Theme overrides are runtime assets. Choose a normal Assets folder, outside Editor folders.");
+        || runtime && IsEditorPath(path))
+        throw new InvalidOperationException("Runtime theme assets require a normal Assets folder, outside Editor folders.");
       if (Exists(path))
         throw new InvalidOperationException("Refusing to adopt or overwrite an existing asset, directory or metadata at " + path + ".");
       if (!AssetDatabase.IsValidFolder(parent))
         throw new InvalidOperationException("Create the runtime theme asset's parent folder first.");
-      MenuSkin asset = null;
+      ScriptableObject asset = null;
       try
       {
-        asset = ScriptableObject.CreateInstance<MenuSkin>();
+        asset = ScriptableObject.CreateInstance(type);
         asset.name = Path.GetFileNameWithoutExtension(path);
         AssetDatabase.CreateAsset(asset, path);
         AssetDatabase.SaveAssetIfDirty(asset);
@@ -68,6 +100,9 @@ namespace MToolKit.Editor.ContextMenus
         throw;
       }
     }
+
+    private static bool IsEditorPath(string path)
+      => path.Split('/').Any(part => string.Equals(part, "Editor", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Read-only validation and exact proposed output paths. A null style id selects all styles.</summary>
     public static MenuStyleBuildPlan Preview(MenuStyleConfig config, string styleId = null)
@@ -110,6 +145,8 @@ namespace MToolKit.Editor.ContextMenus
           if (Exists(path)) diagnostics.Add(name + ": refusing to adopt or overwrite an existing asset at " + path + ". Assign that profile explicitly if it is yours.");
         }
         if (config.Common == null) continue;
+        if (recipe.PresentationTheme != null && !SavedAsset(recipe.PresentationTheme))
+          diagnostics.Add(name + ": save the typed theme source under Assets before rebuilding.");
         MenuProfile candidate = null;
         try
         {
@@ -208,6 +245,8 @@ namespace MToolKit.Editor.ContextMenus
         EditorUtility.SetDirty(config.Common);
         AssetDatabase.SaveAssetIfDirty(config.Common);
         AssetDatabase.SaveAssetIfDirty(config);
+        foreach (var entry in current.Entries)
+          if (entry.Recipe.PresentationTheme != null) AssetDatabase.SaveAssetIfDirty(entry.Recipe.PresentationTheme);
         Undo.CollapseUndoOperations(undoGroup);
         return outputs.ToArray();
       }
@@ -226,8 +265,8 @@ namespace MToolKit.Editor.ContextMenus
         profile.hideFlags = HideFlags.HideAndDontSave;
         profile.name = recipe.Output != null ? recipe.Output.name : recipe.AssetName;
         profile.SharedThemeOverrides = common.ThemeOverrides;
-      profile.ThemeOverrides = recipe.ThemeOverrides;
-      if (common.Skin != null) profile.Skin = common.Skin;
+        profile.ThemeOverrides = recipe.ThemeOverrides;
+        if (common.Skin != null) profile.Skin = common.Skin;
         if (common.ItemPrefab != null) profile.ItemPrefab = common.ItemPrefab;
         if (common.CenterPrefab != null) profile.CenterPrefab = common.CenterPrefab;
         if (common.SecondaryPrefab != null) profile.SecondaryPrefab = common.SecondaryPrefab;
@@ -238,19 +277,22 @@ namespace MToolKit.Editor.ContextMenus
         profile.ShowCenter = common.ShowCenter; profile.Backdrop = common.Backdrop;
         profile.ReducedMotion = common.ReducedMotion; profile.MinimumTargetSize = common.MinimumTargetSize;
         profile.AnalogDeadZone = common.AnalogDeadZone; profile.AnalogHysteresis = common.AnalogHysteresis;
-        profile.MaximumVisibleItems = recipe.MaximumVisibleItems; profile.WidgetSize = recipe.WidgetSize;
-        if (recipe.PresenterPrefab != null) profile.PresenterPrefab = recipe.PresenterPrefab;
-        if (recipe.ItemPrefab != null) profile.ItemPrefab = recipe.ItemPrefab;
-        if (recipe.CenterPrefab != null) profile.CenterPrefab = recipe.CenterPrefab;
-        if (recipe.SecondaryPrefab != null) profile.SecondaryPrefab = recipe.SecondaryPrefab;
-        if (recipe.Skin != null) profile.Skin = recipe.Skin;
+        if (recipe.PresentationTheme == null)
+        {
+          profile.MaximumVisibleItems = recipe.MaximumVisibleItems; profile.WidgetSize = recipe.WidgetSize;
+          if (recipe.PresenterPrefab != null) profile.PresenterPrefab = recipe.PresenterPrefab;
+          if (recipe.ItemPrefab != null) profile.ItemPrefab = recipe.ItemPrefab;
+          if (recipe.CenterPrefab != null) profile.CenterPrefab = recipe.CenterPrefab;
+          if (recipe.SecondaryPrefab != null) profile.SecondaryPrefab = recipe.SecondaryPrefab;
+          if (recipe.Skin != null) profile.Skin = recipe.Skin;
+        }
         if (recipe.OverrideInputBindings) profile.InputBindings = Clone(recipe.InputBindings);
+        recipe.ApplySpecialized(profile);
         // Unity materializes an unassigned serialized AssetReference as an empty wrapper when cloning assets.
         // It is not an authored addressable choice; nonempty invalid GUIDs must still produce diagnostics.
         if (profile.PresenterPrefab == null && profile.PresenterReference != null &&
             string.IsNullOrEmpty(profile.PresenterReference.AssetGUID)) profile.PresenterReference = null;
-        recipe.ApplySpecialized(profile);
-        if (recipe.OverrideShowCenter) profile.ShowCenter = recipe.ShowCenter;
+        if (recipe.PresentationTheme == null && recipe.OverrideShowCenter) profile.ShowCenter = recipe.ShowCenter;
         return profile;
       }
       catch
@@ -277,18 +319,28 @@ namespace MToolKit.Editor.ContextMenus
       var text = new StringBuilder();
       AppendObject(text, plan.Config);
       AppendObject(text, plan.Config.Common);
-      AppendObject(text, plan.Config.Common != null ? plan.Config.Common.ThemeOverrides : null);
+      AppendLayer(text, plan.Config.Common != null ? plan.Config.Common.ThemeOverrides : null);
       AppendObject(text, plan.Config.GeneratedListPresenter);
       AppendObject(text, plan.Config.GeneratedRadialPresenter);
       text.Append('|').Append(plan.StyleId);
       foreach (var entry in plan.Entries)
       {
         AppendObject(text, entry.ExistingProfile);
-        AppendObject(text, entry.Recipe.ThemeOverrides);
+        AppendLayer(text, entry.Recipe.ThemeOverrides);
+        var theme = entry.Recipe.PresentationTheme;
+        AppendObject(text, theme);
+        if (theme != null) AppendLayer(text, theme.ThemeOverrides);
         text.Append('|').Append(entry.OutputPath); AppendFile(text, entry.OutputPath);
         text.Append('|').Append(entry.PresenterPath); AppendFile(text, entry.PresenterPath);
       }
       using (var hash = SHA256.Create()) return Convert.ToBase64String(hash.ComputeHash(Encoding.UTF8.GetBytes(text.ToString())));
+    }
+
+    private static void AppendLayer(StringBuilder text, MenuSkin layer)
+    {
+      AppendObject(text, layer);
+      if (layer?.StateStyles == null) return;
+      foreach (var slot in layer.StateStyles) AppendObject(text, slot?.Style);
     }
 
     private static void AppendObject(StringBuilder text, Object value)
@@ -320,7 +372,7 @@ namespace MToolKit.Editor.ContextMenus
     private static bool SavedAsset(Object value)
       => value != null && EditorUtility.IsPersistent(value) && AssetDatabase.GetAssetPath(value).StartsWith("Assets/", StringComparison.Ordinal);
     private static bool Exists(string path) => !string.IsNullOrEmpty(path) && (File.Exists(path) || File.Exists(path + ".meta")
-      || Directory.Exists(path) || AssetDatabase.LoadMainAssetAtPath(path) != null);
+      || Directory.Exists(path) || Directory.Exists(path + ".meta") || AssetDatabase.LoadMainAssetAtPath(path) != null);
     private static void ValidateParentFolders(string path, ICollection<string> diagnostics)
     {
       if (string.IsNullOrEmpty(path) || !path.StartsWith("Assets/", StringComparison.Ordinal)) return;

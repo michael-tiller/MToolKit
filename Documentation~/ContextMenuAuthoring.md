@@ -1,96 +1,84 @@
 # Menu style authoring
 
-Open **Tools → MToolKit → Context Menus → Style Wizard**. The tool edits saved authoring assets and explicitly bakes their settings into runtime `MenuProfile` assets.
-
-The Inspector and wizard use native Unity Editor controls, MTK theme asset tooling, existing input references and the shared widget factories.
+Open **Tools → MToolKit → Context Menus → Style Wizard**. It edits saved authoring assets and explicitly bakes their settings into runtime `MenuProfile` assets. Existing profiles keep their GUIDs, and existing custom prefab contents are retained.
 
 ## Create shared settings and styles
 
-1. Choose **New default style configuration**. Source assets default to `Assets/Editor/MToolKit/Menus`. The wizard creates one `MenuStyleConfig` and, unless one was selected, a companion `MenuCommonSettings`.
-2. Expand **Shared common settings**. Configure **MTK theme overrides (shared)**, optional **Fallback skin**, input bindings, center/item/secondary prefabs, placement, accessibility and transitions.
-3. Expand a style to edit its specialized layout. The four defaults are `WheelContextMenu`, `PieContextMenu`, `ListContextMenu` and `NestedWheelContextMenu`.
-4. Choose **Preview all changes** or **Preview changes** for one style. Inspect diagnostics and the exact proposed runtime asset paths.
-5. Choose **Rebuild all styles** or **Rebuild this style**. A rebuild button without a current preview first creates the preview; press it again after reviewing the paths.
-6. Assign the generated profiles to the project's existing menu host configuration or per-use-case requests.
+1. Choose **New default style configuration**. Source assets default to `Assets/Editor/MToolKit/Menus`. A configuration references one reusable `MenuCommonSettings` asset.
+2. Expand **Shared common settings** to assign shared state style assets. Input, accessibility, placement and fallback composition are in the separate collapsed section.
+3. Expand a style and assign its correctly typed **Theme set**, or use **Create**. Open **Details** to edit that source asset. Each family owns its own dimensions and visual composition.
+4. Choose **Preview all changes** or **Preview changes** for one style. Inspect diagnostics and the exact proposed runtime paths.
+5. Choose **Rebuild all styles** or **Rebuild this style**. Without a current preview, the first press creates the preview; press again after reviewing it.
+6. Assign the resulting profiles to the existing menu host configuration or per-use-case requests.
 
-Runtime profiles and native presenter prefabs default to `Assets/MToolKit/Menus/<configuration name>`. They do not reference the Editor authoring assets.
+Runtime profiles and missing native presenter prefabs default to `Assets/MToolKit/Menus/<configuration name>`. They do not reference the Editor authoring sources. Creating a configuration or previewing it does not create theme sources or runtime outputs implicitly.
 
-The geometry panel is a layout sketch with up to twelve illustrative actions. It uses native radial geometry and shows item/center rectangles. It does not render custom prefab graphics, actual actions, text metrics, animations or runtime viewport fitting. Validate those through the existing menu host and project UI.
+## Typed presentation themes
 
-## Sharing and overrides
+Each recipe accepts one specific source asset type through Unity's typed object picker:
 
-Multiple configurations can reference the same Common settings asset. Changes to its references and layout settings reach runtime profiles through explicit rebuilds. Referenced theme assets remain shared assets; their update timing is described below.
+| Style | Recipe | Theme source | Layout |
+| --- | --- | --- | --- |
+| `WheelContextMenu` | `SingleRingMenuStyleRecipe` | `WheelMenuThemeSet` | Radius, ring width, start angle, direction and gaps. |
+| `PieContextMenu` | `ReplacementMenuStyleRecipe` | `PieMenuThemeSet` | Button orbit and size; optional background ring. |
+| `ListContextMenu` | `ListMenuStyleRecipe` | `ListMenuThemeSet` | List width and row height. |
+| `NestedWheelContextMenu` | `ConcentricMenuStyleRecipe` | `NestedWheelMenuThemeSet` | Independent parent/child widths, inter-ring gap and partial child arc. |
 
-Common settings supply theme, input, accessibility, placement, transitions and optional composition. The generic recipe classes keep their serialized identity while naming four style families:
+These derive from Editor-only `MenuPresentationThemeSet`. A source also owns visible-item capacity, item/button size, center visibility, backdrop and optional presenter/item/center/secondary prefabs. Its `ThemeOverrides` reference supplies the per-style runtime state layer. Empty visual references inherit Common, then retain an existing output reference.
 
-| Style | Recipe | Presentation |
-| --- | --- | --- |
-| WheelContextMenu | `SingleRingMenuStyleRecipe` | One native ring with configurable items and center. |
-| PieContextMenu | `ReplacementMenuStyleRecipe` | Replacement navigation and individually composed buttons. |
-| ListContextMenu | `ListMenuStyleRecipe` | List rows and inline foldouts. |
-| NestedWheelContextMenu | `ConcentricMenuStyleRecipe` | Parent ring and partial child arc. |
+An assigned theme source owns the family's visual geometry and composition. Existing recipe fields remain under **Advanced inline fallback** and apply when that source is absent. Input bindings, tool/gameplay behavior and recipe navigation policy are outside the theme source. Custom recipes retain their project-defined presenter and inline configuration.
 
-A custom recipe retains a project-defined presenter. Custom cards are a child-presentation example. Icon, label and richer center variations remain configurations of the wheel; they do not add another default style.
+The shared layout `ApplyTo` methods serve both typed sources and legacy inline recipes. Rebuild copies effective values into the existing `MenuProfile`; runtime presenters read that profile. State changes never select another radius, row height or hit-test geometry from a state asset.
 
-Per-style presenter, item, center, secondary and fallback skin references override Common. An empty override inherits Common, then retains an existing output reference. To return an output to native defaults, clear the shared/style override and clear the output reference. Existing custom prefab contents and private child transforms are never regenerated.
+Multiple configurations can reuse the same source. Editing it requires explicit Preview/Rebuild for each affected output. Changing the output's Asset Name does not rename an assigned profile. A selected-style rebuild leaves other outputs unchanged.
 
-Enable **Override show center** to give a radial or custom style its own center visibility. Replacement interaction recipes default to None; uncheck the override to inherit Common. The default list omits center information.
+The geometry panel is a layout sketch with up to twelve illustrative actions. It shows effective family layout and layered colors, not actual actions, custom prefab graphics, text metrics, animation or runtime viewport fitting. Validate those through the menu host and gallery.
 
-Enable **Override input bindings** for a style that needs distinct hold, ring-switch, secondary or other action references. The complete binding set is copied; referenced Input System actions retain their identity. Dead zone and hysteresis remain shared Common settings.
+## Reusable state style sets
 
-New wizard Common settings use the project's native uGUI navigation module. Configure existing semantic action references and turn off native uGUI navigation when the project needs analog sector selection, hold/release or bound secondary operations. The tool does not create another input asset or rebinding system.
+Common and each presentation source show six compact state slots: **Default (Any state)**, **Enabled (Normal)**, **Hovered**, **Selected**, **Disabled** and **Checked**. Each slot references one reusable runtime `MenuStyleSet`. Use **New** to create an asset and **Details** only when editing its contents. Empty slots inherit. Names such as `PositiveInactive` or `NegativeSelected` are asset-instance conventions, not a global enum.
 
-## MTK theme overrides
+`MenuStyleSet` derives from shared `MToolKit.Theme.ThemeStyleSet`. It references existing MTK Swatches for surface, foreground, description, icon and border, plus label/description Typesets and Spacing. Menu-specific channels are collapsed inside that asset's Inspector: explicit normal/hovered/selected/disabled fills, custom panel, center, auxiliary/footer, outside backdrop, inner/outer borders, separator and check marker. The ordinary slot editor does not repeat those individual fields.
 
-The primary theme controls are inline in Common and in each expanded style. They edit a sparse runtime `MenuSkin` asset containing references to existing MTK `Swatch`, `Typeset` and `Spacing` assets. **Create overrides** creates a new runtime asset under a normal `Assets/` folder; Editor folders, occupied paths, directories and orphan metadata are refused. Authoring Common/configuration assets can remain under `Assets/Editor`.
+Swatch fields reuse MTK's color-chip/asset drawer. **Open MTK Theme tools** opens the existing leaf-token configurator. Clearing a property permits inheritance. Empty fill channels use the asset's Surface; empty inner/outer border channels use its Border. Missing check-marker colors search all layers before finally using the resolved label color.
 
-The inline Swatch fields use MTK's existing color-chip/asset drawer. Typography fields reference MTK Typesets, including their font, sizing, style and spacing settings. **Open MTK Theme tools** opens the existing Theme Configurator for editing those assets. Each layer has one **Spacing (all states)** token for padding and gap; spacing is independent of interaction state.
+Each property resolves in this order:
 
-Colors and typography have these foldouts:
+1. Per-style exact state: direct legacy value, then state style asset.
+2. Per-style Default: direct legacy value, then Default style asset.
+3. Shared exact state and Default, in the same order.
+4. Fallback skin exact state and Default, in the same order.
+5. Native defaults or the preset's restored authored baseline.
 
-- **Default (Any state)** provides values for every state without its own entry in that layer.
-- **Enabled (Normal)**, **Hovered**, **Selected**, **Disabled** and **Checked** provide state-specific Swatches and label/description Typesets.
+A per-style Default therefore wins over a shared state-specific property. Disabled takes precedence over hover, selection and checked interaction state. Surface, text and border can vary independently. Swatches, Typesets and Spacing resolve semantic IDs through `IThemeService` unless the supplying asset or entire layer locks them to authored tokens.
 
-Unset properties inherit in this order, resolving each property independently:
+State packs contain no family geometry. Their Spacing token applies to the widget's explicitly wired MTK layout targets; the legacy spacing API continues to resolve Default/Any. Keep consistent state spacing when padding/gap should remain stable. Typesets bind through `TypesetPreset`. The framework does not add layout controllers to arbitrary custom prefab children; custom widgets can opt out with `UseSkin = false`.
 
-1. Per-style exact state, then per-style Default.
-2. Shared exact state, then shared Default.
-3. Fallback skin exact state, then fallback Default.
-4. Native widget defaults or the preset's restored authored baseline.
+Center, auxiliary and outside-backdrop channels are independent of an item's Surface. The backdrop's native default is black at 35% opacity; `MenuProfile.Backdrop = false` keeps it transparent. A custom center or presenter can deliberately own its own visuals.
 
-A per-style Default value therefore wins over a shared state-specific value. Swatches and Typesets resolve their semantic IDs through the supplied `IThemeService`, unless that layer disables **Resolve active MTK theme**. An explicit legacy local-color override wins over its Swatch, including transparent colors. The UI labels active local overrides; assigning a different Swatch clears that local-color mode.
+## Preserve or convert existing layers
 
-Interaction state and visual role are separate. Default item and native wedge fills request `Normal` for normal/checked state, `Hovered` for pointer hover, `Selected` for selection and `Disabled` for unavailable actions. Center and auxiliary/footer fills keep the `Center` and `Auxiliary` roles. Labels, descriptions and icons use their named roles with the active state; check markers use `Checked`. Disabled takes precedence over hover, selection and checked state. Custom presenters can consume any role.
+The existing `MenuSkin` remains the runtime layer container. Common's `ThemeOverrides` bakes into `MenuProfile.SharedThemeOverrides`; the selected source's layer bakes into `MenuProfile.ThemeOverrides`. The optional `MenuProfile.Skin` remains the fallback. Clearing a layer reference and rebuilding clears that layer on the selected output.
 
-`Backdrop` is the separate outside-overlay role; its native default is black at 35% opacity. It uses Default/Any tokens, follows theme refreshes, and remains transparent when `MenuProfile.Backdrop` is false. `Background` remains available for custom panel/background composition; an opaque legacy Background token does not become a full-screen overlay.
+**Advanced legacy overrides (count)** retains old direct Swatch/Typeset/Spacing fields and local raw colors. These direct properties win over the style asset in the same exact state, so the count identifies deliberate or inherited overrides that may mask a state asset.
 
-Common's `ThemeOverrides` reference bakes into `MenuProfile.SharedThemeOverrides`; a recipe's `ThemeOverrides` bakes into `MenuProfile.ThemeOverrides`. These remain separate from `MenuProfile.Skin`, the optional fallback. Clearing either authoring override reference and rebuilding clears that layer on the selected output, allowing inheritance from the next layer. Existing fallback skin retention continues to follow the composition rules above.
+Use **Preview legacy conversion** to choose an existing runtime Assets folder outside Editor folders. Inspect the exact proposed paths, then choose **Convert previewed tokens**. Conversion creates and verifies state assets before clearing converted direct entries. It preserves the layer/profile GUIDs and existing MTK token references; it does not duplicate Swatches, Typesets or Spacing. Occupied paths and already-assigned state slots are refused. Raw colors and ambiguous groups containing distinct inactive token references remain advanced rather than losing authored data. Unconverted values and existing style assets are not overwritten.
 
-Changing authoring references requires **Preview/Rebuild**. Editing a `MenuSkin` after preview invalidates the plan, so refresh the preview before rebuilding. An `IThemeService` theme update refreshes open menus. Ordinary MenuSkin/Swatch/Typeset edits do not necessarily emit that event; their values take effect on the next bind, refresh or theme update. The tool does not promise an immediate rerender from a raw asset edit.
+Runtime `MenuStyleSet` and `MenuSkin` assets belong outside Editor folders. Typed presentation theme sources and configurations are Editor-only and can live under `Assets/Editor`. Creation refuses foreign types, occupied files/directories and orphan metadata. The tool saves only its owned outputs and sources; it does not call global `SaveAssets`, rewrite custom prefab children or save unrelated scenes.
 
-Native widgets consume typography through MTK `TypesetPreset` and spacing through explicitly wired `SpacingPreset` targets. Custom widgets can provide their own targets or set `UseSkin = false` to retain their visual ownership. The framework does not add layout controllers to arbitrary custom prefab children. The geometry sketch resolves layered colors but remains a layout illustration, not a font/prefab preview.
+## Update timing and validation
 
-## Existing profiles and identity
+Changing source references or layout requires Preview/Rebuild. Source, state-style content or output edits after preview invalidate that plan. An `IThemeService` update refreshes open menus. Ordinary raw asset edits do not necessarily emit that event; token values take effect on the next bind, refresh or theme update.
 
-Assign an existing `MenuProfile` to a recipe's **Output** to rebuild it in place. Its GUID and existing host/action references remain valid. **Asset Name** names a new output; changing that name does not rename an assigned profile.
+Run `MToolKit.ContextMenus.Authoring.Tests.Editor` in Unity Test Runner, or select `MToolKit.Editor.ContextMenus.Tests`. Coverage includes typed source serialization, family layout, in-place GUID retention, shared state assets, stale plans, guarded creation, token-preserving conversion, custom composition and existing Addressables-only presenters.
 
-Direct custom presenters and valid typed Addressables presenter references are retained unless a direct presenter override is supplied. If a built-in recipe has no presenter, the tool creates a minimal native List or Radial presenter prefab. Null widget references continue using runtime widget defaults. A custom recipe requires an explicit or existing presenter.
-
-Preview and rebuild reject duplicate IDs, duplicate output targets, invalid profiles, self-referencing fallbacks and unexpected existing assets at new output paths. Rebuild also refuses changed source or target state after preview. Refresh the preview after intentional external edits.
-
-The tool saves only its selected profiles and authoring sources, plus newly created native presenter outputs. It does not rebuild scenes, overwrite existing prefab contents, call global `SaveAssets`, or save unrelated dirty assets/scenes. Removing a recipe removes the authoring entry; it does not delete its runtime assets.
+Authoring unit tests do not establish rendering or input behavior. Run the supplied gallery PlayMode tests and inspect its mouse, keyboard, controller, scaling and viewport behavior in the consuming project. Include the development-player checks required by that project's workflow.
 
 ## Editor API
 
-- `MenuStyleAuthoring.Preview(config, optionalStyleId)` returns diagnostics and a proposed asset plan without writing.
-- `MenuStyleAuthoring.Rebuild(plan)` revalidates the plan and returns updated runtime profiles.
-- `MenuStyleWizard.CreateDefaults(newAssetPath, optionalSharedCommon)` creates source assets only. Runtime outputs still require explicit preview/rebuild.
-- `MenuStyleAuthoring.CreateThemeOverrideAsset(newAssetPath)` creates a new runtime MenuSkin override asset with collision and destination checks.
-
-Authoring types live in Editor-only `MToolKit.Editor.ContextMenus`. Outputs use the standard runtime `MenuProfile`, presenter and widget contracts; game code does not depend on the authoring assembly.
-
-## Authoring validation
-
-Run `MToolKit.ContextMenus.Authoring.Tests.Editor` in Unity Test Runner, or select the `MToolKit.Editor.ContextMenus.Tests` namespace. Its fixtures cover shared settings, layer baking/clearing, in-place GUID retention, custom composition, Addressables-only presenters, stale plans, runtime-asset destination checks, foreign metadata/directory refusal, center visibility, selected-style rebuilds and caller scene/dirty-asset preservation.
-
-Validate rendering, input, transitions and viewport fitting through the supplied gallery PlayMode tests and the consuming project's menu host. Authoring unit tests do not establish those runtime results.
+- `MenuStyleAuthoring.Preview(config, optionalStyleId)` and `Rebuild(plan)` validate and apply selected outputs.
+- `MenuStyleWizard.CreateDefaults(newPath, optionalCommon)` creates authoring sources only.
+- `CreatePresentationThemeSetAsset(type, newPath)` creates a concrete typed Editor theme source.
+- `CreateMenuStyleSetAsset(newPath)` creates a reusable runtime state pack.
+- `CreateThemeOverrideAsset(newPath)` creates a runtime layer container.
+- `PreviewStyleSetConversion(layer, outputFolder)` and `ConvertStyleSets(plan)` explicitly migrate representable legacy tokens.

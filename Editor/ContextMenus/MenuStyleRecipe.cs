@@ -29,26 +29,36 @@ namespace MToolKit.Editor.ContextMenus
     public abstract string DisplayName { get; }
     public virtual bool UsesRadialLayout => false;
     internal virtual Type DefaultPresenterType => null;
+    internal virtual MenuPresentationThemeSet PresentationTheme => null;
+    internal virtual Type PresentationThemeType => null;
     internal abstract void ApplySpecialized(MenuProfile profile);
   }
 
   [Serializable]
   public sealed class ListMenuStyleRecipe : MenuStyleRecipe
   {
+    public ListMenuThemeSet ThemeSet;
     public float ListWidth = 380;
     public float RowHeight = 48;
     public MenuNavigationPolicy Navigation = MenuNavigationPolicy.Inline;
     public override string DisplayName => "ListContextMenu";
     internal override Type DefaultPresenterType => typeof(MToolKit.ContextMenus.Presentation.ListMenuPresenter);
+    internal override MenuPresentationThemeSet PresentationTheme => ThemeSet;
+    internal override Type PresentationThemeType => typeof(ListMenuThemeSet);
     internal override void ApplySpecialized(MenuProfile profile)
     {
-      profile.ListWidth = ListWidth; profile.RowHeight = RowHeight;
-      profile.Navigation = Navigation; profile.ShowCenter = false;
+      if (ThemeSet != null) ThemeSet.ApplyTo(profile);
+      else
+      {
+        new MenuListLayout { ListWidth = ListWidth, RowHeight = RowHeight }.ApplyTo(profile);
+        profile.ShowCenter = false;
+      }
+      profile.Navigation = Navigation;
     }
   }
 
   [Serializable]
-  public class SingleRingMenuStyleRecipe : MenuStyleRecipe
+  public abstract class RadialMenuStyleRecipe : MenuStyleRecipe
   {
     public float InnerRadius = 166;
     public float RingWidth = 90;
@@ -61,32 +71,53 @@ namespace MToolKit.Editor.ContextMenus
     internal override Type DefaultPresenterType => typeof(MToolKit.ContextMenus.Presentation.RadialMenuPresenter);
     internal override void ApplySpecialized(MenuProfile profile)
     {
-      profile.InnerRadius = InnerRadius; profile.RingWidth = RingWidth;
-      profile.StartAngle = StartAngle; profile.Clockwise = Clockwise;
-      profile.AngularGap = AngularGap; profile.DrawSegments = DrawSegments;
+      LegacyLayout.ApplyTo(profile);
+      profile.Navigation = MenuNavigationPolicy.Replacement;
+    }
+    protected MenuWheelLayout LegacyLayout => new MenuWheelLayout {
+      InnerRadius = InnerRadius, RingWidth = RingWidth, StartAngle = StartAngle,
+      Clockwise = Clockwise, AngularGap = AngularGap, DrawSegments = DrawSegments
+    };
+  }
+
+  [Serializable]
+  public class SingleRingMenuStyleRecipe : RadialMenuStyleRecipe
+  {
+    public WheelMenuThemeSet ThemeSet;
+    internal override MenuPresentationThemeSet PresentationTheme => ThemeSet;
+    internal override Type PresentationThemeType => typeof(WheelMenuThemeSet);
+    internal override void ApplySpecialized(MenuProfile profile)
+    {
+      if (ThemeSet != null) ThemeSet.ApplyTo(profile); else base.ApplySpecialized(profile);
       profile.Navigation = MenuNavigationPolicy.Replacement;
     }
   }
 
   [Serializable]
-  public sealed class ConcentricMenuStyleRecipe : SingleRingMenuStyleRecipe
+  public sealed class ConcentricMenuStyleRecipe : RadialMenuStyleRecipe
   {
+    public NestedWheelMenuThemeSet ThemeSet;
+    internal override MenuPresentationThemeSet PresentationTheme => ThemeSet;
+    internal override Type PresentationThemeType => typeof(NestedWheelMenuThemeSet);
     public float RingGap = 12;
     public float ChildRingWidth = 72;
     public float ChildArcDegrees = 120;
     public override string DisplayName => "NestedWheelContextMenu";
     internal override void ApplySpecialized(MenuProfile profile)
     {
-      base.ApplySpecialized(profile);
+      if (ThemeSet != null) ThemeSet.ApplyTo(profile);
+      else new MenuNestedWheelLayout { InnerRing = LegacyLayout, RingGap = RingGap,
+        ChildRingWidth = ChildRingWidth, ChildArcDegrees = ChildArcDegrees }.ApplyTo(profile);
       profile.Navigation = MenuNavigationPolicy.Concentric;
-      profile.RingGap = RingGap; profile.ChildRingWidth = ChildRingWidth;
-      profile.ChildArcDegrees = ChildArcDegrees;
     }
   }
 
   [Serializable]
-  public sealed class ReplacementMenuStyleRecipe : SingleRingMenuStyleRecipe
+  public sealed class ReplacementMenuStyleRecipe : RadialMenuStyleRecipe
   {
+    public PieMenuThemeSet ThemeSet;
+    internal override MenuPresentationThemeSet PresentationTheme => ThemeSet;
+    internal override Type PresentationThemeType => typeof(PieMenuThemeSet);
     public ReplacementMenuStyleRecipe()
     {
       DrawSegments = false;
@@ -95,7 +126,11 @@ namespace MToolKit.Editor.ContextMenus
       ShowCenter = false;
     }
     public override string DisplayName => "PieContextMenu";
-    internal override void ApplySpecialized(MenuProfile profile) => base.ApplySpecialized(profile);
+    internal override void ApplySpecialized(MenuProfile profile)
+    {
+      if (ThemeSet != null) ThemeSet.ApplyTo(profile); else base.ApplySpecialized(profile);
+      profile.Navigation = MenuNavigationPolicy.Replacement;
+    }
   }
 
   [Serializable]

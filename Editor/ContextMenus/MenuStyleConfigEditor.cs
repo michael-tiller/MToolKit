@@ -11,14 +11,22 @@ namespace MToolKit.Editor.ContextMenus
   {
     private MenuStyleBuildPlan plan;
     private string message;
-    private bool failed, commonExpanded = true;
+    private bool failed, commonExpanded = true, commonDetails;
+    private UnityEditor.Editor presentationInspector;
+    private string expandedSource;
     private int previewIndex;
     private readonly MenuThemeOverridesGUI themeOverrides = new MenuThemeOverridesGUI();
     private readonly HashSet<string> composition = new HashSet<string>();
     private static readonly HashSet<string> BaseFields = new HashSet<string> {
       "Id", "AssetName", "Output", "PresenterPrefab", "ItemPrefab", "CenterPrefab", "SecondaryPrefab",
-      "ThemeOverrides", "Skin", "OverrideShowCenter", "ShowCenter", "OverrideInputBindings", "InputBindings", "MaximumVisibleItems", "WidgetSize"
+      "ThemeOverrides", "ThemeSet", "Skin", "OverrideShowCenter", "ShowCenter", "OverrideInputBindings", "InputBindings", "MaximumVisibleItems", "WidgetSize", "Navigation"
     };
+
+    private void OnDisable()
+    {
+      themeOverrides.Dispose();
+      if (presentationInspector != null) DestroyImmediate(presentationInspector);
+    }
 
     public override void OnInspectorGUI()
     {
@@ -52,36 +60,36 @@ namespace MToolKit.Editor.ContextMenus
           recipe.DisplayName + " — " + recipe.AssetName, true);
         if (property.isExpanded)
         {
-          Draw(property, "AssetName", "Output", "PresenterPrefab");
-          themeChanged |= themeOverrides.Draw(property.FindPropertyRelative("ThemeOverrides"), "style:" + recipe.Id,
-            "MTK theme overrides (style)", recipe.AssetName + "_ThemeOverrides", config.OutputFolder);
-
+          Draw(property, "AssetName", "Output");
+          if (recipe.PresentationThemeType != null) themeChanged |= DrawPresentationSource(property, recipe, config);
+          bool hasSource = property.FindPropertyRelative("ThemeSet")?.objectReferenceValue != null;
           bool open = composition.Contains(recipe.Id);
-          bool next = EditorGUILayout.Foldout(open, "Composition and input overrides", true);
+          bool next = EditorGUILayout.Foldout(open, hasSource ? "Advanced inline fallback (inactive)" : "Advanced inline fallback (active)", true);
           if (next) composition.Add(recipe.Id); else composition.Remove(recipe.Id);
           if (next)
           {
             EditorGUI.indentLevel++;
-            EditorGUILayout.HelpBox("Empty prefab and fallback skin references inherit common values, then retain the existing output. Custom prefab children are preserved.", MessageType.None);
-            Draw(property, "ItemPrefab", "CenterPrefab", "SecondaryPrefab");
+            if (hasSource) EditorGUILayout.HelpBox("The assigned typed source owns visual layout/composition. These retained fields apply only after clearing Theme set.", MessageType.None);
+            else EditorGUILayout.HelpBox("These inline values remain active until a typed Theme set is assigned. Empty prefabs inherit Common, then retain an existing output reference.", MessageType.None);
+            themeChanged |= themeOverrides.Draw(property.FindPropertyRelative("ThemeOverrides"), "style:" + recipe.Id,
+              "Legacy per-style state layer", recipe.AssetName + "_ThemeOverrides", config.OutputFolder);
+            Draw(property, "PresenterPrefab", "ItemPrefab", "CenterPrefab", "SecondaryPrefab");
             DrawFallbackSkin(property.FindPropertyRelative("Skin"));
             Draw(property, "OverrideShowCenter");
             if (property.FindPropertyRelative("OverrideShowCenter").boolValue) Draw(property, "ShowCenter");
-            Draw(property, "OverrideInputBindings");
-            if (property.FindPropertyRelative("OverrideInputBindings").boolValue) Draw(property, "InputBindings");
+            Draw(property, "MaximumVisibleItems", "WidgetSize");
+            var iterator = property.Copy();
+            int depth = property.depth;
+            bool enter = true;
+            while (iterator.NextVisible(enter) && iterator.depth > depth)
+            {
+              enter = false;
+              if (iterator.depth == depth + 1 && !BaseFields.Contains(iterator.name)) EditorGUILayout.PropertyField(iterator, true);
+            }
             EditorGUI.indentLevel--;
           }
-          EditorGUILayout.LabelField("Layout", EditorStyles.boldLabel);
-          Draw(property, "MaximumVisibleItems", "WidgetSize");
-          var iterator = property.Copy();
-          int depth = property.depth;
-          bool enter = true;
-          while (iterator.NextVisible(enter) && iterator.depth > depth)
-          {
-            enter = false;
-            if (iterator.depth == depth + 1 && !BaseFields.Contains(iterator.name))
-              EditorGUILayout.PropertyField(iterator, true);
-          }
+          Draw(property, "Navigation", "OverrideInputBindings");
+          if (property.FindPropertyRelative("OverrideInputBindings").boolValue) Draw(property, "InputBindings");
           EditorGUILayout.BeginHorizontal();
           if (GUILayout.Button("Geometry")) previewIndex = i;
           if (GUILayout.Button("Preview changes")) pendingPreview = recipe.Id;
@@ -132,14 +140,50 @@ namespace MToolKit.Editor.ContextMenus
         common.Update();
         changed |= themeOverrides.Draw(common.FindProperty("ThemeOverrides"), "common:" + config.Common.GetInstanceID(),
           "MTK theme overrides (shared)", config.Common.name + "_ThemeOverrides", config.OutputFolder);
-        EditorGUILayout.LabelField("Fallback and composition", EditorStyles.boldLabel);
-        DrawFallbackSkin(common.FindProperty("Skin"));
-        Draw(common, "ItemPrefab", "CenterPrefab", "SecondaryPrefab", "FallbackProfile", "ShowCenter", "Backdrop");
-        EditorGUILayout.LabelField("Input", EditorStyles.boldLabel);
-        Draw(common, "InputBindings", "AnalogDeadZone", "AnalogHysteresis");
-        EditorGUILayout.LabelField("Accessibility and placement", EditorStyles.boldLabel);
-        Draw(common, "Anchor", "MinimumTargetSize", "ReducedMotion", "Transition");
+        commonDetails = EditorGUILayout.Foldout(commonDetails, "Input, accessibility and host composition", true);
+        if (commonDetails)
+        {
+          DrawFallbackSkin(common.FindProperty("Skin"));
+          Draw(common, "ItemPrefab", "CenterPrefab", "SecondaryPrefab", "FallbackProfile", "ShowCenter", "Backdrop");
+          EditorGUILayout.LabelField("Input", EditorStyles.boldLabel);
+          Draw(common, "InputBindings", "AnalogDeadZone", "AnalogHysteresis");
+          EditorGUILayout.LabelField("Accessibility and placement", EditorStyles.boldLabel);
+          Draw(common, "Anchor", "MinimumTargetSize", "ReducedMotion", "Transition");
+        }
         changed |= common.ApplyModifiedProperties();
+      }
+      return changed;
+    }
+
+    private bool DrawPresentationSource(SerializedProperty property, MenuStyleRecipe recipe, MenuStyleConfig config)
+    {
+      var slot = property.FindPropertyRelative("ThemeSet");
+      EditorGUILayout.BeginHorizontal();
+      EditorGUI.BeginChangeCheck();
+      EditorGUILayout.PropertyField(slot, new GUIContent("Theme set"));
+      bool changed = EditorGUI.EndChangeCheck();
+      if (GUILayout.Button("Create", GUILayout.Width(52)))
+      {
+        string folder = System.IO.Path.GetDirectoryName(AssetDatabase.GetAssetPath(config))?.Replace('\\', '/');
+        string path = EditorUtility.SaveFilePanelInProject("Create " + recipe.DisplayName + " theme source", recipe.AssetName + "_Theme",
+          "asset", "Choose a new reusable Editor authoring source. Runtime profiles are updated only on Rebuild.", folder);
+        if (!string.IsNullOrEmpty(path))
+          Execute(() => { slot.objectReferenceValue = MenuStyleAuthoring.CreatePresentationThemeSetAsset(recipe.PresentationThemeType, path); changed = true; });
+      }
+      var source = slot.objectReferenceValue as MenuPresentationThemeSet;
+      using (new EditorGUI.DisabledScope(source == null))
+        if (GUILayout.Button(expandedSource == recipe.Id ? "Hide" : "Details", GUILayout.Width(58)))
+          expandedSource = expandedSource == recipe.Id ? null : recipe.Id;
+      EditorGUILayout.EndHorizontal();
+      if (source == null)
+        EditorGUILayout.HelpBox("Assign or create the correctly typed theme for this presentation. Existing inline settings remain active until then.", MessageType.None);
+      if (source != null && expandedSource == recipe.Id)
+      {
+        using (new EditorGUI.IndentLevelScope())
+        {
+          UnityEditor.Editor.CreateCachedEditor(source, typeof(MenuPresentationThemeSetEditor), ref presentationInspector);
+          EditorGUI.BeginChangeCheck(); presentationInspector.OnInspectorGUI(); changed |= EditorGUI.EndChangeCheck();
+        }
       }
       return changed;
     }
