@@ -25,6 +25,38 @@ namespace MToolKit.Editor.ContextMenus.Tests
       common = Save<MenuCommonSettings>("Common"); config = Save<MenuStyleConfig>("Styles");
       config.Common = common; config.OutputFolder = root + "/Generated";
     }
+    [TestCase(false)]
+    [TestCase(true)]
+    public void ListOverflowIsAuthorableAndBakedWithoutChangingRowGeometryOrAssetIdentity(bool typedTheme)
+    {
+      var field = (typedTheme ? typeof(MenuListLayout) : typeof(ListMenuStyleRecipe)).GetField("Overflow");
+      Assert.That(field, Is.Not.Null, "Both typed and inline list authoring must expose the optional scrolling policy.");
+      Assert.That(field.FieldType.FullName, Is.EqualTo("MToolKit.ContextMenus.Configuration.MenuListOverflowPolicy"));
+      var scrolling = Enum.Parse(field.FieldType, "Scrolling");
+      var output = Save<MenuProfile>("ScrollableOutput");
+      var recipe = new ListMenuStyleRecipe { Output = output, ListWidth = 466, RowHeight = 66 };
+      string sourceBefore = null;
+      if (typedTheme)
+      {
+        var source = Save<ListMenuThemeSet>("ScrollableTheme");
+        object layout = new MenuListLayout { ListWidth = 466, RowHeight = 66 };
+        field.SetValue(layout, scrolling); source.Layout = (MenuListLayout)layout;
+        recipe.ThemeSet = source; sourceBefore = EditorJsonUtility.ToJson(source);
+      }
+      else field.SetValue(recipe, scrolling);
+      config.Styles = new MenuStyleRecipe[] { recipe };
+      string guid = GuidOf(output);
+
+      MenuStyleAuthoring.Rebuild(MenuStyleAuthoring.Preview(config));
+
+      var overflow = typeof(MenuProfile).GetProperty("ListOverflow");
+      Assert.That(overflow, Is.Not.Null);
+      Assert.That(overflow.GetValue(output), Is.EqualTo(scrolling));
+      Assert.That(output.ListWidth, Is.EqualTo(466)); Assert.That(output.RowHeight, Is.EqualTo(66));
+      Assert.That(GuidOf(output), Is.EqualTo(guid));
+      if (typedTheme) Assert.That(EditorJsonUtility.ToJson(recipe.ThemeSet), Is.EqualTo(sourceBefore));
+    }
+
     [TearDown]
     public void TearDown()
     {

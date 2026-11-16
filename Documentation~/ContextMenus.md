@@ -147,11 +147,29 @@ The profile's root prefab supplies `IContextMenuPresenter`; it chooses the imple
 without changing any action definition.
 
 - `ListMenuPresenter`: inline foldouts by default, replacement/flyout policies,
-  scrolling by page, checked/disabled rows and local Back.
+  configurable pagination or native scrolling, checked/disabled rows and local Back.
 - `RadialMenuPresenter`: single ring, arbitrary-depth replacement, or a concentric
   two-ring sliding window with a partial child arc.
 - A custom presenter: implement the lifecycle and semantic operations on a root
   RectTransform, bind the shared session and own your transforms/animation.
+
+Lists preserve pagination by default. Set `MenuProfile.ListOverflow` to
+`MenuListOverflowPolicy.Scrolling` for a native vertical `ScrollRect` with clipped
+content. `MaximumVisibleItems` limits the viewport's readable rows; the content
+contains the full expanded hierarchy. Keyboard/controller selection uses MTK's
+existing reveal helper, and clipped rows cannot be confirmed outside the viewport.
+The footer stays outside the clip. No item size or font reduction is used to fit
+additional rows. The same policy is exposed by `ListMenuThemeSet.Layout.Overflow`
+and the List recipe's inline `Overflow` setting; rebuild the profile after editing
+its authoring source.
+
+Scrolling rows use native pointer release and drag cancellation, so starting a drag
+does not invoke the row command. Wheel/drag input preserves the viewport offset;
+Page bindings move selection by a viewport and reveal it. Keep the existing Point
+binding assigned for mixed mouse/keyboard/controller use: layout-generated hover
+events then leave keyboard/controller selection intact until deliberate pointer
+input takes ownership. Profiles without a resolved Point binding retain their
+legacy native-hover fallback. Custom widgets retain their configured callbacks.
 
 `MenuSession` exposes `RootActions`, current `Actions`, visible paged `Rows` with depth
 and expansion state, `Selected`, `Path`, `PathActions`, `ParentActions` and

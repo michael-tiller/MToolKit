@@ -40,6 +40,7 @@ namespace MToolKit.Editor.ContextMenus
     public ListMenuThemeSet ThemeSet;
     public float ListWidth = 380;
     public float RowHeight = 48;
+    public MenuListOverflowPolicy Overflow = MenuListOverflowPolicy.Pagination;
     public MenuNavigationPolicy Navigation = MenuNavigationPolicy.Inline;
     public override string DisplayName => "ListContextMenu";
     internal override Type DefaultPresenterType => typeof(MToolKit.ContextMenus.Presentation.ListMenuPresenter);
@@ -50,7 +51,7 @@ namespace MToolKit.Editor.ContextMenus
       if (ThemeSet != null) ThemeSet.ApplyTo(profile);
       else
       {
-        new MenuListLayout { ListWidth = ListWidth, RowHeight = RowHeight }.ApplyTo(profile);
+        new MenuListLayout { ListWidth = ListWidth, RowHeight = RowHeight, Overflow = Overflow }.ApplyTo(profile);
         profile.ShowCenter = false;
       }
       profile.Navigation = Navigation;

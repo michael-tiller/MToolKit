@@ -329,7 +329,7 @@ namespace MToolKit.ContextMenus.Presentation
     protected void ConfigureNavigation(MenuWidgetInstance item)
     {
       if (item.DefaultWidget?.Button == null) return;
-      item.DefaultWidget.Button.enabled = !Profile.InputBindings.RoutePointerClick;
+      item.DefaultWidget.Button.enabled = !Profile.InputBindings.RoutePointerClick || PreferNativeItemPointer;
       var navigation = item.DefaultWidget.Button.navigation;
       navigation.mode = Profile.InputBindings.UseNativeUguiNavigation ? Navigation.Mode.Automatic : Navigation.Mode.None;
       item.DefaultWidget.Button.navigation = navigation;
@@ -382,6 +382,7 @@ namespace MToolKit.ContextMenus.Presentation
     {
       if (!IsBound) return;
       if (!entered) { ClearPointerHover(action); return; }
+      if (!AcceptNativePointerHover) return;
       var before = Session.Selected; var mode = Session.InteractionMode;
       bool changed = SetPointerHovered(action);
       Session.InteractionMode = MenuInteractionMode.Pointer;
@@ -433,7 +434,11 @@ namespace MToolKit.ContextMenus.Presentation
       finally { widgetConfirmation = false; }
     }
     protected Action PointerActivation(MenuAction action)
-      => Profile.InputBindings.RoutePointerClick || !action.Behavior.IsInteractive ? null : () => ActivateAction(action);
+      => Profile.InputBindings.RoutePointerClick && !PreferNativeItemPointer || !action.Behavior.IsInteractive ? null : () => ActivateAction(action);
+    /// <summary>A native scrolling row may retain release/drag click ownership while navigation stays semantic.</summary>
+    protected virtual bool PreferNativeItemPointer => false;
+    protected virtual bool NativeItemPointerOwnsConfirmation() => false;
+    protected virtual bool AcceptNativePointerHover => true;
     protected Color ColorFor(MenuVisualRole role, MenuThemeState state = MenuThemeState.Any)
       => Profile.GetTheme(Context.Themes).GetColor(role, state);
 
@@ -445,7 +450,9 @@ namespace MToolKit.ContextMenus.Presentation
       public bool Enabled = true, Hovered;
     }
 
-    protected void SetFooter(Vector2 position, float width)
+    protected void SetFooter(Vector2 position, float width) => SetFooter(position, width, true);
+
+    protected void SetFooter(Vector2 position, float width, bool showPagination)
     {
       if (footer == null)
       {
@@ -470,11 +477,12 @@ namespace MToolKit.ContextMenus.Presentation
         nextButton = Button("Next", () => Page(1), out nextLabel);
       }
       MenuWidgetFactory.Place((RectTransform)footer.transform, position, new Vector2(width, 36));
-      float itemWidth = width / 3;
+      float itemWidth = showPagination ? width / 3 : width;
       for (int i = 0; i < 3; i++)
       {
         var rect = (RectTransform)footer.transform.GetChild(i);
-        MenuWidgetFactory.Place(rect, new Vector2((i - 1) * itemWidth, 0), new Vector2(itemWidth - 2, 36));
+        rect.gameObject.SetActive(showPagination || i == 0);
+        MenuWidgetFactory.Place(rect, new Vector2(showPagination ? (i - 1) * itemWidth : 0, 0), new Vector2(itemWidth - 2, 36));
       }
       footerControls[0].Label = Session.Path.Count == 0 ? "Close" : "Back";
       footerControls[1].Label = "Previous"; footerControls[1].Enabled = Session.PageIndex > 0;
@@ -583,7 +591,7 @@ namespace MToolKit.ContextMenus.Presentation
     {
       if (widgetConfirmation) return false;
       if (holdConfirmation) return PointerControlOwnsInput || NativeControlHasFocus;
-      if (pointerConfirmation) return PointerControlOwnsInput;
+      if (pointerConfirmation) return PointerControlOwnsInput || NativeItemPointerOwnsConfirmation();
       if (!IsBound || Profile.InputBindings.UseNativeUguiNavigation) return false;
       var control = FocusedControl<ISubmitHandler>();
       if (control == null) return false;

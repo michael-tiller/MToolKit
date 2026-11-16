@@ -21,7 +21,7 @@ Each recipe accepts one specific source asset type through Unity's typed object 
 | --- | --- | --- | --- |
 | `WheelContextMenu` | `SingleRingMenuStyleRecipe` | `WheelMenuThemeSet` | Radius, ring width, start angle, direction and gaps. |
 | `PieContextMenu` | `ReplacementMenuStyleRecipe` | `PieMenuThemeSet` | Button orbit and size; optional background ring. |
-| `ListContextMenu` | `ListMenuStyleRecipe` | `ListMenuThemeSet` | List width and row height. |
+| `ListContextMenu` | `ListMenuStyleRecipe` | `ListMenuThemeSet` | List width, row height and Pagination/Scrolling overflow. |
 | `NestedWheelContextMenu` | `ConcentricMenuStyleRecipe` | `NestedWheelMenuThemeSet` | Independent parent/child widths, inter-ring gap and partial child arc. |
 
 These derive from Editor-only `MenuPresentationThemeSet`. A source also owns visible-item capacity, item/button size, center visibility, backdrop and optional presenter/item/center/secondary prefabs. Its `ThemeOverrides` reference supplies the per-style runtime state layer. Empty visual references inherit Common, then retain an existing output reference.

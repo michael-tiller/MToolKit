@@ -7,6 +7,7 @@ using UnityEngine;
 namespace MToolKit.ContextMenus.Configuration
 {
   public enum MenuNavigationPolicy { Inline, Replacement, Concentric, Flyout }
+  public enum MenuListOverflowPolicy { Pagination = 0, Scrolling = 1 }
   public enum MenuAnchorPolicy
   {
     CursorTopLeft = 0, TopLeft = CursorTopLeft, Centered = 1, BottomCenter = 2,
@@ -39,6 +40,7 @@ namespace MToolKit.ContextMenus.Configuration
     [field: SerializeField] public int MaximumVisibleItems { get; set; } = 8;
     [field: SerializeField] public float ListWidth { get; set; } = 320;
     [field: SerializeField] public float RowHeight { get; set; } = 40;
+    [field: SerializeField] public MenuListOverflowPolicy ListOverflow { get; set; } = MenuListOverflowPolicy.Pagination;
     [field: SerializeField] public Vector2 WidgetSize { get; set; } = new Vector2(96, 64);
     [field: SerializeField] public bool ShowCenter { get; set; } = true;
     [field: SerializeField] public bool Backdrop { get; set; } = true;
@@ -59,6 +61,7 @@ namespace MToolKit.ContextMenus.Configuration
       diagnostic = null;
       if (Transition != null && !Transition.Validate(out diagnostic)) return false;
       if (!Enum.IsDefined(typeof(MenuNavigationPolicy), Navigation)) return Invalid(nameof(Navigation), out diagnostic);
+      if (!Enum.IsDefined(typeof(MenuListOverflowPolicy), ListOverflow)) return Invalid(nameof(ListOverflow), out diagnostic);
       if (!Enum.IsDefined(typeof(MenuAnchorPolicy), Anchor)) return Invalid(nameof(Anchor), out diagnostic);
       if (FallbackProfile == this) return Invalid(nameof(FallbackProfile), out diagnostic);
       if (!Finite(InnerRadius) || InnerRadius < 0) return Invalid(nameof(InnerRadius), out diagnostic);

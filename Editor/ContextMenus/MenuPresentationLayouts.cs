@@ -8,11 +8,15 @@ namespace MToolKit.Editor.ContextMenus
   {
     public float ListWidth;
     public float RowHeight;
-    public static MenuListLayout Default => new MenuListLayout { ListWidth = 380, RowHeight = 48 };
+    public MenuListOverflowPolicy Overflow;
+    public static MenuListLayout Default => new MenuListLayout {
+      ListWidth = 380, RowHeight = 48, Overflow = MenuListOverflowPolicy.Pagination
+    };
     public void ApplyTo(MenuProfile profile)
     {
       if (profile == null) throw new ArgumentNullException(nameof(profile));
       profile.ListWidth = ListWidth; profile.RowHeight = RowHeight;
+      profile.ListOverflow = Overflow;
     }
   }
 

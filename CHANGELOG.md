@@ -12,6 +12,8 @@ not a roadmap milestone.
 
 ### Added
 
+- Add optional native list scrolling alongside default pagination, with typed/inline authoring, clipped flyout columns, keyboard/controller selection reveal and viewport navigation. Preserve native release/drag ownership and prevent stationary-pointer hover from taking selection back during scrolling. (v1.25.0)
+
 - Add independent optional icon and full-color image sprites to runtime/authored menu actions, scoped child and secondary placements, widget snapshots and default item/center widgets. Preserve authored artwork color, collapse empty artwork slots, and clear reused visuals safely. Supply original artwork and editable examples across all four menu presentations, including dynamic inventory and auxiliary actions. (v1.24.0)
 
 - Add reusable MTK Theme style-set assets and compact menu state slots with independent Swatch, Typeset and Spacing tokens. Add typed Wheel, Nested Wheel, Pie and List presentation theme sources, preserving runtime profile identities and input ownership. Preview token-preserving legacy conversion, retain ambiguous/raw overrides, and fence rebuilds against edits to referenced style assets. (v1.23.0)

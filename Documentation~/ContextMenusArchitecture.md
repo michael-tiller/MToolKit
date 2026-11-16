@@ -33,7 +33,7 @@ direction in ADR-0023. No Asset Store source is part of the public module.
 | Assets | `AssetReferenceBase<T>`, `IRuntimeAssetService`, `IAssetLoader` | `ContextMenuPrefabReference : AssetReferenceBase<GameObject>` supplies the optional presenter reference. `MenuPrefabCache` owns prewarmed assets. Item, center and secondary widget references are direct `GameObject` references. |
 | Theme | `IThemeService`, `ThemePreset<TAsset>`, `SwatchPreset`, `TypesetPreset`, `SpacingPreset` | Semantic visual tokens, live updates and authored local overrides. |
 | Responsive UI | `UserUiScaleCanvas`, `UiScaleCapacity`, `TypesetPreset` accessibility calculation | React to existing scale/viewport events, preserve minimum text/hit sizes, reposition or use configured overflow. |
-| List overflow | `MenuSession` page state and `ListMenuPresenter` | The supplied list bounds its page capacity and maps the scroll wheel to paging. It does not claim to contain a smooth `ScrollRect`; custom presenters may reuse `UI/ScrollIntoViewOnSelect.cs` when they supply one. |
+| List overflow | `MenuSession` page state, `ListMenuPresenter`, native `ScrollRect` and `UI/ScrollIntoViewOnSelect.cs` | Pagination remains the default. The optional Scrolling policy keeps all expanded rows in clipped content while bounding viewport rows; keyboard/controller selection reuses the existing reveal helper. |
 
 Important API details:
 

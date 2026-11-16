@@ -594,6 +594,97 @@ namespace MToolKit.ContextMenus.Samples.Tests
       Assert.That(((IMenuViewportAwarePresenter)gallery.MenuService.Presenter).FitsViewport, Is.True);
     }
 
+    [UnityTest]
+    public IEnumerator Saved_list_scrolling_masks_rows_scrolls_without_activation_and_reveals_gamepad_selection()
+    {
+      var profile = Object.Instantiate(gallery.HostConfig.Resolve(MenuGalleryController.ListContextMenu));
+      ownedObjects.Add(profile);
+      var overflow = typeof(MenuProfile).GetProperty("ListOverflow");
+      Assert.That(overflow, Is.Not.Null, "The saved list prefab needs the authorable scrolling policy.");
+      overflow.SetValue(profile, Enum.Parse(overflow.PropertyType, "Scrolling"));
+      profile.MaximumVisibleItems = 4; profile.RowHeight = 48; profile.ListWidth = 320;
+      profile.Navigation = MenuNavigationPolicy.Inline;
+      // Keep the saved action references: Configure replaces the entire binding set.
+      Assert.That(profile.InputBindings.UseNativeUguiNavigation, Is.False);
+      Assert.That(profile.InputBindings.RoutePointerClick, Is.True);
+      Assert.That(profile.InputBindings.Navigate, Is.Not.Null); Assert.That(profile.InputBindings.Click, Is.Not.Null);
+      Assert.That(profile.InputBindings.Submit, Is.Not.Null);
+      int executions = 0;
+      var actions = new MenuAction[24];
+      for (int i = 0; i < actions.Length; i++)
+        actions[i] = new MenuAction("scroll." + i, new MenuLabel("Scroll " + i),
+          new MenuCommandBehavior(_ => executions++, MenuActionOutcome.Keep));
+      var gameplay = new List<InputAction>();
+      foreach (var action in gallery.InputModule.actionsAsset.FindActionMap("Player").actions) gameplay.Add(action);
+      var menuContext = new MenuContext(gallery.State);
+      yield return gallery.MenuService.OpenAsync(new MenuOpenRequest(actions, menuContext, gallery.Canvas,
+        new Vector2(Screen.width * .5f, Screen.height * .5f), profile: profile, gameplayActions: gameplay)).ToCoroutine();
+      yield return null; yield return null;
+      var presenter = gallery.MenuService.Presenter;
+      var session = gallery.MenuService.Session;
+      var scroll = presenter.Root.GetComponentInChildren<ScrollRect>();
+      Assert.That(scroll, Is.Not.Null); Assert.That(scroll.viewport.GetComponent<RectMask2D>(), Is.Not.Null);
+      Assert.That(session.Rows.Count, Is.EqualTo(24)); Assert.That(session.PageCount, Is.EqualTo(1));
+      Assert.That(scroll.content.rect.height, Is.GreaterThan(scroll.viewport.rect.height));
+
+      MenuActionWidget Row(int index)
+      {
+        foreach (var widget in presenter.Root.GetComponentsInChildren<MenuActionWidget>(true))
+          if (widget.Label != null && widget.Label.text == "Scroll " + index) return widget;
+        Assert.Fail("Saved list widget missing: Scroll " + index); return null;
+      }
+      Vector2 Point(MenuActionWidget widget) => RectTransformUtility.WorldToScreenPoint(null,
+        widget.transform.TransformPoint(((RectTransform)widget.transform).rect.center));
+      mouse ??= InputSystem.AddDevice<Mouse>();
+      gallery.InputModule.actionsAsset.devices = new InputDevice[] { gamepad, mouse };
+
+      var clipped = Row(4);
+      var hits = new List<RaycastResult>();
+      EventSystem.current.RaycastAll(new PointerEventData(EventSystem.current) { position = Point(clipped) }, hits);
+      foreach (var hit in hits)
+        Assert.That(hit.gameObject.transform.IsChildOf(clipped.transform), Is.False,
+          "The real GraphicRaycaster must reject the first clipped row over the footer.");
+
+      Vector2 point = Point(Row(1));
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = point }); yield return null; yield return null;
+      float beforeWheel = scroll.content.anchoredPosition.y;
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = point, scroll = new Vector2(0, -120) });
+      yield return null; yield return null;
+      Assert.That(scroll.content.anchoredPosition.y, Is.GreaterThan(beforeWheel + .1f));
+      Assert.That(executions, Is.Zero); Assert.That(session.PageIndex, Is.Zero);
+
+      scroll.StopMovement(); scroll.verticalNormalizedPosition = 1; yield return null; yield return null;
+      point = Point(Row(1));
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = point }); yield return null; yield return null;
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = point, buttons = 1 }); yield return null; yield return null;
+      Assert.That(executions, Is.Zero, "Press must leave time for the native row gesture to become a drag.");
+      // Native ScrollRect captures its starting cursor when the drag threshold is crossed.
+      // A second held movement must follow that begin event before release can demonstrate scrolling.
+      var dragStart = point + Vector2.up * 32;
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = dragStart, buttons = 1 }); yield return null; yield return null;
+      var end = point + Vector2.up * 96;
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = end, buttons = 1 }); yield return null; yield return null;
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = end }); yield return null; yield return null;
+      Assert.That(executions, Is.Zero, "A native ScrollRect drag must cancel its row click.");
+      Assert.That(scroll.content.anchoredPosition.y, Is.GreaterThan(.1f));
+
+      scroll.StopMovement(); scroll.verticalNormalizedPosition = 1; yield return null; yield return null;
+      yield return MouseClick(Point(Row(0)));
+      Assert.That(executions, Is.EqualTo(1), "An eligible native release must execute exactly once.");
+      for (int i = 0; i < 23; i++) yield return Tap(GamepadButton.DpadDown);
+      Assert.That(session.Selected.Id.Value, Is.EqualTo("scroll.23"));
+      var corners = new Vector3[4]; ((RectTransform)Row(23).transform).GetWorldCorners(corners);
+      foreach (var corner in corners)
+      {
+        var local = scroll.viewport.InverseTransformPoint(corner);
+        Assert.That(local.y, Is.GreaterThanOrEqualTo(scroll.viewport.rect.yMin - 1));
+        Assert.That(local.y, Is.LessThanOrEqualTo(scroll.viewport.rect.yMax + 1));
+      }
+      yield return Tap(GamepadButton.South);
+      Assert.That(executions, Is.EqualTo(2));
+      Assert.That(gallery.State.GameplayFireEvents, Is.Zero);
+    }
+
     private IEnumerator Open(string style)
     {
       yield return gallery.OpenAsync(style, new Vector2(Screen.width * .5f, Screen.height * .5f)).ToCoroutine();
