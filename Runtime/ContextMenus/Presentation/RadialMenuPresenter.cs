@@ -228,7 +228,7 @@ namespace MToolKit.ContextMenus.Presentation
         var pointer = graphic.GetComponent<MenuSectorPointer>();
         if (pointer == null) pointer = graphic.gameObject.AddComponent<MenuSectorPointer>();
         pointer.Configure(() => SelectPointerAction(action, selectedRing), Profile.InputBindings.RoutePointerClick || !action.Behavior.IsInteractive ? null
-          : () => ActivateRingActionAsync(action, selectedRing).Forget(), () => ClearPointerHover(action));
+          : () => ActivateRingActionAsync(action, selectedRing).Forget(), () => ClearPointerHover(action), HandlePointerExit);
         item.Bind(StateFor(action, selected,
           Profile.InputBindings.RoutePointerClick || !action.Behavior.IsInteractive ? null : () => ActivateRingActionAsync(action, selectedRing).Forget(),
           () => SelectRingAction(action, selectedRing)));
@@ -241,6 +241,14 @@ namespace MToolKit.ContextMenus.Presentation
     private void SelectPointerAction(MenuAction action, int ring)
     {
       if (!IsBound) return;
+      CancelSelectionReset();
+      if (!action.Behavior.IsInteractive)
+      {
+        Session.InteractionMode = MenuInteractionMode.Pointer;
+        hasTarget = false;
+        ClearPointerSelection();
+        return;
+      }
       var before = Session.Selected; var mode = Session.InteractionMode;
       bool changed = SetPointerHovered(action);
       Session.InteractionMode = MenuInteractionMode.Pointer;
@@ -316,14 +324,14 @@ namespace MToolKit.ContextMenus.Presentation
           SelectPointerAction(action, ring);
           return;
         }
-        bool hoverChanged = SetPointerHovered(null);
-        if (hasTarget || hoverChanged) { hasTarget = false; Refresh(false); }
+        hasTarget = false;
+        ClearPointerSelection();
         return;
       }
       if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(Root, screenPosition, camera, out var point))
       {
-        bool hoverChanged = SetPointerHovered(null);
-        if (hasTarget || hoverChanged) { hasTarget = false; Refresh(false); }
+        hasTarget = false;
+        ClearPointerSelection();
         return;
       }
       int outer = OuterGeometry?.HitTest(point) ?? -1;
@@ -337,14 +345,20 @@ namespace MToolKit.ContextMenus.Presentation
         if (preview) Session.EnterSubmenuAsync(action.Id).Forget();
         return;
       }
-      bool clearedHover = SetPointerHovered(null);
-      if (hasTarget || clearedHover) { hasTarget = false; Refresh(false); }
+      hasTarget = false;
+      ClearPointerSelection();
     }
 
     public override void Navigate(Vector2 direction, bool analog)
     {
       if (!IsBound) return;
-      if (TryRouteControlNavigation(direction, analog)) return;
+      if (TryRouteControlNavigation(direction, analog)) { CancelSelectionReset(); return; }
+      if (HandleSelectionReset(direction, analog))
+      {
+        if (Session.InteractionMode == MenuInteractionMode.Controller)
+        { hasTarget = false; selector?.Reset(); Refresh(false); }
+        return;
+      }
       Session.InteractionMode = analog ? MenuInteractionMode.Controller : MenuInteractionMode.Keyboard;
       SetPointerHovered(null);
       if (!analog)
@@ -379,8 +393,9 @@ namespace MToolKit.ContextMenus.Presentation
 
     public override void Confirm()
     {
-      if (!IsBound || TryRouteControlSubmit() || !hasTarget || Session.Selected == null) return;
+      if (!IsBound || TryRouteControlSubmit() || !hasTarget) return;
       if (focusedRing == 0 && OuterGeometry != null) { focusedRing = 1; Refresh(false); return; }
+      if (Session.Selected == null) return;
       if (Session.Selected.HasChildren) Session.EnterSubmenuAsync(Session.Selected.Id).Forget();
       else Session.ActivateAsync().Forget();
     }
@@ -396,6 +411,7 @@ namespace MToolKit.ContextMenus.Presentation
     public override void SwitchRing()
     {
       if (!IsBound || OuterGeometry == null) return;
+      CancelSelectionReset();
       focusedRing = focusedRing == 0 ? 1 : 0;
       selector?.Reset();
       hasTarget = true;
@@ -464,10 +480,12 @@ namespace MToolKit.ContextMenus.Presentation
   public sealed class MenuSectorPointer : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
   {
     private Action select, activate, exit;
-    public void Configure(Action selection, Action activation, Action pointerExit = null)
-    { select = selection; activate = activation; exit = pointerExit; }
+    private Action<Vector2> exitAt;
+    public void Configure(Action selection, Action activation, Action pointerExit = null, Action<Vector2> pointerExited = null)
+    { select = selection; activate = activation; exit = pointerExit; exitAt = pointerExited; }
     public void OnPointerEnter(PointerEventData eventData) => select?.Invoke();
-    public void OnPointerExit(PointerEventData eventData) => exit?.Invoke();
+    public void OnPointerExit(PointerEventData eventData)
+    { if (exitAt != null) exitAt(eventData.position); else exit?.Invoke(); }
     public void OnPointerClick(PointerEventData eventData)
     { if (eventData.button == PointerEventData.InputButton.Left) activate?.Invoke(); }
   }

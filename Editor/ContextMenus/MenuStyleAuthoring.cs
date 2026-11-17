@@ -277,6 +277,7 @@ namespace MToolKit.Editor.ContextMenus
         profile.ShowCenter = common.ShowCenter; profile.Backdrop = common.Backdrop;
         profile.ReducedMotion = common.ReducedMotion; profile.MinimumTargetSize = common.MinimumTargetSize;
         profile.AnalogDeadZone = common.AnalogDeadZone; profile.AnalogHysteresis = common.AnalogHysteresis;
+        profile.AnalogSelectionResetDelay = common.AnalogSelectionResetDelay;
         if (recipe.PresentationTheme == null)
         {
           profile.MaximumVisibleItems = recipe.MaximumVisibleItems; profile.WidgetSize = recipe.WidgetSize;

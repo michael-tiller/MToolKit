@@ -225,7 +225,8 @@ namespace MToolKit.ContextMenus.Presentation
     public override void Navigate(Vector2 direction, bool analog)
     {
       if (!IsBound) return;
-      if (TryRouteControlNavigation(direction, analog)) return;
+      if (TryRouteControlNavigation(direction, analog)) { CancelSelectionReset(); return; }
+      if (HandleSelectionReset(direction, analog)) return;
       pointerTarget = true;
       pointerParentTarget = false;
       if (Math.Abs(direction.x) > Math.Abs(direction.y) && Session.Selected != null)
@@ -265,9 +266,11 @@ namespace MToolKit.ContextMenus.Presentation
         hovered = row.Action;
         break;
       }
+      if (hovered != null && !hovered.Behavior.IsInteractive) hovered = null;
       bool changed = SetPointerHovered(hovered);
       var before = Session.Selected;
       if (hovered != null) { SelectRow(hovered); pointerTarget = Session.Selected == hovered; }
+      else ClearPointerSelection();
       if (changed && ReferenceEquals(before, Session.Selected)) Refresh(false);
     }
 

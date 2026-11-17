@@ -286,6 +286,11 @@ distinct from keyboard submit so a custom center button can own an overlapping c
 
 Analog selection applies a dead zone and angular hysteresis. Concentric controller
 selection uses explicit ring focus/confirmation; stick magnitude is not a mouse radius.
+Pointer-out clears pointer selection; the selected center and its auxiliary controls retain
+their action context while being operated. `MenuProfile.AnalogSelectionResetDelay` controls
+the analog-neutral grace period in seconds: `.35` by default, `0` for immediate clearing;
+values must be finite and nonnegative. Shared Common Settings exposes the same value
+for explicit profile rebuilds. New interaction or menu cleanup cancels a pending reset.
 Bind a hold action and open with `activationHeld:true` for hold/release confirmation.
 The router uses event callbacks; it does not poll hardcoded gamepad controls.
 

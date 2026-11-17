@@ -100,6 +100,33 @@ namespace MToolKit.Editor.ContextMenus.Tests
     }
 
     [Test]
+    public void AnalogSelectionResetDelayRebuildsFromSharedCommonWithoutLiveMutation()
+    {
+      var delay = typeof(MenuCommonSettings).GetField("AnalogSelectionResetDelay");
+      Assert.That(delay, Is.Not.Null, "Shared authoring settings must expose the neutral-selection grace period.");
+      Assert.That(delay.FieldType, Is.EqualTo(typeof(float)));
+      Assert.That((float)delay.GetValue(common), Is.EqualTo(.35f));
+      var output = Save<MenuProfile>("ResetDelay");
+      string outputGuid = GuidOf(output);
+      output.AnalogSelectionResetDelay = .1f;
+      config.Styles = new MenuStyleRecipe[] { new SingleRingMenuStyleRecipe { Output = output } };
+      delay.SetValue(common, .65f);
+      common.AnalogDeadZone = .4f; common.AnalogHysteresis = 7;
+      var plan = MenuStyleAuthoring.Preview(config);
+      Assert.That(output.AnalogSelectionResetDelay, Is.EqualTo(.1f), "Preview must not edit the runtime profile.");
+      MenuStyleAuthoring.Rebuild(plan);
+      Assert.That(output.AnalogSelectionResetDelay, Is.EqualTo(.65f));
+      Assert.That(output.AnalogDeadZone, Is.EqualTo(.4f));
+      Assert.That(output.AnalogHysteresis, Is.EqualTo(7));
+      Assert.That(GuidOf(output), Is.EqualTo(outputGuid));
+      delay.SetValue(common, 0f);
+      Assert.That(output.AnalogSelectionResetDelay, Is.EqualTo(.65f), "Common edits apply only through explicit rebuild.");
+      MenuStyleAuthoring.Rebuild(MenuStyleAuthoring.Preview(config));
+      Assert.That(output.AnalogSelectionResetDelay, Is.Zero, "Zero must remain authorable for immediate reset.");
+      Assert.That(GuidOf(output), Is.EqualTo(outputGuid));
+    }
+
+    [Test]
     public void SpecializedRecipesDoNotOverwriteUnrelatedExistingGeometry()
     {
       var single = Save<MenuProfile>("Single");

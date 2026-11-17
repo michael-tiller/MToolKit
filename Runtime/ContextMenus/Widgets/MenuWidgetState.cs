@@ -29,7 +29,8 @@ namespace MToolKit.ContextMenus.Widgets
       string label = null, string description = null, MenuSkin skin = null, IThemeService themeService = null,
       Action activate = null, Action select = null, string bindingHint = null,
       IReadOnlyList<MenuWidgetState> secondaryStates = null, IInputPromptService promptService = null,
-      InputAction bindingAction = null, bool isHovered = false, Action<bool> hoverChanged = null, MenuThemeContext? theme = null)
+      InputAction bindingAction = null, bool isHovered = false, Action<bool> hoverChanged = null, MenuThemeContext? theme = null,
+      Action<Vector2> pointerExited = null)
     {
       Action = action;
       Availability = availability;
@@ -47,6 +48,7 @@ namespace MToolKit.ContextMenus.Widgets
       BindingAction = bindingAction;
       IsHovered = isHovered;
       HoverChanged = hoverChanged;
+      PointerExited = pointerExited;
     }
 
     public MenuAction Action { get; }
@@ -54,6 +56,7 @@ namespace MToolKit.ContextMenus.Widgets
     public bool IsSelected { get; }
     public bool IsHovered { get; }
     public Action<bool> HoverChanged { get; }
+    public Action<Vector2> PointerExited { get; }
     public string Label { get; }
     public string Description { get; }
     public string BindingHint { get; }
@@ -71,6 +74,6 @@ namespace MToolKit.ContextMenus.Widgets
     public InputAction BindingAction { get; }
     public MenuWidgetState WithLabel(string label)
       => new MenuWidgetState(Action, Availability, IsSelected, label, Description, Skin, ThemeService,
-        Activate, Select, BindingHint, SecondaryStates, PromptService, BindingAction, IsHovered, HoverChanged, Theme);
+        Activate, Select, BindingHint, SecondaryStates, PromptService, BindingAction, IsHovered, HoverChanged, Theme, PointerExited);
   }
 }

@@ -26,5 +26,7 @@ namespace MToolKit.Editor.ContextMenus
     public float MinimumTargetSize = 32;
     public float AnalogDeadZone = .25f;
     public float AnalogHysteresis = 5;
+    [Tooltip("Seconds to retain analog selection after the stick returns to its dead zone. Zero clears immediately.")]
+    public float AnalogSelectionResetDelay = .35f;
   }
 }

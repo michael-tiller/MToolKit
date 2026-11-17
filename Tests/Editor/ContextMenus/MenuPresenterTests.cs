@@ -220,7 +220,7 @@ namespace MToolKit.Tests.Editor.ContextMenus
     [Test]
     public void PresenterHint_UsesOwnedRuntimeBindingIdentity()
     {
-      var presenter = Presenter<ListMenuPresenter>(new[] { Command("one") }, out var profile);
+      var presenter = Presenter<RadialMenuPresenter>(new[] { Command("one") }, out var profile);
       var authoredAsset = ScriptableObject.CreateInstance<InputActionAsset>();
       cleanup.Add(authoredAsset);
       var authoredMap = new InputActionMap("Menu");
@@ -240,6 +240,9 @@ namespace MToolKit.Tests.Editor.ContextMenus
       presenter.Bind(session, profile, context);
       Assert.That(prompts.LastAction, Is.SameAs(runtime));
       Assert.That(prompts.LastAction.bindings[0].effectivePath, Is.EqualTo("<Keyboard>/space"));
+      var center = presenter.GetComponentInChildren<MenuCenterWidget>();
+      Assert.That(center, Is.Not.Null);
+      Assert.That(center.BindingHint.text, Is.EqualTo("Runtime hint"));
     }
 
     [TestCase(true)]

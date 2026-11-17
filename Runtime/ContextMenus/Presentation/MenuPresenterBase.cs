@@ -42,6 +42,7 @@ namespace MToolKit.ContextMenus.Presentation
     private IMenuTransition transition;
     private MenuTransitionAsset transitionAsset;
     private CancellationTokenSource transitionCancellation;
+    private CancellationTokenSource selectionResetCancellation;
     private readonly List<MenuActionId> transitionPath = new List<MenuActionId>();
     private readonly List<MenuRow> transitionRows = new List<MenuRow>();
     private int transitionPage;
@@ -88,6 +89,7 @@ namespace MToolKit.ContextMenus.Presentation
 
     public virtual void Unbind()
     {
+      CancelSelectionReset();
       bindingGeneration++;
       // Detach ownership before custom callbacks can synchronously bind a replacement.
       var oldSession = Session; var oldContext = Context;
@@ -360,7 +362,7 @@ namespace MToolKit.ContextMenus.Presentation
         ? Context.Prompts.Resolve(bindingAction, InputPromptStyle.Glyph) : string.Empty;
       return new MenuWidgetState(action, availability, selected, Context.Resolve(action.Label), Context.Resolve(action.Description),
         Profile.Skin, Context.Themes, activate, () => SelectWidget(select), binding, secondaryStates,
-        Context.Prompts, bindingAction, IsPointerHovered(action), entered => HoverWidget(action, entered, select), Profile.GetTheme(Context.Themes));
+        Context.Prompts, bindingAction, IsPointerHovered(action), entered => HoverWidget(action, entered, select), Profile.GetTheme(Context.Themes), HandlePointerExit);
     }
 
     protected bool IsPointerHovered(MenuAction action)
@@ -379,11 +381,19 @@ namespace MToolKit.ContextMenus.Presentation
       if (ReferenceEquals(pointerHovered, action) && SetPointerHovered(null)) Refresh(false);
     }
 
+    protected void HandlePointerExit(Vector2 destination)
+    {
+      // uGUI exits the old object before entering the new one. Resolve the destination
+      // instead of clearing on an intermediate exit or stealing keyboard/controller focus.
+      if (IsBound && Session.InteractionMode == MenuInteractionMode.Pointer) Point(destination);
+    }
+
     private void HoverWidget(MenuAction action, bool entered, Action select)
     {
       if (!IsBound) return;
       if (!entered) { ClearPointerHover(action); return; }
       if (!AcceptNativePointerHover) return;
+      CancelSelectionReset();
       var before = Session.Selected; var mode = Session.InteractionMode;
       bool changed = SetPointerHovered(action);
       Session.InteractionMode = MenuInteractionMode.Pointer;
@@ -394,6 +404,7 @@ namespace MToolKit.ContextMenus.Presentation
     private void SelectWidget(Action select)
     {
       if (!IsBound) return;
+      CancelSelectionReset();
       var before = Session.Selected; var mode = Session.InteractionMode;
       bool changed = SetPointerHovered(null);
       Session.InteractionMode = MenuInteractionMode.Keyboard;
@@ -426,7 +437,7 @@ namespace MToolKit.ContextMenus.Presentation
     }
 
     protected void SelectAction(MenuAction action)
-    { if (IsBound && action != null) Session.Select(action.Id); }
+    { CancelSelectionReset(); if (IsBound && action != null) Session.Select(action.Id); }
     protected virtual void ActivateAction(MenuAction action)
     { if (IsBound && Session.Select(action.Id)) ConfirmChosenWidget(); }
     protected void ConfirmChosenWidget()
@@ -559,7 +570,8 @@ namespace MToolKit.ContextMenus.Presentation
     public virtual void Navigate(Vector2 direction, bool analog)
     {
       if (!IsBound) return;
-      if (TryRouteControlNavigation(direction, analog)) return;
+      if (TryRouteControlNavigation(direction, analog)) { CancelSelectionReset(); return; }
+      if (HandleSelectionReset(direction, analog)) { analogLatched = false; return; }
       if (analog)
       {
         if (direction.sqrMagnitude <= Profile.AnalogDeadZone * Profile.AnalogDeadZone) { analogLatched = false; return; }
@@ -569,9 +581,10 @@ namespace MToolKit.ContextMenus.Presentation
       if (direction == Vector2.zero || Session.Rows.Count == 0) return;
       Session.InteractionMode = analog ? MenuInteractionMode.Controller : MenuInteractionMode.Keyboard;
       SetPointerHovered(null);
-      int selected = 0;
+      int selected = -1;
       for (int i = 0; i < Session.Rows.Count; i++) if (Session.Rows[i].Action == Session.Selected) { selected = i; break; }
       int step = direction.y > 0 || direction.x < 0 ? -1 : 1;
+      if (selected < 0) selected = step > 0 ? -1 : 0;
       for (int offset = 1; offset <= Session.Rows.Count; offset++)
       {
         int next = (selected + step * offset + Session.Rows.Count) % Session.Rows.Count;
@@ -582,6 +595,7 @@ namespace MToolKit.ContextMenus.Presentation
     public virtual void Point(Vector2 position)
     {
       if (!IsBound) return;
+      CancelSelectionReset();
       Session.InteractionMode = MenuInteractionMode.Pointer;
       PointerControlOwnsInput = false;
       PointerHitObject = null;
@@ -593,11 +607,72 @@ namespace MToolKit.ContextMenus.Presentation
       if (pointerHits.Count == 0) return;
       var hit = pointerHits[0].gameObject;
       PointerHitObject = hit;
+      // Center information and auxiliary controls belong to the selected action. Crossing
+      // from its sector into that authored affordance must not destroy the controls.
+      if (center?.GameObject != null && hit.transform.IsChildOf(center.Rect))
+      {
+        PointerControlOwnsInput = true;
+        if (SetPointerHovered(null)) Refresh(false);
+        return;
+      }
       var handler = ExecuteEvents.GetEventHandler<IPointerClickHandler>(hit)
         ?? ExecuteEvents.GetEventHandler<IPointerDownHandler>(hit);
       if (handler == null || handler == backdrop) return;
       PointerControlOwnsInput = IsControl(handler) || !handler.transform.IsChildOf(transform);
-      if (PointerControlOwnsInput && SetPointerHovered(null)) Refresh(false);
+      if (PointerControlOwnsInput) ClearPointerSelection();
+    }
+
+    protected void ClearPointerSelection()
+    {
+      if (!IsBound || Session.InteractionMode != MenuInteractionMode.Pointer) return;
+      bool hovered = SetPointerHovered(null);
+      if (!Session.ClearSelection() && hovered) Refresh(false);
+    }
+
+    /// <summary>One event-driven unscaled neutral timer; no per-frame input polling.</summary>
+    protected bool HandleSelectionReset(Vector2 direction, bool analog)
+    {
+      bool neutral = analog && direction.sqrMagnitude <= Profile.AnalogDeadZone * Profile.AnalogDeadZone;
+      if (!neutral) { CancelSelectionReset(); return false; }
+      analogLatched = false;
+      // A late canceled stick callback must not reclaim selection from a mouse or keyboard.
+      if (Session.InteractionMode != MenuInteractionMode.Controller || Session.Selected == null) return true;
+      if (selectionResetCancellation != null) return true;
+      if (Profile.AnalogSelectionResetDelay <= 0) { Session.ClearSelection(); return true; }
+      var cancellation = new CancellationTokenSource();
+      selectionResetCancellation = cancellation;
+      ResetSelectionAfterDelayAsync(Session, Session.Selected, Session.ParentSelected, Session.PageIndex,
+        Session.NavigationRevision, Profile.AnalogSelectionResetDelay, cancellation, cancellation.Token).Forget();
+      return true;
+    }
+
+    protected void CancelSelectionReset()
+    {
+      var cancellation = selectionResetCancellation;
+      selectionResetCancellation = null;
+      if (cancellation == null) return;
+      try { cancellation.Cancel(); }
+      finally { cancellation.Dispose(); }
+    }
+
+    private async UniTask ResetSelectionAfterDelayAsync(MenuSession observed, MenuAction selected,
+      MenuAction parent, int page, long navigation, float delay, CancellationTokenSource cancellation, CancellationToken token)
+    {
+      try
+      {
+        await UniTask.Delay(TimeSpan.FromSeconds(delay), ignoreTimeScale: true, cancellationToken: token);
+        if (this == null || !IsBound || !ReferenceEquals(Session, observed)
+          || !ReferenceEquals(selectionResetCancellation, cancellation) || Session.InteractionMode != MenuInteractionMode.Controller
+          || Session.NavigationRevision != navigation || !ReferenceEquals(Session.Selected, selected)
+          || !ReferenceEquals(Session.ParentSelected, parent) || Session.PageIndex != page) return;
+        Session.ClearSelection();
+      }
+      catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+      finally
+      {
+        if (ReferenceEquals(selectionResetCancellation, cancellation))
+        { selectionResetCancellation = null; cancellation.Dispose(); }
+      }
     }
 
     public void ConfirmPointer()
@@ -659,6 +734,7 @@ namespace MToolKit.ContextMenus.Presentation
     public virtual void Back()
     {
       if (!IsBound) return;
+      CancelSelectionReset();
       if (!Profile.InputBindings.UseNativeUguiNavigation)
       {
         var control = FocusedControl<ICancelHandler>();
@@ -673,9 +749,9 @@ namespace MToolKit.ContextMenus.Presentation
     }
     public virtual void Cancel() { if (IsBound) Session.Close(); }
     public virtual void InvokeSecondary(int index) { if (IsBound) Session.InvokeSecondaryAsync(index).Forget(); }
-    public virtual void Page(int direction) { if (!IsBound) return; if (direction > 0) Session.PageForward(); else Session.PageBackward(); }
+    public virtual void Page(int direction) { if (!IsBound) return; CancelSelectionReset(); if (direction > 0) Session.PageForward(); else Session.PageBackward(); }
     public virtual void SwitchRing() { }
-    public virtual void BeginHold() { holding = IsBound; }
+    public virtual void BeginHold() { CancelSelectionReset(); holding = IsBound; }
     public virtual void EndHold()
     {
       if (!holding) return;

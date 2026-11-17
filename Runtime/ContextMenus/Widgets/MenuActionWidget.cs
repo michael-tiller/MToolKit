@@ -115,7 +115,12 @@ namespace MToolKit.ContextMenus.Widgets
       if (State.HoverChanged != null) State.HoverChanged(true);
       else Select();
     }
-    public void OnPointerExit(PointerEventData eventData) => State?.HoverChanged?.Invoke(false);
+    public void OnPointerExit(PointerEventData eventData)
+    {
+      var state = State;
+      if (state?.PointerExited != null) state.PointerExited(eventData.position);
+      else state?.HoverChanged?.Invoke(false);
+    }
     public void OnSelect(BaseEventData eventData)
     {
       if (eventData is PointerEventData pointer) OnPointerEnter(pointer);

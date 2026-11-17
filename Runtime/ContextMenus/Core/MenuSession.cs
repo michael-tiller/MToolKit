@@ -16,6 +16,7 @@ namespace MToolKit.ContextMenus
       public readonly MenuAction Parent;
       public readonly bool SecondaryCollection;
       public MenuAction Selection;
+      public bool SelectionCleared;
       public int Page;
       public Frame(IReadOnlyList<MenuAction> source, MenuAction parent = null, bool secondaryCollection = false)
       { Source = source; Parent = parent; SecondaryCollection = secondaryCollection; VisibleView = Visible.AsReadOnly(); }
@@ -36,7 +37,7 @@ namespace MToolKit.ContextMenus
     private bool disposed;
     private bool rebuilding;
     private bool unityOwner;
-    private long generation, navigationRequest, nextExpansionRequest;
+    private long generation, navigationRequest, navigationIntent, nextExpansionRequest;
     private int pageSize = int.MaxValue;
     private MenuInteractionMode interactionMode;
 
@@ -47,6 +48,8 @@ namespace MToolKit.ContextMenus
     public bool IsExecuting { get; private set; }
     public MenuContext Context { get; private set; }
     public MenuAction Selected { get; private set; }
+    // Availability/provider refresh also advances navigationRequest; it does not change user intent.
+    internal long NavigationRevision => navigationIntent;
     public IReadOnlyList<MenuAction> Actions => frames.Count == 0 ? Array.Empty<MenuAction>() : Current.VisibleView;
     public IReadOnlyList<MenuAction> RootActions => frames.Count == 0 ? Array.Empty<MenuAction>() : frames[0].VisibleView;
     public IReadOnlyList<MenuAction> ParentActions => frames.Count < 2 ? Array.Empty<MenuAction>() : frames[frames.Count - 2].VisibleView;
@@ -157,12 +160,26 @@ namespace MToolKit.ContextMenus
       var action = allRows[index].Action;
       if (!action.Evaluate(Context).Visible) return false;
       bool changed = Selected != action || Current.Page != index / pageSize;
-      if (changed) navigationRequest++;
+      if (changed) { navigationRequest++; navigationIntent++; }
       Current.Selection = action;
+      Current.SelectionCleared = false;
       Current.Page = index / pageSize;
       Selected = action;
       RebuildPage();
       if (changed) Changed?.Invoke();
+      return true;
+    }
+
+    /// <summary>Clear the active action without closing or changing the navigation path.</summary>
+    public bool ClearSelection()
+    {
+      if (!EnsureValid() || Current.SelectionCleared && Selected == null) return false;
+      navigationRequest++;
+      navigationIntent++;
+      Current.SelectionCleared = true;
+      Current.Selection = null;
+      Selected = null;
+      Changed?.Invoke();
       return true;
     }
 
@@ -180,6 +197,7 @@ namespace MToolKit.ContextMenus
       var action = allRows[index].Action;
       if (!action.HasChildren || !CanInvoke(action)) return;
       long opened = generation, request = ++navigationRequest;
+      navigationIntent++;
       using var linked = Link(cancellationToken);
       var token = linked?.Token ?? cancellation.Token;
       try
@@ -191,10 +209,12 @@ namespace MToolKit.ContextMenus
         {
           var ancestor = ancestors[i];
           Current.Selection = ancestor;
+          Current.SelectionCleared = false;
           frames.Add(new Frame(expanded[ancestor], ancestor));
           path.Add(ancestor.Id);
         }
         Current.Selection = action;
+        Current.SelectionCleared = false;
         frames.Add(new Frame(children, action));
         path.Add(action.Id);
         Rebuild();
@@ -206,6 +226,7 @@ namespace MToolKit.ContextMenus
     {
       if (!EnsureValid()) return false;
       navigationRequest++;
+      navigationIntent++;
       if (Selected != null)
       {
         if (expanded.ContainsKey(Selected) && Collapse(Selected.Id)) return true;
@@ -218,6 +239,7 @@ namespace MToolKit.ContextMenus
         frames.RemoveAt(frames.Count - 1);
         path.RemoveAt(path.Count - 1);
         Current.Selection = returningTo;
+        Current.SelectionCleared = false;
         Rebuild();
       }
       else Close();
@@ -233,6 +255,7 @@ namespace MToolKit.ContextMenus
       if (!action.HasChildren || !CanInvoke(action)) return;
       long opened = generation, request = ++nextExpansionRequest;
       navigationRequest++;
+      navigationIntent++;
       expansionRequests[action] = request;
       using var linked = Link(cancellationToken);
       var token = linked?.Token ?? cancellation.Token;
@@ -254,6 +277,7 @@ namespace MToolKit.ContextMenus
       if (index < 0) return false;
       var action = allRows[index].Action;
       navigationRequest++;
+      navigationIntent++;
       expansionRequests.Remove(action);
       if (!expanded.ContainsKey(action)) return false;
       int selected = Selected == null ? -1 : IndexOfReference(Selected);
@@ -261,7 +285,7 @@ namespace MToolKit.ContextMenus
       {
         int end = index + 1;
         while (end < allRows.Count && allRows[end].Depth > allRows[index].Depth) end++;
-        if (selected < end) Current.Selection = action;
+        if (selected < end) { Current.Selection = action; Current.SelectionCleared = false; }
       }
       DropExpansion(action);
       Rebuild();
@@ -347,6 +371,8 @@ namespace MToolKit.ContextMenus
             {
               if (Selected != secondaryOwner || !IsVisible(secondaryOwner) || !action.HasChildren) break;
               Current.Selection = secondaryOwner;
+              Current.SelectionCleared = false;
+              navigationIntent++;
               frames.Add(new Frame(SnapshotAndValidate(secondaryOwner.SecondaryActions), secondaryOwner, true));
               path.Add(secondaryOwner.Id);
               Rebuild();
@@ -365,8 +391,10 @@ namespace MToolKit.ContextMenus
     {
       if (!EnsureValid() || page < 0 || page >= PageCount || page == Current.Page) return false;
       navigationRequest++;
+      navigationIntent++;
       Current.Page = page;
       Current.Selection = null;
+      Current.SelectionCleared = false;
       RebuildPage();
       Changed?.Invoke();
       return true;
@@ -427,7 +455,8 @@ namespace MToolKit.ContextMenus
 
     private static Frame CopyFrame(Frame old, IReadOnlyList<MenuAction> source, MenuAction parent = null)
     {
-      var frame = new Frame(source, parent ?? old.Parent, old.SecondaryCollection) { Page = old.Page };
+      var frame = new Frame(source, parent ?? old.Parent, old.SecondaryCollection)
+        { Page = old.Page, SelectionCleared = old.SelectionCleared };
       if (old.Selection != null) frame.Selection = FindById(source, old.Selection.Id) ?? old.Selection;
       return frame;
     }
@@ -559,6 +588,7 @@ namespace MToolKit.ContextMenus
       int count = Math.Min(pageSize, allRows.Count - start);
       for (int i = 0; i < count; i++) rows.Add(allRows[start + i]);
       Selected = null;
+      if (Current.SelectionCleared) return;
       for (int i = 0; i < rows.Count; i++)
         if (rows[i].Action == Current.Selection && rows[i].Action.Behavior.IsInteractive) Selected = rows[i].Action;
       if (Selected == null)

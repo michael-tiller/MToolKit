@@ -51,6 +51,8 @@ namespace MToolKit.ContextMenus.Configuration
     [field: SerializeField] public MenuInputBindings InputBindings { get; set; } = new MenuInputBindings();
     [field: SerializeField] public float AnalogDeadZone { get; set; } = .25f;
     [field: SerializeField] public float AnalogHysteresis { get; set; } = 5;
+    [field: SerializeField, Tooltip("Unscaled seconds at stick neutral before clearing selection. Zero clears immediately.")]
+    public float AnalogSelectionResetDelay { get; set; } = .35f;
 
     public MenuThemeContext GetTheme(MToolKit.Theme.IThemeService themeService = null)
       => new MenuThemeContext(Skin, SharedThemeOverrides, ThemeOverrides, themeService);
@@ -83,6 +85,8 @@ namespace MToolKit.ContextMenus.Configuration
       if (!Finite(AnalogDeadZone) || AnalogDeadZone < 0 || AnalogDeadZone >= 1)
         return Invalid(nameof(AnalogDeadZone), out diagnostic);
       if (!Finite(AnalogHysteresis) || AnalogHysteresis < 0) return Invalid(nameof(AnalogHysteresis), out diagnostic);
+      if (!Finite(AnalogSelectionResetDelay) || AnalogSelectionResetDelay < 0)
+        return Invalid(nameof(AnalogSelectionResetDelay), out diagnostic);
       if (InputBindings == null) return Invalid(nameof(InputBindings), out diagnostic);
       if (InputBindings.UseNativeUguiNavigation && InputBindings.RoutePointerClick)
       {

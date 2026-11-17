@@ -146,7 +146,7 @@ namespace MToolKit.Editor.ContextMenus
           DrawFallbackSkin(common.FindProperty("Skin"));
           Draw(common, "ItemPrefab", "CenterPrefab", "SecondaryPrefab", "FallbackProfile", "ShowCenter", "Backdrop");
           EditorGUILayout.LabelField("Input", EditorStyles.boldLabel);
-          Draw(common, "InputBindings", "AnalogDeadZone", "AnalogHysteresis");
+          Draw(common, "InputBindings", "AnalogDeadZone", "AnalogHysteresis", "AnalogSelectionResetDelay");
           EditorGUILayout.LabelField("Accessibility and placement", EditorStyles.boldLabel);
           Draw(common, "Anchor", "MinimumTargetSize", "ReducedMotion", "Transition");
         }

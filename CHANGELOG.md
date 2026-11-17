@@ -54,6 +54,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Clear abandoned pointer selections and reset analog selection after a configurable unscaled neutral grace period. Preserve center/auxiliary controls, submenu paths, input ownership and safe hold/release behavior; retain empty selection across availability refreshes and restore concentric ring navigation. Keep runtime binding-identity coverage on the selected center. (v1.25.5)
+
 - Keep confirmation glyphs out of menu items and in the selected action's center, preserving explicit secondary bindings and clearing center ownership with selection. Correct the button-only corner test to sample settled layout while preserving all raycast/semantic assertions. (v1.25.4)
 
 - Reserve measured footer glyph widths as layout minima under compression; keep wide paging keycaps visible at default menu widths and release space on rebinding. Validate the default-width native mesh regression and actual saved-gallery footer. (v1.25.3)
