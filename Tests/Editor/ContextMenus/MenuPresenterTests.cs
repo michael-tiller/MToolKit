@@ -315,6 +315,7 @@ namespace MToolKit.Tests.Editor.ContextMenus
         if (widget.Label != null && widget.Label.text == "second") { secondWidget = widget; break; }
       Assert.That(secondWidget, Is.Not.Null);
       ConfigureKnownControlRaycast(presenter.GetComponentInParent<Canvas>(), secondWidget.gameObject);
+      Canvas.ForceUpdateCanvases();
       var rect = (RectTransform)secondWidget.transform;
       var world = rect.TransformPoint(new Vector3(rect.rect.xMin + 1, rect.rect.yMax - 1));
       var screen = RectTransformUtility.WorldToScreenPoint(presenter.GetComponentInParent<Canvas>().worldCamera, world);
@@ -322,7 +323,6 @@ namespace MToolKit.Tests.Editor.ContextMenus
         "The visible button corner intentionally lies outside annular selection.");
       Assert.That(presenter.Root.rect.Contains((Vector2)presenter.Root.InverseTransformPoint(world)), Is.True,
         "The unchanged menu bounds must contain the whole button target without reducing its dimensions.");
-      Canvas.ForceUpdateCanvases();
       var hits = new List<RaycastResult>(); events.RaycastAll(new PointerEventData(events) { position = screen }, hits);
       Assert.That(hits.Count, Is.GreaterThan(0));
       Assert.That(hits[0].gameObject.transform.IsChildOf(secondWidget.transform), Is.True,

@@ -54,6 +54,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Keep confirmation glyphs out of menu items and in the selected action's center, preserving explicit secondary bindings and clearing center ownership with selection. Correct the button-only corner test to sample settled layout while preserving all raycast/semantic assertions. (v1.25.4)
+
 - Reserve measured footer glyph widths as layout minima under compression; keep wide paging keycaps visible at default menu widths and release space on rebinding. Validate the default-width native mesh regression and actual saved-gallery footer. (v1.25.3)
 
 - Let native TMP glyph widths drive default footer layout so wide keyboard caps render, operation labels stay separate and rebinding releases extra space. Verify actual sprite meshes and layout with a focused native regression. (v1.25.2)

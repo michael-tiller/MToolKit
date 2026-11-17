@@ -254,12 +254,17 @@ the host omits unsupported legacy registration instead of retaining destroyed ac
 
 Default hint widgets own `IInputPromptService.Bind` subscriptions for the resolved runtime
 action, including foreign profile clones. Rebinding and device/locale changes update the
-bound hint; unbind disposes that subscription. Default menu widgets and navigation
-controls request `InputPromptStyle.Glyph` explicitly, leaving the application's
+bound hint; unbind disposes that subscription. Default selected-action centers,
+auxiliary controls and navigation request `InputPromptStyle.Glyph` explicitly, leaving the application's
 shared prompt preference unchanged. Keep operation labels such as Back and Inspect;
 the binding beside them is native TMP sprite markup. An optional `BindingHint`
 text target is sufficient on an item, center or auxiliary widget. Missing targets
 are supported, and custom widgets retain control of their own composition.
+Default menu items show no confirmation hint. The primary hint belongs to the
+selected action's center and is unbound when selection clears. Auxiliary hints
+use their own explicit/configured bindings; an unbound auxiliary never inherits
+Submit. A custom presenter can supply an explicit binding override when composing
+its own item state.
 Framework-owned footer controls use native TMP preferred widths in their uGUI
 layout, so wide keycaps remain visible and rebinding can release unused space.
 The measured glyph width is reserved as a minimum at narrow footer widths; labels

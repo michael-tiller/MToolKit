@@ -63,7 +63,8 @@ namespace MToolKit.Tests.Editor.ContextMenus
       Assert.That(state.SecondaryStates.Count, Is.EqualTo(1));
       Assert.That(state.SecondaryStates[0].BindingAction, Is.SameAs(fixture.Secondary));
       Assert.That(state.SecondaryStates[0].BindingHint, Does.StartWith("glyph:"));
-      Assert.That(prompts.Styles.Count, Is.GreaterThanOrEqualTo(3));
+      Assert.That(prompts.ResolvedActions, Does.Contain(fixture.Confirm));
+      Assert.That(prompts.ResolvedActions, Does.Contain(fixture.Secondary));
       foreach (var style in prompts.Styles) Assert.That(style, Is.EqualTo(InputPromptStyle.Glyph));
       Assert.That(fixture.AuthoredConfirm.enabled, Is.False);
     }
@@ -163,18 +164,103 @@ namespace MToolKit.Tests.Editor.ContextMenus
       Assert.That(back.rectTransform.rect.width, Is.LessThan(wideWidth), "Rebinding to a compact glyph must release its extra layout width.");
     }
 
+    [TestCase(true, MenuNavigationPolicy.Inline)]
+    [TestCase(false, MenuNavigationPolicy.Inline)]
+    [TestCase(false, MenuNavigationPolicy.Replacement)]
+    [TestCase(false, MenuNavigationPolicy.Concentric)]
+    public void Items_do_not_display_confirmation_hints_even_when_the_action_has_an_explicit_hint(
+      bool list, MenuNavigationPolicy navigation)
+    {
+      using var fixture = new Fixture();
+      using var prompts = new RecordingPrompts();
+      var itemPrefab = fixture.Widget();
+      itemPrefab.gameObject.AddComponent<MenuGlyphCaptureWidget>();
+      var profile = fixture.Profile(); profile.Navigation = navigation;
+      profile.ShowCenter = false; profile.ItemPrefab = itemPrefab.gameObject;
+      profile.InputBindings.Configure(submit: fixture.Reference(fixture.AuthoredConfirm));
+      var explicitReference = fixture.Reference(fixture.AuthoredSecondary);
+      var actions = new[]
+      {
+        new MenuAction("explicit-item", new MenuLabel("Explicit"), new MenuCommandBehavior(_ => { }), bindingHint: explicitReference),
+        new MenuAction("implicit-item", new MenuLabel("Implicit"), new MenuCommandBehavior(_ => { }))
+      };
+      MenuPresenterBase presenter = list
+        ? fixture.Presenter<ListMenuPresenter>(profile, actions, prompts)
+        : fixture.Presenter<RadialMenuPresenter>(profile, actions, prompts);
+      var captures = presenter.GetComponentsInChildren<MenuGlyphCaptureWidget>(true);
+      Assert.That(captures, Has.Length.EqualTo(2));
+      foreach (var capture in captures)
+      {
+        Assert.That(capture.State, Is.Not.Null);
+        Assert.That(capture.State.BindingAction, Is.Null, "An item does not own the selected center's confirmation hint.");
+        Assert.That(capture.State.BindingHint, Is.Empty);
+        Assert.That(capture.GetComponent<MenuActionWidget>().BindingHint.text, Is.Empty);
+      }
+      Assert.That(actions[0].BindingHint, Is.SameAs(explicitReference), "Presentation must not rewrite action definitions.");
+      Assert.That(prompts.ActiveBindings, Is.Zero, "Items must not retain unused confirmation-prompt subscriptions.");
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void Selected_center_owns_confirmation_and_secondary_hints_and_releases_them_when_selection_clears(bool explicitPrimary)
+    {
+      using var fixture = new Fixture();
+      using var prompts = new RecordingPrompts();
+      var centerPrefab = fixture.CenterWidget();
+      centerPrefab.gameObject.AddComponent<MenuGlyphCaptureWidget>();
+      var profile = fixture.Profile(); profile.CenterPrefab = centerPrefab.gameObject;
+      profile.InputBindings.Configure(submit: fixture.Reference(fixture.AuthoredConfirm),
+        secondary: new[] { fixture.Reference(fixture.AuthoredBack), fixture.Reference(fixture.AuthoredSecondary) });
+      var secondary = new[]
+      {
+        new MenuAction("explicit-aux", new MenuLabel("Explicit auxiliary"), new MenuCommandBehavior(_ => { }),
+          bindingHint: fixture.Reference(fixture.AuthoredConfirm)),
+        new MenuAction("profile-aux", new MenuLabel("Profile auxiliary"), new MenuCommandBehavior(_ => { })),
+        new MenuAction("unbound-aux", new MenuLabel("Unbound auxiliary"), new MenuCommandBehavior(_ => { }))
+      };
+      bool visible = true;
+      var action = new MenuAction("selected", new MenuLabel("Selected"), new MenuCommandBehavior(_ => { }),
+        secondaryActions: secondary, state: _ => new MenuActionState(visible, true),
+        bindingHint: explicitPrimary ? fixture.Reference(fixture.AuthoredSecondary) : null);
+      var presenter = fixture.Presenter<RadialMenuPresenter>(profile, new[] { action }, prompts);
+      var capture = presenter.GetComponentInChildren<MenuGlyphCaptureWidget>(true);
+      var center = presenter.GetComponentInChildren<MenuCenterWidget>(true);
+      Assert.That(capture.State, Is.Not.Null);
+      Assert.That(capture.State.BindingAction, Is.SameAs(explicitPrimary ? fixture.Secondary : fixture.Confirm));
+      Assert.That(capture.State.BindingHint, Does.StartWith("glyph:"));
+      Assert.That(center.BindingHint.text, Is.EqualTo(capture.State.BindingHint));
+      Assert.That(capture.State.SecondaryStates, Has.Count.EqualTo(3));
+      Assert.That(capture.State.SecondaryStates[0].BindingAction, Is.SameAs(fixture.Confirm), "An explicit auxiliary hint wins over its profile slot.");
+      Assert.That(capture.State.SecondaryStates[0].BindingHint, Does.StartWith("glyph:"));
+      Assert.That(capture.State.SecondaryStates[1].BindingAction, Is.SameAs(fixture.Secondary));
+      Assert.That(capture.State.SecondaryStates[1].BindingHint, Does.StartWith("glyph:"));
+      Assert.That(capture.State.SecondaryStates[2].BindingAction, Is.Null, "An unbound auxiliary must not invent a Submit hint.");
+      Assert.That(capture.State.SecondaryStates[2].BindingHint, Is.Empty);
+      visible = false; action.NotifyChanged();
+      Assert.That(fixture.LastSession.Selected, Is.Null);
+      Assert.That(capture.State, Is.Null);
+      Assert.That(center.gameObject.activeSelf, Is.False);
+      Assert.That(center.BindingHint.gameObject.activeInHierarchy, Is.False);
+      Assert.That(prompts.ActiveBindings, Is.Zero);
+      string retiredHint = center.BindingHint.text;
+      prompts.Revision++; prompts.Notify();
+      Assert.That(center.BindingHint.text, Is.EqualTo(retiredHint), "Cleared selection must not retain a live prompt writer.");
+    }
+
     private sealed class RecordingPrompts : IInputPromptService, IDisposable
     {
       private readonly Subject<Unit> changed = new();
       public readonly List<InputPromptStyle> Styles = new();
+      public readonly List<InputAction> ResolvedActions = new();
       public int Revision;
+      public int ActiveBindings { get; private set; }
       public InputPromptStyle LastStyle;
       public Observable<Unit> Changed => changed;
       public InputPromptContext Context => default;
       public void Notify() => changed.OnNext(Unit.Default);
       public string Resolve(InputAction action, InputPromptStyle style = InputPromptStyle.Auto, InputPromptContext? context = null)
       {
-        LastStyle = style; Styles.Add(style);
+        LastStyle = style; Styles.Add(style); ResolvedActions.Add(action);
         return style == InputPromptStyle.Glyph ? "glyph:" + action?.id + ":" + Revision : "Literal button name";
       }
       public string ResolveReference(InputActionReference action, InputPromptStyle style = InputPromptStyle.Auto, InputPromptContext? context = null)
@@ -185,7 +271,14 @@ namespace MToolKit.Tests.Editor.ContextMenus
       public IDisposable Bind(TMP_Text text, Func<string> render)
       {
         text.richText = true; text.text = render();
-        return changed.Subscribe(_ => { if (text != null) text.text = render(); });
+        var subscription = changed.Subscribe(_ => { if (text != null) text.text = render(); });
+        ActiveBindings++;
+        bool disposed = false;
+        return Disposable.Create(() =>
+        {
+          if (disposed) return;
+          disposed = true; subscription.Dispose(); ActiveBindings--;
+        });
       }
       public void Dispose() => changed.Dispose();
     }
@@ -218,6 +311,7 @@ namespace MToolKit.Tests.Editor.ContextMenus
       public InputAction Confirm => runtime.FindAction(AuthoredConfirm.id);
       public InputAction Secondary => runtime.FindAction(AuthoredSecondary.id);
       public InputAction Back => runtime.FindAction(AuthoredBack.id);
+      public MenuSession LastSession => sessions[sessions.Count - 1];
 
       public Fixture(bool wideFooterGlyphs = false)
       {
@@ -292,6 +386,17 @@ namespace MToolKit.Tests.Editor.ContextMenus
         var widget = Widget();
         widget.Bind(new MenuWidgetState(null, MenuActionState.Available, promptService: Prompts, bindingAction: Confirm));
         return widget;
+      }
+      public MenuCenterWidget CenterWidget()
+      {
+        var root = Root("Center glyph widget", canvas.transform);
+        var center = root.AddComponent<MenuCenterWidget>(); widgets.Add(center); center.UseSkin = false;
+        var hint = Root("Center binding glyph", root.transform).AddComponent<TextMeshProUGUI>();
+        hint.font = TMP_Settings.defaultFontAsset;
+        Assert.That(hint.font, Is.Not.Null);
+        hint.rectTransform.sizeDelta = new Vector2(300, 80); hint.fontSize = 20;
+        center.Configure(null, null, bindingHint: hint);
+        return center;
       }
       public T Presenter<T>(MenuProfile profile, IReadOnlyList<MenuAction> actions, IInputPromptService prompts = null) where T : Component, IContextMenuPresenter
       {

@@ -349,12 +349,12 @@ namespace MToolKit.ContextMenus.Presentation
           var auxiliary = action.SecondaryActions[i];
           if (!auxiliary.Evaluate(Session.Context).Visible) continue;
           int index = i;
-          var hint = index < Profile.InputBindings.Secondary.Count ? Profile.InputBindings.Secondary[index] : null;
+          var hint = auxiliary.BindingHint ?? (index < Profile.InputBindings.Secondary.Count ? Profile.InputBindings.Secondary[index] : null);
           states.Add(StateFor(auxiliary, false, () => InvokeSecondary(index), bindingOverride: hint));
         }
         secondaryStates = states;
       }
-      var bindingReference = action.BindingHint != null ? action.BindingHint : bindingOverride ?? Profile.InputBindings.Submit;
+      var bindingReference = bindingOverride;
       var bindingAction = Context.ResolveInputAction(bindingReference);
       string binding = Context.Prompts != null && bindingReference != null
         ? Context.Prompts.Resolve(bindingAction, InputPromptStyle.Glyph) : string.Empty;
@@ -420,7 +420,8 @@ namespace MToolKit.ContextMenus.Presentation
       // Only framework-created roots receive default dimensions. Custom center roots preserve authored composition.
       if (center.DefaultWidget != null) MenuWidgetFactory.Place(center.Rect, Vector2.zero, new Vector2(170, 150));
       else center.Rect.anchoredPosition = Vector2.zero;
-      center.Bind(StateFor(Session.Selected, true, secondary: true));
+      center.Bind(StateFor(Session.Selected, true, secondary: true,
+        bindingOverride: Session.Selected.BindingHint ?? Profile.InputBindings.Submit));
 
     }
 
