@@ -56,7 +56,7 @@ MonoBehaviour:
           routePointerClick: 0
         MaximumVisibleItems: 8
         WidgetSize: {x: 96, y: 64}
-        InnerRadius: 165
+        InnerRadius: 200
         RingWidth: 60
         StartAngle: 90
         Clockwise: 1
@@ -97,7 +97,7 @@ MonoBehaviour:
           routePointerClick: 0
         MaximumVisibleItems: 8
         WidgetSize: {x: 96, y: 64}
-        InnerRadius: 165
+        InnerRadius: 200
         RingWidth: 80
         StartAngle: 90
         Clockwise: 1
@@ -176,6 +176,7 @@ MonoBehaviour:
         ThemeSet: {fileID: 11400000, guid: 7f45e6a526fc2d34b82def88266b9ebd, type: 2}
         ListWidth: 380
         RowHeight: 48
+        Overflow: 0
         Navigation: 0
     - rid: 6067106620727623823
       type: {class: CustomMenuStyleRecipe, ns: MToolKit.Editor.ContextMenus, asm: MToolKit.Editor.ContextMenus}

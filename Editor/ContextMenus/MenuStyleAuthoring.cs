@@ -275,6 +275,7 @@ namespace MToolKit.Editor.ContextMenus
         profile.Transition = common.Transition;
         profile.Anchor = common.Anchor;
         profile.ShowCenter = common.ShowCenter; profile.Backdrop = common.Backdrop;
+        profile.ShowBackControl = common.ShowBackControl;
         profile.ReducedMotion = common.ReducedMotion; profile.MinimumTargetSize = common.MinimumTargetSize;
         profile.AnalogDeadZone = common.AnalogDeadZone; profile.AnalogHysteresis = common.AnalogHysteresis;
         profile.AnalogSelectionResetDelay = common.AnalogSelectionResetDelay;

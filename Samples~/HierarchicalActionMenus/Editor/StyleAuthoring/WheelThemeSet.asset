@@ -22,7 +22,7 @@ MonoBehaviour:
   ShowCenter: 1
   Backdrop: 1
   Layout:
-    InnerRadius: 165
+    InnerRadius: 200
     RingWidth: 80
     StartAngle: 90
     Clockwise: 1

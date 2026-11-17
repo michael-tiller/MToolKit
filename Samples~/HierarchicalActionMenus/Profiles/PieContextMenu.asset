@@ -39,8 +39,10 @@ MonoBehaviour:
   <MaximumVisibleItems>k__BackingField: 8
   <ListWidth>k__BackingField: 360
   <RowHeight>k__BackingField: 48
+  <ListOverflow>k__BackingField: 0
   <WidgetSize>k__BackingField: {x: 144, y: 56}
   <ShowCenter>k__BackingField: 0
+  <ShowBackControl>k__BackingField: 0
   <Backdrop>k__BackingField: 1
   <DrawSegments>k__BackingField: 0
   <ReducedMotion>k__BackingField: 1
@@ -64,3 +66,4 @@ MonoBehaviour:
     routePointerClick: 1
   <AnalogDeadZone>k__BackingField: 0.25
   <AnalogHysteresis>k__BackingField: 6
+  <AnalogSelectionResetDelay>k__BackingField: 0.35

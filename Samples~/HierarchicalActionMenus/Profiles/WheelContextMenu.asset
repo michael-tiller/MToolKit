@@ -28,7 +28,7 @@ MonoBehaviour:
   <ThemeOverrides>k__BackingField: {fileID: 0}
   <Navigation>k__BackingField: 1
   <Anchor>k__BackingField: 1
-  <InnerRadius>k__BackingField: 165
+  <InnerRadius>k__BackingField: 200
   <RingWidth>k__BackingField: 80
   <RingGap>k__BackingField: 12
   <ChildRingWidth>k__BackingField: 70
@@ -39,8 +39,10 @@ MonoBehaviour:
   <MaximumVisibleItems>k__BackingField: 8
   <ListWidth>k__BackingField: 360
   <RowHeight>k__BackingField: 48
+  <ListOverflow>k__BackingField: 0
   <WidgetSize>k__BackingField: {x: 96, y: 64}
   <ShowCenter>k__BackingField: 1
+  <ShowBackControl>k__BackingField: 0
   <Backdrop>k__BackingField: 1
   <DrawSegments>k__BackingField: 1
   <ReducedMotion>k__BackingField: 1
@@ -64,3 +66,4 @@ MonoBehaviour:
     routePointerClick: 1
   <AnalogDeadZone>k__BackingField: 0.25
   <AnalogHysteresis>k__BackingField: 6
+  <AnalogSelectionResetDelay>k__BackingField: 0.35

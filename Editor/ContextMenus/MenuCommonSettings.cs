@@ -21,6 +21,7 @@ namespace MToolKit.Editor.ContextMenus
     public GameObject SecondaryPrefab;
     public MenuProfile FallbackProfile;
     public bool ShowCenter = true;
+    public bool ShowBackControl = true;
     public bool Backdrop = true;
     public bool ReducedMotion;
     public float MinimumTargetSize = 32;

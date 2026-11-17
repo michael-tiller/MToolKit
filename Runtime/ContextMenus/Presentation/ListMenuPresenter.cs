@@ -45,24 +45,40 @@ namespace MToolKit.ContextMenus.Presentation
     protected override void Render(bool forceLayout)
     {
       var capacity = MenuScreenPlacement.LogicalCapacity(Root, Context.Canvas);
-      int rows = Math.Min(Profile.MaximumVisibleItems, (int)((capacity.y - 44) / Profile.RowHeight));
+      int rows = Math.Min(Profile.MaximumVisibleItems,
+        (int)((capacity.y - (Profile.ShowBackControl ? 44 : 0)) / Profile.RowHeight));
       if (rows < 1 || capacity.x < Profile.ListWidth)
       { ReportCannotFit("The list needs at least one full readable row and its configured width."); return; }
       var renderingSession = Session;
       long revision = bindingRevision;
       bool scrolling = Scrolling;
-      viewportRows = rows;
       Session.PageSize = scrolling ? int.MaxValue : rows;
       if (!Owns(renderingSession, revision)) return;
-      visible = Session.Rows.Count;
       bool flyout = Profile.Navigation == MenuNavigationPolicy.Flyout && Session.ParentActions.Count > 0;
       float width = Profile.ListWidth * (flyout ? 2 : 1);
       if (width > capacity.x) { flyout = false; width = Profile.ListWidth; }
+      SetFooter(Vector2.zero, width, !scrolling);
+      if (!Owns(renderingSession, revision)) return;
+      float footerHeight = NavigationControlSize.y > 0 ? Mathf.Max(44, NavigationControlSize.y + 8) : 0;
+      int fittingRows = Math.Min(rows, (int)((capacity.y - footerHeight) / Profile.RowHeight));
+      if (fittingRows < 1)
+      { ReportCannotFit("The list needs one full row and its readable navigation controls."); return; }
+      if (fittingRows < rows)
+      {
+        rows = fittingRows;
+        Session.PageSize = scrolling ? int.MaxValue : rows;
+        if (!Owns(renderingSession, revision)) return;
+        SetFooter(Vector2.zero, width, !scrolling);
+        if (!Owns(renderingSession, revision)) return;
+      }
+      viewportRows = rows;
+      visible = Session.Rows.Count;
+      width = Mathf.Max(width, NavigationControlSize.x);
       int parentCount = flyout ? (scrolling ? Session.ParentActions.Count : Math.Min(rows, Session.ParentActions.Count)) : 0;
       parentWidgetCount = parentCount;
       int displayedRows = Math.Max(1, Math.Max(visible, parentCount));
       if (scrolling) displayedRows = Math.Min(rows, displayedRows);
-      float height = displayedRows * Profile.RowHeight + 44;
+      float height = displayedRows * Profile.RowHeight + footerHeight;
       if (!MenuScreenPlacement.TryPlace(Root, Context.Canvas, Context.ScreenPosition,
           new Vector2(width, height), out var diagnostic, Context.ResolveAnchor(Profile.Anchor)))
       { ReportCannotFit(diagnostic); return; }
@@ -71,9 +87,9 @@ namespace MToolKit.ContextMenus.Presentation
       if (scrolling)
       {
         ConfigureScroll(ref currentScroll, "Menu rows", flyout ? Profile.ListWidth * .5f : 0,
-          contentHeight, visible);
+          contentHeight, visible, footerHeight);
         if (flyout) ConfigureScroll(ref parentScroll, "Menu parents", -Profile.ListWidth * .5f,
-          contentHeight, parentCount);
+          contentHeight, parentCount, footerHeight);
         else if (parentScroll != null) parentScroll.gameObject.SetActive(false);
       }
       else
@@ -116,7 +132,7 @@ namespace MToolKit.ContextMenus.Presentation
       }
       FinishItems(widgetIndex);
       if (!Owns(renderingSession, revision)) return;
-      SetFooter(new Vector2(0, -height * .5f + 20), width, !scrolling);
+      PositionFooter(new Vector2(0, -height * .5f + footerHeight * .5f));
       BindCenter(false);
       if (!Owns(renderingSession, revision)) return;
       int selectedIndex = SelectedIndex();
@@ -139,7 +155,9 @@ namespace MToolKit.ContextMenus.Presentation
       return item;
     }
 
-    private void ConfigureScroll(ref ScrollRect scroll, string name, float x, float height, int count)
+    protected override void OnNavigationLayoutChanged() => Refresh(false);
+
+    private void ConfigureScroll(ref ScrollRect scroll, string name, float x, float height, int count, float footerHeight)
     {
       if (scroll == null)
       {
@@ -163,7 +181,7 @@ namespace MToolKit.ContextMenus.Presentation
         input.Configure(position => { if (Owns(bindingSession, revision)) Point(position); });
       }
       scroll.gameObject.SetActive(true);
-      MenuWidgetFactory.Place((RectTransform)scroll.transform, new Vector2(x, 22), new Vector2(Profile.ListWidth, height));
+      MenuWidgetFactory.Place((RectTransform)scroll.transform, new Vector2(x, footerHeight * .5f), new Vector2(Profile.ListWidth, height));
       scroll.content.sizeDelta = new Vector2(Profile.ListWidth, Math.Max(1, count) * Profile.RowHeight);
       var position = scroll.content.anchoredPosition;
       position.x = 0; position.y = Mathf.Clamp(position.y, 0, Mathf.Max(0, scroll.content.rect.height - height));

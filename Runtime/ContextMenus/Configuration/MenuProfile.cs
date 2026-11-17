@@ -43,6 +43,8 @@ namespace MToolKit.ContextMenus.Configuration
     [field: SerializeField] public MenuListOverflowPolicy ListOverflow { get; set; } = MenuListOverflowPolicy.Pagination;
     [field: SerializeField] public Vector2 WidgetSize { get; set; } = new Vector2(96, 64);
     [field: SerializeField] public bool ShowCenter { get; set; } = true;
+    [field: SerializeField, Tooltip("Show this presenter's Back control. Disable when a host supplies one shared Back control.")]
+    public bool ShowBackControl { get; set; } = true;
     [field: SerializeField] public bool Backdrop { get; set; } = true;
     [field: SerializeField] public bool DrawSegments { get; set; } = true;
     [field: SerializeField] public bool ReducedMotion { get; set; }

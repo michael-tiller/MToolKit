@@ -32,6 +32,7 @@ namespace MToolKit.ContextMenus.Samples
     [field: SerializeField] public InputSystemUIInputModule InputModule { get; set; }
     [field: SerializeField] public TMP_Text Status { get; set; }
     [field: SerializeField] public TMP_Text Hints { get; set; }
+    [field: SerializeField] public MenuGalleryCommandHud CommandHud { get; set; }
     [field: SerializeField] public UserUiScaleCanvas ScaleCanvas { get; set; }
     [field: SerializeField] public MenuGalleryTheme StandaloneTheme { get; set; }
     [field: SerializeField] public bool OwnStandaloneTheme { get; set; }
@@ -46,7 +47,6 @@ namespace MToolKit.ContextMenus.Samples
     private IThemeService themes, injectedThemes;
     private ThemeAsset priorTheme;
     private ContextMenuHostService service;
-    private IDisposable hintBinding;
     private ReactiveSetting<float> scale;
     private InputAction point, open, hold, fire, move, themeAction, scaleUpAction, scaleDownAction, styleAction;
     private Vector2 pointer;
@@ -55,6 +55,8 @@ namespace MToolKit.ContextMenus.Samples
     private MenuContext currentContext;
     public MenuGalleryState State => state;
     public IContextMenuHostService MenuService => service;
+    public InputActionAsset RuntimeActions => input?.RuntimeActions;
+    public IInputPromptService PromptService => prompts;
 
     [Inject]
     public void Construct(IInputPromptService prompts = null, IThemeService themes = null)
@@ -95,7 +97,8 @@ namespace MToolKit.ContextMenus.Samples
       state.Changed += RefreshStatus;
       scale = new ReactiveSetting<float>(1, "ActionMenuGallery.UiScale");
       if (ScaleCanvas != null) ScaleCanvas.Configure(scale);
-      if (Hints != null) hintBinding = prompts.Bind(Hints, RenderHints);
+      if (Hints != null) { Hints.text = string.Empty; Hints.gameObject.SetActive(false); }
+      BindHud();
       initialized = true;
       RefreshStatus();
     }
@@ -185,22 +188,15 @@ namespace MToolKit.ContextMenus.Samples
       if (service?.Session?.IsOpen == true) service.Session.RefreshAsync().Forget(Report);
     }
     private Vector2 ScreenCenter() => new(Screen.width * .5f, Screen.height * .5f);
-    private string RenderHints()
+    private void BindHud()
     {
-      string Hint(string path)
-      {
-        var action = Required(path);
-        return prompts?.Resolve(action, InputPromptStyle.Glyph) ?? action.GetBindingDisplayString();
-      }
-      return "Open " + Hint("Shared/OpenContext") + "   Hold wheel " + Hint("Shared/HoldWheel")
-        + "   Confirm " + Hint("Menu/Submit") + "   Back " + Hint("Menu/Back")
-        + "   Ring " + Hint("Menu/SwitchRing") + "   Variant " + Hint("Menu/Secondary")
-        + "   Theme " + Hint("Shared/Theme") + "   Next style " + Hint("Shared/NextStyle");
+      if (CommandHud != null && prompts != null && input != null)
+        CommandHud.Bind(prompts, input.RuntimeActions, () => service?.Presenter?.Back());
     }
     private void RefreshStatus()
     {
       if (Status == null) return;
-      Status.text = "Style: " + selectedStyle + "  |  Target: " + (state.IsValid ? "valid" : "invalid")
+      Status.text = "Style: " + selectedStyle + "\nTarget: " + (state.IsValid ? "valid" : "invalid")
         + "  |  Commands: " + (state.CommandsEnabled ? "enabled" : "disabled")
         + "\nCommands executed: " + state.CommandsExecuted + "  |  Variant changes: " + state.VariantChanges
         + "  |  UI scale requested/applied: " + (scale != null ? UiScalePolicy.Percentage(scale.Value) : 100) + "%/"
@@ -214,10 +210,11 @@ namespace MToolKit.ContextMenus.Samples
     }
     private void OnEnable()
     {
-      if (initialized) input?.Enable();
+      if (initialized) { input?.Enable(); BindHud(); }
     }
     private void OnDisable()
     {
+      CommandHud?.Unbind();
       service?.Close();
       input?.Disable();
     }
@@ -234,7 +231,7 @@ namespace MToolKit.ContextMenus.Samples
       if (scaleDownAction != null) scaleDownAction.performed -= OnScaleDown;
       if (styleAction != null) styleAction.performed -= OnNextStyle;
       service?.Dispose(); service = null;
-      hintBinding?.Dispose(); ownedPrompts?.Dispose();
+      CommandHud?.Unbind(); ownedPrompts?.Dispose();
       if (ScaleCanvas != null) ScaleCanvas.Configure(null);
       scale?.Dispose();
       if (InputModule != null) InputModule.enabled = false;

@@ -10,6 +10,7 @@ not a roadmap milestone.
 
 ## [Unreleased]
 
+
 ### Added
 
 - Add optional native list scrolling alongside default pagination, with typed/inline authoring, clipped flyout columns, keyboard/controller selection reveal and viewport navigation. Preserve native release/drag ownership and prevent stationary-pointer hover from taking selection back during scrolling. (v1.25.0)
@@ -53,6 +54,8 @@ not a roadmap milestone.
 - Consolidate the sample into WheelContextMenu, PieContextMenu, ListContextMenu and NestedWheelContextMenu, retaining the optional custom-center and custom-presenter examples. Preserve renamed profile GUIDs, remove the redundant single-ring preset, and supply shared authoring sources and reproducible themed widget prefabs. (v1.22.0)
 
 ### Fixed
+
+- Place radial paging controls above the outer composition, show them only for the focused menu's available pages, and measure complete labels/glyphs. Add shared local-Back suppression, explicit navigation prompt cleanup, stacked secondary rows, and a reusable gallery command HUD with per-binding glyph columns. Preserve theme/profile authoring and all four presentations. (v1.25.6)
 
 - Clear abandoned pointer selections and reset analog selection after a configurable unscaled neutral grace period. Preserve center/auxiliary controls, submenu paths, input ownership and safe hold/release behavior; retain empty selection across availability refreshes and restore concentric ring navigation. Keep runtime binding-identity coverage on the selected center. (v1.25.5)
 

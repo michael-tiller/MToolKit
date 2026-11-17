@@ -152,19 +152,20 @@ namespace MToolKit.ContextMenus.Samples.Editor
       list.Navigation = MenuNavigationPolicy.Inline; list.ShowCenter = false; list.MaximumVisibleItems = 10;
       list.ListWidth = 380; list.RowHeight = 48; list.Anchor = MenuAnchorPolicy.Centered;
       var wheel = Profile(outputRoot, "WheelContextMenu", radialPresenter, iconOnly, center, theme.Skin, bindings);
-      wheel.SecondaryPrefab = secondary; wheel.AngularGap = 5;
+      wheel.SecondaryPrefab = secondary; wheel.AngularGap = 5; wheel.InnerRadius = 200;
       var interactions = Profile(outputRoot, "PieContextMenu", radialPresenter, pieItem, null, theme.Skin, bindings);
       interactions.DrawSegments = false; interactions.ShowCenter = false; interactions.WidgetSize = new Vector2(144, 56);
       interactions.InnerRadius = 90; interactions.RingWidth = 150;
       var concentric = Profile(outputRoot, "NestedWheelContextMenu", radialPresenter, radial, center, theme.Skin, bindings);
       concentric.Navigation = MenuNavigationPolicy.Concentric; concentric.RingWidth = 60; concentric.RingGap = 10;
-      concentric.ChildRingWidth = 55; concentric.ChildArcDegrees = 120; concentric.SecondaryPrefab = secondary;
+      concentric.ChildRingWidth = 55; concentric.ChildArcDegrees = 120; concentric.SecondaryPrefab = secondary; concentric.InnerRadius = 200;
       var custom = Profile(outputRoot, "ReplacementCards", customPresenter, pieItem, null, theme.LocalSkin, bindings);
       custom.Navigation = MenuNavigationPolicy.Replacement; custom.ListWidth = 380; custom.RowHeight = 80;
       custom.MaximumVisibleItems = 8; custom.ShowCenter = false;
       foreach (var profile in new[] { wheel, interactions, concentric, custom }) profile.FallbackProfile = list;
       foreach (var profile in new[] { list, wheel, interactions, concentric, custom })
       {
+        profile.ShowBackControl = false;
         EditorUtility.SetDirty(profile);
         if (!profile.Validate(out string diagnostic)) throw new InvalidOperationException(profile.name + ": " + diagnostic);
       }
@@ -569,21 +570,21 @@ namespace MToolKit.ContextMenus.Samples.Editor
         var dimensions = media.GetComponent<LayoutElement>();
         dimensions.minWidth = dimensions.preferredWidth = dimensions.minHeight = dimensions.preferredHeight = 16;
       }
-      ((RectTransform)root.transform).sizeDelta = new Vector2(98, 44);
+      ((RectTransform)root.transform).sizeDelta = new Vector2(200, 44);
       var label = root.GetComponent<MenuActionWidget>().Label.rectTransform;
       label.offsetMin = new Vector2(8, 0); label.offsetMax = new Vector2(-8, 0);
       var element = root.GetComponent<LayoutElement>();
-      element.minWidth = element.minHeight = 40; element.preferredWidth = 98; element.preferredHeight = 44;
+      element.minWidth = element.minHeight = 40; element.preferredWidth = 200; element.preferredHeight = 44;
       return root;
     }
     private static GameObject Center(TMP_FontAsset font, Typeset labelTypeset, Typeset descriptionTypeset, GameObject secondary)
     {
       var created = MenuWidgetFactory.CreateCenter(null, secondaryPrefab: secondary);
-      var root = created.Rect; root.name = "Center information"; root.sizeDelta = new Vector2(220, 220);
+      var root = created.Rect; root.name = "Center information"; root.sizeDelta = new Vector2(220, 320);
       var widget = (MenuCenterWidget)created.DefaultWidget;
       var content = (RectTransform)root.Find("Main content");
       content.anchorMin = content.anchorMax = content.pivot = new Vector2(.5f, .5f);
-      content.anchoredPosition = new Vector2(0, 10); content.sizeDelta = new Vector2(200, 192);
+      content.anchoredPosition = new Vector2(0, 42); content.sizeDelta = new Vector2(200, 192);
       var mainLayout = content.GetComponent<VerticalLayoutGroup>();
       mainLayout.padding = new RectOffset(); mainLayout.spacing = 2;
       var cost = MenuWidgetFactory.Text("Cost", content, 16); widget.Cost = cost;
@@ -597,14 +598,16 @@ namespace MToolKit.ContextMenus.Samples.Editor
         var preset = text.GetComponent<TypesetPreset>(); preset.ConfigureTarget(text);
         preset.SetOverrideTheme(true); preset.SetStart(text == widget.Label ? labelTypeset : descriptionTypeset);
       }
-      var container = widget.SecondaryContainer; Place(container, new Vector2(0, -109), new Vector2(200, 44));
-      var mainSpacing = widget.SpacingTargets[0];
-      Object.DestroyImmediate(container.GetComponent<SpacingPreset>());
-      Object.DestroyImmediate(container.GetComponent<VerticalLayoutGroup>());
-      var layout = container.gameObject.AddComponent<HorizontalLayoutGroup>(); layout.spacing = 4;
-      layout.childControlWidth = layout.childControlHeight = true; layout.childForceExpandWidth = layout.childForceExpandHeight = true;
-      var secondarySpacing = container.gameObject.AddComponent<SpacingPreset>(); secondarySpacing.ConfigureTarget(layout);
-      widget.SpacingTargets = new[] { mainSpacing, secondarySpacing }; widget.BackgroundRole = MenuVisualRole.Center;
+      var container = widget.SecondaryContainer; Place(container, new Vector2(0, -109), new Vector2(200, 92));
+      container.pivot = new Vector2(.5f, .5f);
+      // Keep the factory's native vertical layout and semantic spacing binding: each auxiliary owns one readable full-width row.
+      var layout = container.GetComponent<VerticalLayoutGroup>(); layout.spacing = 4;
+      layout.childControlWidth = layout.childControlHeight = true;
+      layout.childForceExpandWidth = true; layout.childForceExpandHeight = false;
+      var fitter = container.gameObject.AddComponent<ContentSizeFitter>();
+      fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+      fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+      widget.BackgroundRole = MenuVisualRole.Center;
       return root.gameObject;
     }
     private static GameObject CustomCenter(TMP_FontAsset font)
@@ -683,12 +686,7 @@ namespace MToolKit.ContextMenus.Samples.Editor
           buttonRect.anchorMin = buttonRect.anchorMax = new Vector2(0, 1);
           UnityEventTools.AddPersistentListener(button.onClick, callbacks[i]);
         }
-        controller.Status = Text("Status", controls, font, 16);
-        controller.Status.rectTransform.anchorMin = controller.Status.rectTransform.anchorMax = new Vector2(1, .5f);
-        Place(controller.Status.rectTransform, new Vector2(-150, -100), new Vector2(260, 320), false);
-        controller.Hints = Text("Input hints", controls, font, 16);
-        controller.Hints.rectTransform.anchorMin = controller.Hints.rectTransform.anchorMax = new Vector2(1, .5f);
-        Place(controller.Hints.rectTransform, new Vector2(-150, 220), new Vector2(260, 240), false);
+        ConfigureCommandHud(controller, controls, font);
         EnsureNoUnrelatedDirtyAssets(Path.GetDirectoryName(path)?.Replace('\\', '/'));
         if (!EditorSceneManager.SaveScene(scene, path)) throw new InvalidOperationException("Unity could not save the action-menu gallery scene.");
       }
@@ -697,6 +695,76 @@ namespace MToolKit.ContextMenus.Samples.Editor
         if (previous.IsValid() && previous.isLoaded) SceneManager.SetActiveScene(previous);
         EditorSceneManager.CloseScene(scene, true);
       }
+    }
+    /// <summary>Creates only the shared command HUD and moves its existing status label; never regenerates a gallery or saves assets/scenes.</summary>
+    public static MenuGalleryCommandHud ConfigureCommandHud(MenuGalleryController controller, Transform controls, TMP_FontAsset font)
+    {
+      if (controller == null || controls == null || font == null)
+        throw new ArgumentException("A gallery controller, its controls parent, and a TMP font are required.");
+      if (controller.gameObject.scene != controls.gameObject.scene)
+        throw new InvalidOperationException("Gallery controls must belong to the controller's scene.");
+      if (controller.CommandHud != null || controls.GetComponentInChildren<MenuGalleryCommandHud>(true) != null)
+        throw new InvalidOperationException("The gallery already has a command HUD. Existing custom HUDs are never replaced.");
+
+      if (controller.Status == null) controller.Status = Text("Status", controls, font, 16);
+      var status = controller.Status.rectTransform;
+      status.anchorMin = status.anchorMax = status.pivot = Vector2.one;
+      status.anchoredPosition = new Vector2(-24, -110);
+      status.sizeDelta = new Vector2(360, 240);
+      controller.Status.alignment = TextAlignmentOptions.TopRight;
+      controller.Status.textWrappingMode = TextWrappingModes.Normal;
+      controller.Status.overflowMode = TextOverflowModes.Overflow;
+      if (controller.Hints != null) { controller.Hints.text = string.Empty; controller.Hints.gameObject.SetActive(false); }
+
+      var frame = Rect("Command hints", controls);
+      frame.anchorMin = frame.anchorMax = frame.pivot = Vector2.right;
+      frame.anchoredPosition = new Vector2(-24, 24);
+      frame.sizeDelta = new Vector2(360, 348);
+      var stack = frame.gameObject.AddComponent<VerticalLayoutGroup>();
+      stack.spacing = 4; stack.childAlignment = TextAnchor.LowerRight;
+      stack.childControlWidth = stack.childControlHeight = true;
+      stack.childForceExpandWidth = true; stack.childForceExpandHeight = false;
+      var fit = frame.gameObject.AddComponent<ContentSizeFitter>();
+      fit.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+      fit.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+      var hud = frame.gameObject.AddComponent<MenuGalleryCommandHud>();
+      string[] labels = { "Open", "Hold", "Confirm", "Back", "Ring", "Variant", "Theme", "Next style" };
+      string[] paths = { "Shared/OpenContext", "Shared/HoldWheel", "Menu/Submit", "Menu/Back",
+        "Menu/SwitchRing", "Menu/Secondary", "Shared/Theme", "Shared/NextStyle" };
+      var rows = new MenuGalleryHudRow[labels.Length];
+      for (int i = 0; i < rows.Length; i++)
+      {
+        var row = Rect(labels[i], frame);
+        row.sizeDelta = new Vector2(360, 40);
+        var dimensions = row.gameObject.AddComponent<LayoutElement>();
+        dimensions.minHeight = dimensions.preferredHeight = 40;
+        var layout = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+        layout.spacing = 12; layout.childAlignment = TextAnchor.MiddleRight;
+        layout.childControlWidth = layout.childControlHeight = true;
+        layout.childForceExpandWidth = layout.childForceExpandHeight = false;
+        var label = Text("Label", row, font, 18);
+        label.text = labels[i]; label.alignment = TextAlignmentOptions.MidlineRight;
+        label.textWrappingMode = TextWrappingModes.NoWrap; label.overflowMode = TextOverflowModes.Overflow;
+        var labelSize = label.gameObject.AddComponent<LayoutElement>();
+        labelSize.minWidth = Mathf.Ceil(label.GetPreferredValues(labels[i], Mathf.Infinity, Mathf.Infinity).x);
+        labelSize.flexibleWidth = 1;
+        var glyph = Text("Glyph", row, font, 18);
+        glyph.alignment = TextAlignmentOptions.Midline;
+        glyph.textWrappingMode = TextWrappingModes.NoWrap; glyph.overflowMode = TextOverflowModes.Overflow;
+        var glyphSize = glyph.gameObject.AddComponent<LayoutElement>();
+        glyphSize.minWidth = glyphSize.preferredWidth = 28;
+        Button button = null;
+        if (paths[i] == "Menu/Back")
+        {
+          var image = row.gameObject.AddComponent<Image>(); image.color = Color.clear;
+          button = row.gameObject.AddComponent<Button>(); button.targetGraphic = image;
+          button.navigation = new Navigation { mode = Navigation.Mode.None };
+        }
+        rows[i] = new MenuGalleryHudRow { Label = labels[i], ActionPath = paths[i],
+          LabelTarget = label, GlyphTarget = glyph, Button = button };
+      }
+      hud.Rows = rows; controller.CommandHud = hud;
+      return hud;
     }
     private static Button Control(Transform parent, TMP_FontAsset font, string label, Vector2 position, Vector2 size)
     {

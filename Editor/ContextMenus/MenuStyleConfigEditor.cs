@@ -144,7 +144,7 @@ namespace MToolKit.Editor.ContextMenus
         if (commonDetails)
         {
           DrawFallbackSkin(common.FindProperty("Skin"));
-          Draw(common, "ItemPrefab", "CenterPrefab", "SecondaryPrefab", "FallbackProfile", "ShowCenter", "Backdrop");
+          Draw(common, "ItemPrefab", "CenterPrefab", "SecondaryPrefab", "FallbackProfile", "ShowCenter", "ShowBackControl", "Backdrop");
           EditorGUILayout.LabelField("Input", EditorStyles.boldLabel);
           Draw(common, "InputBindings", "AnalogDeadZone", "AnalogHysteresis", "AnalogSelectionResetDelay");
           EditorGUILayout.LabelField("Accessibility and placement", EditorStyles.boldLabel);

@@ -37,8 +37,10 @@ MonoBehaviour:
   SecondaryPrefab: {fileID: 0}
   FallbackProfile: {fileID: 0}
   ShowCenter: 1
+  ShowBackControl: 0
   Backdrop: 1
   ReducedMotion: 1
   MinimumTargetSize: 40
   AnalogDeadZone: 0.25
   AnalogHysteresis: 6
+  AnalogSelectionResetDelay: 0.35

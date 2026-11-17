@@ -41,7 +41,7 @@ namespace MToolKit.ContextMenus.Presentation
       float maximumRadius = concentric ? outerRadius + Profile.RingGap + Profile.ChildRingWidth : outerRadius;
       float extent = maximumRadius + Mathf.Max(Profile.WidgetSize.x, Profile.WidgetSize.y) * .5f;
       if (!MenuScreenPlacement.TryPlace(Root, Context.Canvas, Context.ScreenPosition,
-          new Vector2(extent * 2, extent * 2 + 72), out var diagnostic, Context.ResolveAnchor(Profile.Anchor)))
+          new Vector2(extent * 2, extent * 2), out var diagnostic, Context.ResolveAnchor(Profile.Anchor)))
       {
         // Preserve the hierarchy and use a one-ring sliding window if only the outer arc cannot fit.
         if (concentric)
@@ -51,7 +51,7 @@ namespace MToolKit.ContextMenus.Presentation
           extent = maximumRadius + Mathf.Max(Profile.WidgetSize.x, Profile.WidgetSize.y) * .5f;
         }
         if (!MenuScreenPlacement.TryPlace(Root, Context.Canvas, Context.ScreenPosition,
-            new Vector2(extent * 2, extent * 2 + 72), out diagnostic, Context.ResolveAnchor(Profile.Anchor)))
+            new Vector2(extent * 2, extent * 2), out diagnostic, Context.ResolveAnchor(Profile.Anchor)))
         { ReportCannotFit(diagnostic); return; }
       }
       FitsViewport = true; PlacementDiagnostic = null;
@@ -101,11 +101,20 @@ namespace MToolKit.ContextMenus.Presentation
       RenderRing(OuterGeometry, outerActions, 1, ref index);
       for (int i = index; i < graphics.Count; i++) graphics[i].gameObject.SetActive(false);
       FinishItems(index);
-      SetFooter(new Vector2(0, -extent - 18), Math.Max(240, outerRadius * 1.5f));
+      int pageIndex = Session.PageIndex, pageCount = Session.PageCount;
+      if (concentric && focusedRing == 0)
+      {
+        pageIndex = parentStart / innerCapacity;
+        pageCount = Math.Max(1, (Session.ParentActions.Count - 1) / innerCapacity + 1);
+      }
+      float navigationGap = Profile.GetTheme(Context.Themes).GetSpacing()?.Gap ?? 8;
+      SetRadialNavigation(extent, navigationGap, pageIndex, pageCount);
       BindCenter(true);
       PlaceBoundContent(false);
       QueueContentLayoutCheck();
     }
+
+    protected override void OnNavigationLayoutChanged() => QueueContentLayoutCheck();
 
     private void PlaceBoundContent(bool notify)
     {

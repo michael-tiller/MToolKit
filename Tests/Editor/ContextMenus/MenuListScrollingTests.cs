@@ -213,6 +213,7 @@ namespace MToolKit.Tests.Editor.ContextMenus
     public void Clipped_row_cannot_steal_semantic_pointer_selection_or_confirm_a_previous_leaf()
     {
       Scrolling(); Open(Commands(18));
+      Assert.That(session.Selected.Id.Value, Is.EqualTo("item0"));
       var scroll = Scroll();
       var clipped = (RectTransform)Widget("item17").transform;
       var point = RectTransformUtility.WorldToScreenPoint(camera, clipped.TransformPoint(clipped.rect.center));
@@ -220,7 +221,7 @@ namespace MToolKit.Tests.Editor.ContextMenus
       // Supply a broad-phase row hit deliberately: semantic selection must still honor the viewport mask.
       raycaster.Target = clipped;
       presenter.Point(point); presenter.ConfirmPointer();
-      Assert.That(session.Selected.Id.Value, Is.EqualTo("item0"));
+      Assert.That(session.Selected, Is.Null);
       Assert.That(calls, Is.Zero, "A clipped row must not execute itself or reuse the old highlighted command.");
       Assert.That(session.IsOpen, Is.True);
     }

@@ -6,6 +6,7 @@ using MToolKit.ContextMenus.Configuration;
 using MToolKit.Runtime.Input.Prompts;
 using MToolKit.ContextMenus.Widgets;
 using MToolKit.Runtime.UI.Scaling;
+using MToolKit.Theme.Spacing;
 using R3;
 using Serilog;
 using TMPro;
@@ -29,6 +30,11 @@ namespace MToolKit.ContextMenus.Presentation
     private TMP_Text backLabel, previousLabel, nextLabel;
     private Button previousButton, nextButton;
     private readonly List<FooterControl> footerControls = new();
+    private Vector2 footerPosition;
+    private float footerWidth, radialNavigationExtent, radialNavigationSpacing;
+    private bool radialNavigation;
+    private int navigationThemeDepth;
+    protected Vector2 NavigationControlSize { get; private set; }
     private GameObject previousFocus;
     private bool refreshing, analogLatched, holding;
     private long bindingGeneration;
@@ -98,12 +104,16 @@ namespace MToolKit.ContextMenus.Presentation
       var oldItems = items.ToArray(); items.Clear();
       var oldCenter = center; var oldSecondary = secondaryTemplate;
       var oldBackdrop = backdrop; var oldFooter = footer;
+      var oldFooterControls = footerControls.ToArray();
       var oldNavigation = navigationLease;
       var oldTransition = transition; var oldCancellation = transitionCancellation;
       Session = null; Profile = null; Context = null;
       themes = null; prompts = null; scaleCanvas = null; previousFocus = null;
       center = null; secondaryTemplate = null; backdrop = null; footer = null;
+      backLabel = previousLabel = nextLabel = null;
+      previousButton = nextButton = null;
       footerControls.Clear();
+      NavigationControlSize = Vector2.zero;
       navigationLease = null; transition = null; transitionCancellation = null; transitionAsset = null;
       transitionGeneration++; hasTransitionSnapshot = false;
       transitionPath.Clear(); transitionRows.Clear();
@@ -138,6 +148,11 @@ namespace MToolKit.ContextMenus.Presentation
         for (int i = 0; i < oldItems.Length; i++) CleanupOwned(oldItems[i].Dispose, "item widget disposal");
         if (oldCenter != null) CleanupOwned(oldCenter.Dispose, "center widget disposal");
         if (oldSecondary != null) CleanupOwned(oldSecondary.Dispose, "secondary template disposal");
+        for (int i = 0; i < oldFooterControls.Length; i++)
+        {
+          var widget = oldFooterControls[i].Widget;
+          if (widget != null) CleanupOwned(widget.Unbind, "navigation prompt disposal");
+        }
         CleanupOwned(() => DestroyOwned(oldBackdrop), "backdrop destruction");
         CleanupOwned(() => DestroyOwned(oldFooter), "footer destruction");
       }
@@ -461,13 +476,36 @@ namespace MToolKit.ContextMenus.Presentation
       public Action Activate;
       public string Label;
       public InputActionReference Binding;
-      public bool Enabled = true, Hovered;
+      public bool Enabled = true, Hovered, Visible;
+      public Vector2 Size, LabelSize, HintSize;
     }
 
     protected void SetFooter(Vector2 position, float width) => SetFooter(position, width, true);
 
     protected void SetFooter(Vector2 position, float width, bool showPagination)
     {
+      radialNavigation = false;
+      footerPosition = position; footerWidth = width;
+      SetNavigationState(Session.PageIndex, showPagination ? Session.PageCount : 1);
+    }
+
+    protected void PositionFooter(Vector2 position)
+    {
+      footerPosition = position;
+      if (!radialNavigation) LayoutNavigationControls();
+    }
+
+    /// <summary>Native radial controls retain the same semantic actions without a bottom paging strip.</summary>
+    protected void SetRadialNavigation(float extent, float spacing, int pageIndex, int pageCount)
+    {
+      radialNavigation = true;
+      radialNavigationExtent = extent; radialNavigationSpacing = Mathf.Max(0, spacing);
+      SetNavigationState(pageIndex, pageCount);
+    }
+
+    private void SetNavigationState(int pageIndex, int pageCount)
+    {
+      if (!IsBound) return;
       if (footer == null)
       {
         footer = MenuWidgetFactory.Rect("Menu navigation", Root).gameObject;
@@ -483,14 +521,16 @@ namespace MToolKit.ContextMenus.Presentation
           layout.childAlignment = TextAnchor.MiddleCenter;
           layout.childControlWidth = layout.childControlHeight = true;
           layout.childForceExpandWidth = layout.childForceExpandHeight = false;
+          var spacing = rect.gameObject.AddComponent<SpacingPreset>(); spacing.ConfigureTarget(layout);
           label = MenuWidgetFactory.Text(name + " label", rect, 16);
-          label.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
+          label.gameObject.AddComponent<LayoutElement>();
           var hint = MenuWidgetFactory.Text(name + " binding", rect, 16);
           var hintLayout = hint.gameObject.AddComponent<LayoutElement>();
           hintLayout.minWidth = 28; hintLayout.preferredWidth = -1;
           var widget = rect.gameObject.AddComponent<MenuActionWidget>(); widget.Background = image;
           widget.BackgroundRole = MenuVisualRole.Auxiliary; widget.Configure(label, null, null, null, button);
           widget.BindingHint = hint;
+          widget.SpacingTargets = new[] { spacing };
           footerControls.Add(new FooterControl { Widget = widget, Activate = callback, Label = name });
           return button;
         }
@@ -498,38 +538,64 @@ namespace MToolKit.ContextMenus.Presentation
         previousButton = Button("Previous", () => Page(-1), out previousLabel);
         nextButton = Button("Next", () => Page(1), out nextLabel);
       }
-      MenuWidgetFactory.Place((RectTransform)footer.transform, position, new Vector2(width, 36));
-      float itemWidth = showPagination ? width / 3 : width;
+      var session = Session;
+      long generation = bindingGeneration;
+      bool restoreItemFocus = false;
       for (int i = 0; i < 3; i++)
       {
-        var rect = (RectTransform)footer.transform.GetChild(i);
-        rect.gameObject.SetActive(showPagination || i == 0);
-        MenuWidgetFactory.Place(rect, new Vector2(showPagination ? (i - 1) * itemWidth : 0, 0), new Vector2(itemWidth - 2, 36));
+        var control = footerControls[i];
+        control.Visible = i == 0 ? Profile.ShowBackControl : pageCount > 1;
+        if (!control.Visible)
+        {
+          var events = navigationLease?.Owner != null ? navigationLease.Owner : EventSystem.current;
+          var selected = events != null ? events.currentSelectedGameObject : null;
+          if (selected != null && selected.transform.IsChildOf(control.Widget.transform))
+          { events.SetSelectedGameObject(null); restoreItemFocus = true; }
+          control.Widget.Unbind();
+          if (!OwnsNavigation(control, session, generation)) return;
+        }
+        control.Widget.gameObject.SetActive(control.Visible);
+        if (!OwnsNavigation(control, session, generation)) return;
       }
       footerControls[0].Label = Session.Path.Count == 0 ? "Close" : "Back";
       footerControls[0].Binding = Profile.InputBindings.Back;
-      footerControls[1].Label = "Previous"; footerControls[1].Enabled = Session.PageIndex > 0;
+      footerControls[1].Label = "Previous"; footerControls[1].Enabled = pageIndex > 0;
       footerControls[1].Binding = Profile.InputBindings.PageBackward;
-      footerControls[2].Label = "Next " + (Session.PageIndex + 1) + "/" + Session.PageCount;
+      footerControls[2].Label = "Next " + (pageIndex + 1) + "/" + pageCount;
       footerControls[2].Binding = Profile.InputBindings.PageForward;
-      footerControls[2].Enabled = Session.PageIndex + 1 < Session.PageCount;
+      footerControls[2].Enabled = pageIndex + 1 < pageCount;
+      footer.SetActive(Profile.ShowBackControl || pageCount > 1);
       ThemeFooterControls();
+      if (generation == bindingGeneration && ReferenceEquals(session, Session) && restoreItemFocus)
+        FinishItems(VisibleWidgetCount);
     }
 
     private void ThemeFooterControls()
     {
       if (!IsBound) return;
-      for (int i = 0; i < footerControls.Count; i++) ThemeFooter(footerControls[i]);
+      long generation = bindingGeneration;
+      navigationThemeDepth++;
+      try
+      {
+        for (int i = 0; i < footerControls.Count && generation == bindingGeneration; i++)
+          ThemeFooter(footerControls[i]);
+      }
+      finally { navigationThemeDepth--; }
+      if (generation == bindingGeneration) LayoutNavigationControls();
     }
 
     private void ThemeFooter(FooterControl control)
     {
-      if (!IsBound || control.Widget == null) return;
+      if (!IsBound || control.Widget == null || !control.Visible) return;
+      var session = Session;
+      long generation = bindingGeneration;
       var events = navigationLease?.Owner != null ? navigationLease.Owner : EventSystem.current;
       bool selected = events != null && events.currentSelectedGameObject == control.Widget.gameObject;
       var action = Context.ResolveInputAction(control.Binding);
+      if (!OwnsNavigation(control, session, generation)) return;
       string hint = Context.Prompts != null && action != null
         ? Context.Prompts.Resolve(action, InputPromptStyle.Glyph) : string.Empty;
+      if (!OwnsNavigation(control, session, generation)) return;
       bool showHint = !string.IsNullOrEmpty(hint);
       if (control.Widget.BindingHint != null) control.Widget.BindingHint.gameObject.SetActive(showHint);
       control.Widget.Bind(new MenuWidgetState(null, new MenuActionState(true, control.Enabled), selected,
@@ -537,13 +603,110 @@ namespace MToolKit.ContextMenus.Presentation
         activate: control.Activate, select: ThemeFooterControls, isHovered: control.Hovered,
         hoverChanged: hot => { control.Hovered = hot; ThemeFooter(control); }, theme: Profile.GetTheme(Context.Themes),
         bindingHint: hint, promptService: Context.Prompts, bindingAction: action));
-      if (control.Widget != null && control.Widget.BindingHint != null)
-      {
-        var text = control.Widget.BindingHint;
-        var layout = text.GetComponent<LayoutElement>();
-        if (layout != null) layout.minWidth = Mathf.Ceil(Mathf.Max(28, text.GetPreferredValues().x));
-      }
+      if (!OwnsNavigation(control, session, generation)) return;
+      control.Size = MeasureNavigationControl(control);
+      if (navigationThemeDepth == 0) LayoutNavigationControls();
     }
+
+    private bool OwnsNavigation(FooterControl control, MenuSession session, long generation)
+      => generation == bindingGeneration && ReferenceEquals(session, Session) && IsBound &&
+        control.Widget != null && footerControls.Contains(control);
+
+    private Vector2 MeasureNavigationControl(FooterControl control)
+    {
+      Vector2 Measure(TMP_Text text)
+      {
+        if (text == null || !text.gameObject.activeSelf) return Vector2.zero;
+        text.textWrappingMode = TextWrappingModes.NoWrap;
+        text.overflowMode = TextOverflowModes.Overflow;
+        var preferred = text.GetPreferredValues();
+        var layout = text.GetComponent<LayoutElement>();
+        if (layout != null)
+        {
+          layout.minWidth = layout.preferredWidth = Mathf.Ceil(preferred.x);
+          layout.flexibleWidth = 0;
+        }
+        return new Vector2(Mathf.Ceil(preferred.x), Mathf.Ceil(preferred.y));
+      }
+      var label = Measure(control.Widget.Label);
+      var hint = Measure(control.Widget.BindingHint);
+      control.LabelSize = label; control.HintSize = hint;
+      var group = control.Widget.GetComponent<HorizontalLayoutGroup>();
+      float gap = hint.x > 0 && label.x > 0 ? group.spacing : 0;
+      return new Vector2(Mathf.Max(Profile.MinimumTargetSize, Mathf.Ceil(label.x + hint.x + gap + group.padding.horizontal)),
+        Mathf.Max(36, Mathf.Max(Profile.MinimumTargetSize, Mathf.Ceil(Mathf.Max(label.y, hint.y) + group.padding.vertical))));
+    }
+
+    private void LayoutNavigationControls()
+    {
+      if (!IsBound || footer == null) return;
+      int count = 0;
+      float width = 0, height = 0;
+      for (int i = 0; i < footerControls.Count; i++)
+      {
+        if (!footerControls[i].Visible) continue;
+        count++; width += footerControls[i].Size.x; height = Mathf.Max(height, footerControls[i].Size.y);
+      }
+      if (count == 0) { NavigationControlSize = Vector2.zero; return; }
+      if (radialNavigation)
+      {
+        MenuWidgetFactory.Place((RectTransform)footer.transform, Vector2.zero, Vector2.zero);
+        for (int i = 0; i < footerControls.Count; i++)
+        {
+          var control = footerControls[i];
+          if (!control.Visible) continue;
+          var direction = i == 0 ? new Vector2(.7071068f, -.7071068f) :
+            new Vector2(i == 1 ? -.8660254f : .8660254f, .5f);
+          float support = Mathf.Abs(direction.x) * control.Size.x * .5f + Mathf.Abs(direction.y) * control.Size.y * .5f;
+          float spacing = Mathf.Max(radialNavigationSpacing, control.Widget.GetComponent<HorizontalLayoutGroup>().spacing);
+          MenuWidgetFactory.Place((RectTransform)control.Widget.transform,
+            direction * (radialNavigationExtent + spacing + support), control.Size);
+          PlaceNavigationContents(control);
+        }
+        NavigationControlSize = Vector2.zero;
+      }
+      else
+      {
+        const float gap = 2;
+        float span = Mathf.Max(footerWidth, width + gap * (count - 1));
+        MenuWidgetFactory.Place((RectTransform)footer.transform, footerPosition, new Vector2(span, height));
+        float extra = (span - width - gap * (count - 1)) / count;
+        float cursor = -span * .5f;
+        for (int i = 0; i < footerControls.Count; i++)
+        {
+          var control = footerControls[i];
+          if (!control.Visible) continue;
+          var size = new Vector2(control.Size.x + extra, height);
+          MenuWidgetFactory.Place((RectTransform)control.Widget.transform, new Vector2(cursor + size.x * .5f, 0), size);
+          PlaceNavigationContents(control);
+          cursor += size.x + gap;
+        }
+        NavigationControlSize = new Vector2(span, height);
+      }
+      OnNavigationLayoutChanged();
+    }
+
+    private static void PlaceNavigationContents(FooterControl control)
+    {
+      // Give the owned texts their measured bounds before the normal canvas pass, so
+      // screen fitting never sees the temporary 100x100 RectTransform defaults.
+      var layout = control.Widget.GetComponent<HorizontalLayoutGroup>();
+      float gap = control.LabelSize.x > 0 && control.HintSize.x > 0 ? layout.spacing : 0;
+      float cursor = -(control.LabelSize.x + control.HintSize.x + gap) * .5f +
+        (layout.padding.left - layout.padding.right) * .5f;
+      float y = (layout.padding.bottom - layout.padding.top) * .5f;
+      if (control.Widget.Label != null && control.Widget.Label.gameObject.activeSelf)
+      {
+        MenuWidgetFactory.Place(control.Widget.Label.rectTransform,
+          new Vector2(cursor + control.LabelSize.x * .5f, y), control.LabelSize);
+        cursor += control.LabelSize.x + gap;
+      }
+      if (control.Widget.BindingHint != null && control.Widget.BindingHint.gameObject.activeSelf)
+        MenuWidgetFactory.Place(control.Widget.BindingHint.rectTransform,
+          new Vector2(cursor + control.HintSize.x * .5f, y), control.HintSize);
+    }
+
+    protected virtual void OnNavigationLayoutChanged() { }
 
     private void CreateBackdrop()
     {

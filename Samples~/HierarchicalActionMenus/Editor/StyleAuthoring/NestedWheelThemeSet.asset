@@ -23,7 +23,7 @@ MonoBehaviour:
   Backdrop: 1
   Layout:
     InnerRing:
-      InnerRadius: 165
+      InnerRadius: 200
       RingWidth: 60
       StartAngle: 90
       Clockwise: 1
