@@ -35,20 +35,27 @@ namespace MToolKit.Theme.Spacing
     [ShowInInspector]
     private ELayoutType layoutType;
     
+    /// <summary>Explicit target wiring for runtime-created UI without replacing another preset owner's configured target.</summary>
+    public void ConfigureTarget(LayoutGroup target)
+    {
+      if (target == null) throw new System.ArgumentNullException(nameof(target));
+      CacheTarget(target);
+      if (Current != null) Apply(Current);
+    }
+
     protected override void AutoWire()
     {
-      LayoutGroup = GetComponent<LayoutGroup>();
+      var target = GetComponent<LayoutGroup>();
+      if (target != null) ConfigureTarget(target);
+    }
 
-      if (LayoutGroup is HorizontalOrVerticalLayoutGroup horizontalOrVerticalLayoutGroup)
-      {
-        this.horizontalOrVerticalLayoutGroup = horizontalOrVerticalLayoutGroup;
-        layoutType = ELayoutType.HorizontalOrVertical;
-      }
-      else if (LayoutGroup is GridLayoutGroup gridLayoutGroup)
-      {
-        this.gridLayoutGroup = gridLayoutGroup;
-        layoutType = ELayoutType.Grid;
-      }
+    private void CacheTarget(LayoutGroup target)
+    {
+      LayoutGroup = target;
+      horizontalOrVerticalLayoutGroup = target as HorizontalOrVerticalLayoutGroup;
+      gridLayoutGroup = target as GridLayoutGroup;
+      layoutType = horizontalOrVerticalLayoutGroup != null ? ELayoutType.HorizontalOrVertical :
+        gridLayoutGroup != null ? ELayoutType.Grid : ELayoutType.None;
     }
 
     protected override Spacing Resolve(Theme theme, string id)
@@ -60,6 +67,8 @@ namespace MToolKit.Theme.Spacing
     protected override void Apply(Spacing spacing)
     {
       if (LayoutGroup == null || spacing == null) return;
+      // Nonserialized type caches do not survive prefab instantiation. Preserve the wired target and refresh its adapters.
+      CacheTarget(LayoutGroup);
 
       // RectOffset is a reference type. The Spacing SO is a read-only source of truth (changed only by
       // an author), so copy it — assigning spacing.Padding directly would alias every consuming

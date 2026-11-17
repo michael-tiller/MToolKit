@@ -1,0 +1,14 @@
+{
+  "name": "MToolKit.ContextMenus.Tests.Runtime",
+  "rootNamespace": "MToolKit.Tests.Runtime.ContextMenus",
+  "references": ["UnityEngine.TestRunner", "MToolKit.ContextMenus", "MToolKit.Runtime", "MToolKit.Theme", "Unity.InputSystem", "Unity.Addressables", "Unity.ResourceManager", "UniTask", "UniTask.Addressables"],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll", "R3.dll"],
+  "autoReferenced": false,
+  "defineConstraints": ["UNITY_INCLUDE_TESTS", "ENABLE_INPUT_SYSTEM"],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

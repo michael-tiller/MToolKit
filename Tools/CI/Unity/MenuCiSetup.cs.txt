@@ -1,0 +1,29 @@
+// Copied only into a disposable CI integration project.
+using System;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+
+public static class LicensedMenuCiEntry
+{
+    public static void ValidateSavedGallery()
+    {
+        try
+        {
+            var matches = AssetDatabase.FindAssets("ActionMenuGallery t:Scene", new[] { "Assets/Samples/MToolKit" });
+            if (matches.Length != 1)
+                throw new InvalidOperationException("The candidate sample must contain exactly one saved ActionMenuGallery scene; CI does not regenerate authored assets.");
+            var path = AssetDatabase.GUIDToAssetPath(matches[0]);
+            var scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+            if (!scene.IsValid() || !scene.isLoaded)
+                throw new InvalidOperationException("The candidate's saved menu gallery could not be opened.");
+            Debug.Log("LICENSED_MENU_CI_SETUP_PASS");
+            EditorApplication.Exit(0);
+        }
+        catch (Exception exception)
+        {
+            Debug.LogException(exception);
+            EditorApplication.Exit(1);
+        }
+    }
+}

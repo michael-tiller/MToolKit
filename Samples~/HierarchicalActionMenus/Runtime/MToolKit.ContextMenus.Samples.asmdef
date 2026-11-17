@@ -1,0 +1,13 @@
+{
+  "name": "MToolKit.ContextMenus.Samples",
+  "rootNamespace": "MToolKit.ContextMenus.Samples",
+  "references": ["MToolKit.ContextMenus", "MToolKit.Runtime", "MToolKit.Theme", "UnityEngine.UI", "Unity.TextMeshPro", "Unity.InputSystem", "UniTask", "VContainer"],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "autoReferenced": true,
+  "defineConstraints": ["ENABLE_INPUT_SYSTEM"],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

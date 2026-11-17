@@ -1,0 +1,29 @@
+{
+    "references":  [
+                       "UnityEngine.TestRunner",
+                       "UnityEditor.TestRunner",
+                       "MToolKit.Editor.ContextMenus",
+                       "MToolKit.ContextMenus",
+                       "MToolKit.Runtime",
+                       "MToolKit.Theme",
+                       "UnityEngine.UI",
+                       "Unity.TextMeshPro",
+                       "Unity.InputSystem",
+                       "Unity.Addressables",
+                       "UniTask"
+                   ],
+    "autoReferenced":  false,
+    "includePlatforms":  [
+                             "Editor"
+                         ],
+    "defineConstraints":  [
+                              "UNITY_INCLUDE_TESTS",
+                              "ENABLE_INPUT_SYSTEM"
+                          ],
+    "name":  "MToolKit.ContextMenus.Authoring.Tests.Editor",
+    "rootNamespace":  "MToolKit.Editor.ContextMenus.Tests",
+    "overrideReferences":  true,
+    "precompiledReferences":  [
+                                  "nunit.framework.dll"
+                              ]
+}

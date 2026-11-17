@@ -328,10 +328,11 @@ namespace MToolKit.Runtime.Input.Prompts
         if (playerInput != null) RefreshPlayerContext();
         if (deviceChanged) NotifyChanged();
       }
-      else if (change == InputActionChange.BoundControlsChanged || change == InputActionChange.ActionEnabled
-        || change == InputActionChange.ActionDisabled || change == InputActionChange.ActionMapEnabled
-        || change == InputActionChange.ActionMapDisabled)
+      else if (change == InputActionChange.BoundControlsChanged)
       {
+        // Prompts describe effective bindings even while actions are disabled. Routing-only
+        // enable/disable bursts must not refresh every prompt and presenter once per action.
+        // Native binding resolution still publishes BoundControlsChanged, including on first use.
         if (IsBindingRelevant(value)) NotifyChanged();
       }
     }

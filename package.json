@@ -1,8 +1,15 @@
 {
   "name": "com.michael-tiller.mtoolkit",
   "displayName": "MToolKit",
-  "version": "1.20.2",
+  "version": "1.25.9",
   "unity": "2021.3",
   "author": "Michael Tiller",
-  "description": "Modular runtime framework for production Unity applications built on modern .NET practices."
+  "description": "Modular runtime framework for production Unity applications built on modern .NET practices.",
+  "samples": [
+    {
+      "displayName": "Hierarchical Action Menus",
+      "description": "One authored action hierarchy with list, radial, concentric, replacement and custom presentations.",
+      "path": "Samples~/HierarchicalActionMenus"
+    }
+  ]
 }

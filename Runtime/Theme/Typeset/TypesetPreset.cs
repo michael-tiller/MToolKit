@@ -16,6 +16,15 @@ namespace MToolKit.Theme.Typeset
     private float AccessibilityScale => scaleCanvas != null
       ? Mathf.Min(UiScalePolicy.Maximum, scaleCanvas.Capacity.MaximumSupported) : UiScalePolicy.Maximum;
 
+    /// <summary>Explicit target wiring for runtime-created UI; existing authored targets are retained unless a caller replaces them.</summary>
+    public void ConfigureTarget(TMP_Text target)
+    {
+      if (target == null) throw new System.ArgumentNullException(nameof(target));
+      Text = target;
+      BindScaleCanvas();
+      if (Current != null) Apply(Current);
+    }
+
     private void OnEnable()
     {
       UserUiScaleCanvas.Attached += OnCanvasAttached;

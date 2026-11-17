@@ -1,0 +1,26 @@
+{
+  "name": "MToolKit.ContextMenus",
+  "rootNamespace": "MToolKit.ContextMenus",
+  "references": [
+    "MToolKit.Runtime",
+    "MToolKit.Theme",
+    "UnityEngine.UI",
+    "Unity.TextMeshPro",
+    "Unity.InputSystem",
+    "Unity.Localization",
+    "Unity.Addressables",
+    "Unity.ResourceManager",
+    "UniTask",
+    "UniTask.Addressables",
+    "VContainer"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": ["ENABLE_INPUT_SYSTEM"],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

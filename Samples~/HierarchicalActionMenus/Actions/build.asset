@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5c110750b8584491a42aa0456933691e, type: 3}
+  m_Name: build
+  m_EditorClassIdentifier: MToolKit.ContextMenus::MToolKit.ContextMenus.Authoring.MenuSubmenuDefinitionSO
+  Id: gallery.build
+  Label: Build
+  LabelKey: 
+  Description: 'Build: the same action in every presentation.'
+  DescriptionKey: 
+  TableName: Default String Table
+  Icon: {fileID: 21300000, guid: 245a196eaa773584eada5e949310c76f, type: 3}
+  Image: {fileID: 21300000, guid: 174053b467139d040aa5ef1e7ea33bf7, type: 3}
+  BindingHint: {fileID: 11400000, guid: 17f7ed4a12844af498544589d09ea1dd, type: 2}
+  SecondaryActions: []
+  Children:
+  - {fileID: 11400000, guid: a9ba68f615e21b445a3e8262aaa5bf5b, type: 2}
+  - {fileID: 11400000, guid: b3f1a9c8dddf9694799819699dd45bda, type: 2}
+  - {fileID: 11400000, guid: 3252f8a64d2ac7648b7ffce7a553afa1, type: 2}
+  - {fileID: 11400000, guid: 74394a56f4341534380bff0f6eb25653, type: 2}
+  Provider: {fileID: 0}
+  Primary: {fileID: 0}
+  ProfileOverride: {fileID: 0}
