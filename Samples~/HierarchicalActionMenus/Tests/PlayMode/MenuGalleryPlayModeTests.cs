@@ -488,8 +488,76 @@ namespace MToolKit.ContextMenus.Samples.Tests
     }
 
     [UnityTest]
+    public IEnumerator Pie_submenu_replacement_preserves_the_open_menu_through_the_parent_click_release()
+    {
+      yield return Open(MenuGalleryController.PieContextMenu);
+      var profile = gallery.HostConfig.Resolve(MenuGalleryController.PieContextMenu);
+      Assert.That(AssetDatabase.GetAssetPath(profile.ItemPrefab), Does.EndWith("/Prefabs/InteractionButton.prefab"));
+      Assert.That(gallery.MenuService.Presenter, Is.TypeOf<RadialMenuPresenter>());
+      Assert.That(profile.DrawSegments, Is.False);
+
+      Vector2 ItemCenter(string label)
+      {
+        var widget = FindWidget(label);
+        Assert.That(widget, Is.Not.Null, "The saved Pie layout has no " + label + " item");
+        var rect = (RectTransform)widget.transform;
+        Vector2 point = RectTransformUtility.WorldToScreenPoint(null, rect.TransformPoint(rect.rect.center));
+        AssertTopRaycastIsInside(point, widget.transform);
+        return point;
+      }
+
+      yield return MouseClick(ItemCenter("Build"));
+      Assert.That(gallery.MenuService.IsOpen, Is.True, "Opening Build must survive its complete native click: " + pointerTrace);
+      Assert.That(gallery.MenuService.Session.ParentSelected.Id.Value, Is.EqualTo("gallery.build"));
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero);
+
+      Vector2 doorsPoint = ItemCenter("Doors");
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = doorsPoint });
+      yield return null; yield return null;
+      pointerTrace = string.Empty;
+      TracePointer("doors-hover");
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = doorsPoint, buttons = 1 });
+      yield return null; yield return null;
+      TracePointer("doors-pressed");
+      string pathAfterPress = gallery.MenuService.Session != null ? string.Join(" > ", gallery.MenuService.Session.Path) : "closed";
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero, "Pressing a submenu parent must not execute a child command");
+      // Do not move the pointer to a child. The release belongs to this original parent gesture,
+      // even if replacement layout has placed an empty region under the same screen position.
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = doorsPoint });
+      yield return null; yield return null;
+      TracePointer("doors-released");
+      Assert.That(gallery.MenuService.IsOpen, Is.True,
+        "The parent click release dismissed the replacement before its final action could be chosen. Press path=" + pathAfterPress + "; " + pointerTrace);
+      Assert.That(gallery.MenuService.Session.Path.Count, Is.EqualTo(2), pointerTrace);
+      Assert.That(gallery.MenuService.Session.ParentSelected.Id.Value, Is.EqualTo("gallery.build/gallery.doors"));
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero);
+
+      yield return MouseClick(ItemCenter("Wooden door"));
+      Assert.That(gallery.State.CommandsExecuted, Is.EqualTo(1), "A new independent final-action click executes exactly once: " + pointerTrace);
+      Assert.That(gallery.State.LastCommand, Does.Contain("Wooden door"));
+      Assert.That(gallery.MenuService.IsOpen, Is.False, "The authored final command requests Close after execution");
+
+      yield return Open(MenuGalleryController.PieContextMenu);
+      Vector2 outside = new Vector2(2, 2);
+      var outsideHits = new List<RaycastResult>();
+      EventSystem.current.RaycastAll(new PointerEventData(EventSystem.current) { position = outside }, outsideHits);
+      Assert.That(outsideHits.Count, Is.GreaterThan(0));
+      Assert.That(outsideHits[0].gameObject.name, Is.EqualTo("Menu outside click"), "Use an actual independent outside gesture for dismissal coverage");
+      yield return MouseClick(outside);
+      Assert.That(gallery.MenuService.IsOpen, Is.False, "A new outside click must still dismiss the menu: " + pointerTrace);
+      Assert.That(gallery.State.CommandsExecuted, Is.EqualTo(1), "Outside dismissal must not execute or duplicate a gameplay command");
+    }
+
+    [UnityTest]
     public IEnumerator Rendered_PieContextMenu_button_accepts_its_visible_corner_outside_the_annulus()
     {
+      // Device/context changes refresh glyphs and the menu composition. Settle the owned
+      // mouse context before sampling a corner of the live layout, not inside MouseClick afterward.
+      mouse ??= InputSystem.AddDevice<Mouse>();
+      gallery.InputModule.actionsAsset.devices = new InputDevice[] { gamepad, mouse };
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = new Vector2(Screen.width * .5f, Screen.height * .5f) });
+      yield return null; yield return null;
+      yield return new WaitForEndOfFrame();
       var profile = Object.Instantiate(gallery.HostConfig.Resolve(MenuGalleryController.PieContextMenu));
       ownedObjects.Add(profile);
       // At the authored 90..240 band a 144x56 first button has no out-of-band
@@ -518,7 +586,11 @@ namespace MToolKit.ContextMenus.Samples.Tests
       }
       Assert.That(found, Is.True, "The authored PieContextMenu button needs a visible corner outside the circular hit bands");
       AssertTopRaycastIsInside(point, build.transform);
+      string sampledGeometry = "sampledRoot=" + radial.Root.position + " sampledBuildPos=" + rect.position
+        + " sampledBuildRect=" + rect.rect + " sampledBuildScale=" + rect.lossyScale + " sampledCorner=" + point;
       yield return MouseClick(point);
+      pointerTrace += sampledGeometry;
+      Assert.That(gallery.MenuService.IsOpen, Is.True, pointerTrace);
       Assert.That(gallery.MenuService.Session.Path.Count, Is.EqualTo(1), pointerTrace);
       Assert.That(gallery.MenuService.Session.ParentSelected.Id.Value, Is.EqualTo("gallery.build"));
       Assert.That(gallery.State.CommandsExecuted, Is.Zero);
@@ -725,11 +797,38 @@ namespace MToolKit.ContextMenus.Samples.Tests
     {
       var module = gallery.InputModule;
       var hit = module.GetLastRaycastResult(mouse.deviceId).gameObject;
+      var presenter = gallery.MenuService.Presenter as MenuPresenterBase;
+      var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+      var activeProfile = presenter != null ? (MenuProfile)typeof(MenuPresenterBase).GetProperty("Profile", flags).GetValue(presenter) : null;
+      var presentation = presenter != null ? (MenuPresentationContext)typeof(MenuPresenterBase).GetProperty("Context", flags).GetValue(presenter) : null;
+      var routed = presenter != null ? typeof(MenuPresenterBase).GetField("routedOutsideClick", flags)?.GetValue(presenter) : null;
+      string geometry = "none";
+      if (presenter != null)
+      {
+        geometry = "root=" + presenter.Root.position + "/" + presenter.Root.rect;
+        foreach (var widget in presenter.Root.GetComponentsInChildren<MenuActionWidget>())
+          if (widget.Label != null && widget.Label.text == "Build")
+          { var rect = (RectTransform)widget.transform; geometry += " Build=" + rect.position + "/" + rect.rect + "/scale=" + rect.lossyScale; break; }
+      }
+      string backdrops = "none";
+      if (presenter != null)
+        foreach (Transform sibling in presenter.Root.parent)
+          if (sibling.name == "Menu outside click")
+          {
+            var button = sibling.GetComponent<Button>();
+            backdrops += " " + sibling.GetInstanceID() + ":active=" + sibling.gameObject.activeInHierarchy + ",enabled=" + button.enabled;
+          }
       pointerTrace += stage + " point=" + module.point.action.ReadValue<Vector2>()
         + " click=" + module.leftClick.action.ReadValue<float>() + " device=" + mouse.deviceId
         + " moduleActive=" + module.isActiveAndEnabled + "/" + (EventSystem.current.currentInputModule == module)
         + " focus=" + Application.isFocused + "/" + EventSystem.current.isFocused
         + " nativeHit=" + (hit != null ? hit.name : "none")
+        + " open=" + gallery.MenuService.IsOpen
+        + " profile=" + (activeProfile != null ? activeProfile.name : "none")
+        + " route=" + activeProfile?.InputBindings.RoutePointerClick + "/outside=" + routed
+        + " resolvedPoint=" + presentation?.ResolveInputAction(activeProfile?.InputBindings.Point)?.ToString()
+        + " resolvedClick=" + presentation?.ResolveInputAction(activeProfile?.InputBindings.Click)?.ToString()
+        + " backdrops=" + backdrops + " geometry=" + geometry
         + " selected=" + gallery.MenuService.Session?.Selected?.Id.Value + "; ";
     }
     private static void AssertTopRaycastIsInside(Vector2 point, Transform expected)

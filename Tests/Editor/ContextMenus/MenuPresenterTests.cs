@@ -302,6 +302,72 @@ namespace MToolKit.Tests.Editor.ContextMenus
     }
 
     [Test]
+    public void RoutedOutsideClickHasOneSemanticOwnerAndKeepsTheBackdropRaycastable()
+    {
+      int commands = 0;
+      CreateEventSystem();
+      var presenter = Presenter<RadialMenuPresenter>(new[] { Command("leaf", () => commands++) }, out var profile);
+      ConfigureOverlappingCenter(presenter, profile);
+      profile.DrawSegments = false; profile.ShowCenter = false;
+      using var input = new PointerInputScope();
+      profile.InputBindings.Configure(point: input.Reference(input.Point), click: input.Reference(input.Click), routePointerClick: true);
+      presenter.Unbind(); presenter.Bind(session, profile, context);
+      var backdrop = FindOutsideButton(presenter);
+      Assert.That(backdrop, Is.Not.Null);
+      Assert.That(backdrop.enabled, Is.False, "Native release must not dismiss a submenu opened by the semantic press.");
+      Assert.That(backdrop.GetComponent<Image>().raycastTarget, Is.True, "The same owned backdrop remains the outside hit surface.");
+      var canvas = presenter.GetComponentInParent<Canvas>();
+      ConfigureKnownControlRaycast(canvas, backdrop.gameObject);
+      Canvas.ForceUpdateCanvases();
+      var canvasRect = (RectTransform)canvas.transform;
+      Vector2 screen = RectTransformUtility.WorldToScreenPoint(canvas.worldCamera,
+        canvasRect.TransformPoint(new Vector2(canvasRect.rect.xMin + 8, canvasRect.rect.yMin + 8)));
+      using var router = new MenuInputRouter(presenter, profile.InputBindings);
+      input.Send(screen, false);
+      Assert.That(session.IsOpen, Is.True, "Hover alone cannot dismiss a menu.");
+      input.Send(screen, true); input.Send(screen, false);
+      Assert.That(session.IsOpen, Is.False, "A new routed outside click still dismisses through its shared semantic path.");
+      Assert.That(commands, Is.Zero);
+    }
+
+    [TestCase(false, true, true)]
+    [TestCase(true, false, true)]
+    [TestCase(true, true, false)]
+    public void UnavailablePointerRoutingRetainsNativeOutsideDismissal(bool route, bool hasPoint, bool hasClick)
+    {
+      int commands = 0;
+      var events = CreateEventSystem();
+      var presenter = Presenter<RadialMenuPresenter>(new[] { Command("leaf", () => commands++) }, out var profile);
+      ConfigureOverlappingCenter(presenter, profile);
+      profile.DrawSegments = false; profile.ShowCenter = false;
+      using var input = new PointerInputScope();
+      profile.InputBindings.Configure(point: hasPoint ? input.Reference(input.Point) : null,
+        click: hasClick ? input.Reference(input.Click) : null, routePointerClick: route);
+      presenter.Unbind(); presenter.Bind(session, profile, context);
+      var backdrop = FindOutsideButton(presenter);
+      Assert.That(backdrop, Is.Not.Null);
+      Assert.That(backdrop.enabled, Is.True, "Native dismissal remains available when semantic Point/Click routing is incomplete or disabled.");
+      var canvas = presenter.GetComponentInParent<Canvas>();
+      ConfigureKnownControlRaycast(canvas, backdrop.gameObject);
+      Canvas.ForceUpdateCanvases();
+      var canvasRect = (RectTransform)canvas.transform;
+      Vector2 screen = RectTransformUtility.WorldToScreenPoint(canvas.worldCamera,
+        canvasRect.TransformPoint(new Vector2(canvasRect.rect.xMin + 8, canvasRect.rect.yMin + 8)));
+      presenter.Point(screen); presenter.ConfirmPointer();
+      Assert.That(session.IsOpen, Is.True, "Incomplete routing must not claim semantic outside-click ownership.");
+      ExecuteEvents.Execute(backdrop.gameObject, new PointerEventData(events) { position = screen, button = PointerEventData.InputButton.Left }, ExecuteEvents.pointerClickHandler);
+      Assert.That(session.IsOpen, Is.False, "The actual native Button retains its existing outside-click callback.");
+      Assert.That(commands, Is.Zero);
+    }
+
+    private static Button FindOutsideButton(MenuPresenterBase presenter)
+    {
+      foreach (Transform child in presenter.Root.parent)
+        if (child.name == "Menu outside click") return child.GetComponent<Button>();
+      return null;
+    }
+
+    [Test]
     public void RoutedPieButtonReportsInteractivityWithoutOwningNativeActivation()
     {
       int calls = 0, external = 0;

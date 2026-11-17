@@ -43,6 +43,7 @@ namespace MToolKit.ContextMenus.Presentation
     private PointerEventData pointerEvent;
     private MenuAction pointerHovered;
     private bool pointerConfirmation;
+    private bool routedOutsideClick;
     private bool holdConfirmation;
     private bool widgetConfirmation;
     private IMenuTransition transition;
@@ -122,7 +123,7 @@ namespace MToolKit.ContextMenus.Presentation
       transitionGeneration++; hasTransitionSnapshot = false;
       transitionPath.Clear(); transitionRows.Clear();
       pointerEvent = null; pointerHits.Clear(); PointerControlOwnsInput = false;
-      PointerHitObject = null;
+      PointerHitObject = null; routedOutsideClick = false;
       VisibleWidgetCount = 0; holding = analogLatched = false;
       try
       {
@@ -744,6 +745,11 @@ namespace MToolKit.ContextMenus.Presentation
       image.color = Profile.Backdrop ? ColorFor(MenuVisualRole.Backdrop) : Color.clear;
       var button = backdrop.AddComponent<Button>();
       button.targetGraphic = image; button.transition = Selectable.Transition.None;
+      // Routed presses already own item activation; a native release must not click a newly exposed backdrop.
+      routedOutsideClick = Profile.InputBindings.RoutePointerClick
+        && Context.ResolveInputAction(Profile.InputBindings.Point) != null
+        && Context.ResolveInputAction(Profile.InputBindings.Click) != null;
+      button.enabled = !routedOutsideClick;
       var navigation = button.navigation; navigation.mode = Navigation.Mode.None; button.navigation = navigation;
       button.onClick.AddListener(Cancel);
     }
@@ -871,6 +877,8 @@ namespace MToolKit.ContextMenus.Presentation
 
     public void ConfirmPointer()
     {
+      if (IsBound && routedOutsideClick && backdrop != null && PointerHitObject == backdrop)
+      { Cancel(); return; }
       pointerConfirmation = true;
       try { Confirm(); }
       finally { pointerConfirmation = false; }

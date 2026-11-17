@@ -55,6 +55,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Give routed menu outside clicks one input owner so a submenu-opening press cannot become a native backdrop cancellation on release. Preserve native fallback, supplied widgets and scrolling controls. Reproduce deeper Pie replacement with the saved prefab and real Input System UI module. (v1.25.8)
+
 - Preserve enabled hover feedback for actions activated through the semantic input router. Fence pointer, selection and activation callbacks against presenter replacement, including reused session/context instances. Target selection-reset fixtures by their bound action rather than native control order. (v1.25.7)
 
 - Place radial paging controls above the outer composition, show them only for the focused menu's available pages, and measure complete labels/glyphs. Add shared local-Back suppression, explicit navigation prompt cleanup, stacked secondary rows, and a reusable gallery command HUD with per-binding glyph columns. Preserve theme/profile authoring and all four presentations. (v1.25.6)
@@ -132,6 +134,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Give routed menu outside clicks one input owner so a submenu-opening press cannot become a native backdrop cancellation on release. Preserve native fallback, supplied widgets and scrolling controls. Reproduce deeper Pie replacement with the saved prefab and real Input System UI module. (v1.25.8)
+
 - Bootstrapper fallback polls the enabled Input System backend safely when keyboard or mouse devices are absent, preserving keyboard and mouse-button readiness and configured action ownership (v1.2.1).
 - Sequential ES3 saves wait for a cancellable next-frame boundary after each controller, preserving durable receipts, aborted-batch cleanup and safe retry (v1.2.1).
 - Routine graph routing and node execution use Debug; dialogue Information messages, warnings and errors retain their existing levels (v1.2.1).
@@ -160,6 +164,8 @@ not a roadmap milestone.
 - Refactored duplicate "enqueue all outputs" pattern into helper methods across objective executors (v1.0.1)
 
 ### Fixed
+
+- Give routed menu outside clicks one input owner so a submenu-opening press cannot become a native backdrop cancellation on release. Preserve native fallback, supplied widgets and scrolling controls. Reproduce deeper Pie replacement with the saved prefab and real Input System UI module. (v1.25.8)
 
 - `Bootstrapper`: guard `OnBootstrappedAsync`/`ForceQuit` against running after the Single-mode scene load has already destroyed the bootstrapper object (v1.0.2)
 - `GlobalInstaller`: log the destroyed plugin's type name when skipping it during initialization, and warn (not verbose) when `NavigationPlugin` is missing for canvas visibility handling (v1.0.2)
@@ -207,6 +213,8 @@ not a roadmap milestone.
 - `SubviewButton.targetSubview` is no longer `[Required]`, and `OnClickSetSubview` null-guards a missing target — it logs a warning (Serilog) and returns instead of throwing, so a tab whose subview isn't wired degrades gracefully rather than NRE-ing.
 
 ### Fixed
+
+- Give routed menu outside clicks one input owner so a submenu-opening press cannot become a native backdrop cancellation on release. Preserve native fallback, supplied widgets and scrolling controls. Reproduce deeper Pie replacement with the saved prefab and real Input System UI module. (v1.25.8)
 
 - `GameLoader` scene loading probed the key with `Addressables.LoadResourceLocationsAsync` before calling `LoadSceneAsync`. A manifest scene with no location made Addressables raise `InvalidKeyException` through its own delayed-action pump, which reaches the Unity console as an unhandled *error log* some frames later — during an EditMode run that log lands in whichever unrelated test is executing and fails it (observed poisoning `ES3SaveableTests` from `GameLoaderTests`). The probe returns an empty result instead of logging, so a missing scene now yields one deliberate warning and the same graceful skip.
 
@@ -266,6 +274,8 @@ API break, not a roadmap point.
 
 ### Fixed
 
+- Give routed menu outside clicks one input owner so a submenu-opening press cannot become a native backdrop cancellation on release. Preserve native fallback, supplied widgets and scrolling controls. Reproduce deeper Pie replacement with the saved prefab and real Input System UI module. (v1.25.8)
+
 - `NavigationInstaller.Install(IContainerBuilder builder)` was calling `base.Configure(builder)`, which resolved to `LifetimeScope`'s empty stub instead of this class's override — `INavigationService` and `IModalService` were silently dropped from the parent scope's registrations. Root cause of the `SaveTruncationDialogPresenter` not wiring in dependent game scopes. Now calls `Configure(builder)` directly.
 
 ## [0.6.0] - 2026-05-19
@@ -296,5 +306,7 @@ API break, not a roadmap point.
 - `.gitignore` excludes Windows-reserved filenames `CON` / `CON.meta`.
 
 ### Fixed
+
+- Give routed menu outside clicks one input owner so a submenu-opening press cannot become a native backdrop cancellation on release. Preserve native fallback, supplied widgets and scrolling controls. Reproduce deeper Pie replacement with the saved prefab and real Input System UI module. (v1.25.8)
 
 - `GraphRunner.HandleMessageAsync` — per-dispatch reentrancy guard (`HashSet<string> executedThisDispatch`) prevents nodes wired into authoring-time feedback edges (e.g. `Check → Increment → Check` for re-evaluate-after-increment) from executing N times on a single message. Quest objective progress now increments by 1 per matching event as intended. `MaxExecutionSteps` (256) remains as the runaway safety net.
