@@ -62,6 +62,10 @@ namespace MToolKit.ContextMenus.Presentation
     protected MenuProfile Profile { get; private set; }
     protected MenuPresentationContext Context { get; private set; }
     protected bool IsBound => Session != null && Session.IsOpen;
+    /// <summary>A new binding has a new identity even when it reuses the session and context instances.</summary>
+    protected long BindingGeneration => bindingGeneration;
+    protected bool OwnsBinding(MenuSession observed, long generation)
+      => this != null && generation == bindingGeneration && ReferenceEquals(Session, observed) && IsBound;
     public RectTransform Root => (RectTransform)transform;
     public bool FitsViewport { get; protected set; } = true;
     public string PlacementDiagnostic { get; protected set; }
@@ -385,7 +389,11 @@ namespace MToolKit.ContextMenus.Presentation
 
     protected bool SetPointerHovered(MenuAction action)
     {
-      if (action != null && !action.Behavior.IsInteractive) action = null;
+      var observed = Session; long generation = BindingGeneration;
+      if (!OwnsBinding(observed, generation)) return false;
+      bool interactive = action == null || action.Behavior.IsInteractive;
+      if (!OwnsBinding(observed, generation)) return false;
+      if (!interactive) action = null;
       if (ReferenceEquals(pointerHovered, action)) return false;
       pointerHovered = action;
       return true;
@@ -405,26 +413,37 @@ namespace MToolKit.ContextMenus.Presentation
 
     private void HoverWidget(MenuAction action, bool entered, Action select)
     {
-      if (!IsBound) return;
+      var observed = Session; long generation = BindingGeneration;
+      if (!OwnsBinding(observed, generation)) return;
       if (!entered) { ClearPointerHover(action); return; }
-      if (!AcceptNativePointerHover) return;
+      bool accept = AcceptNativePointerHover;
+      if (!OwnsBinding(observed, generation) || !accept) return;
       CancelSelectionReset();
-      var before = Session.Selected; var mode = Session.InteractionMode;
+      if (!OwnsBinding(observed, generation)) return;
+      var before = observed.Selected; var mode = observed.InteractionMode;
       bool changed = SetPointerHovered(action);
-      Session.InteractionMode = MenuInteractionMode.Pointer;
+      if (!OwnsBinding(observed, generation)) return;
+      observed.InteractionMode = MenuInteractionMode.Pointer;
+      if (!OwnsBinding(observed, generation)) return;
       select?.Invoke();
-      if (changed && ReferenceEquals(before, Session.Selected) && mode == Session.InteractionMode) Refresh(false);
+      if (!OwnsBinding(observed, generation)) return;
+      if (changed && ReferenceEquals(before, observed.Selected) && mode == observed.InteractionMode) Refresh(false);
     }
 
     private void SelectWidget(Action select)
     {
-      if (!IsBound) return;
+      var observed = Session; long generation = BindingGeneration;
+      if (!OwnsBinding(observed, generation)) return;
       CancelSelectionReset();
-      var before = Session.Selected; var mode = Session.InteractionMode;
+      if (!OwnsBinding(observed, generation)) return;
+      var before = observed.Selected; var mode = observed.InteractionMode;
       bool changed = SetPointerHovered(null);
-      Session.InteractionMode = MenuInteractionMode.Keyboard;
+      if (!OwnsBinding(observed, generation)) return;
+      observed.InteractionMode = MenuInteractionMode.Keyboard;
+      if (!OwnsBinding(observed, generation)) return;
       select?.Invoke();
-      if (changed && ReferenceEquals(before, Session.Selected) && mode == Session.InteractionMode) Refresh(false);
+      if (!OwnsBinding(observed, generation)) return;
+      if (changed && ReferenceEquals(before, observed.Selected) && mode == observed.InteractionMode) Refresh(false);
     }
 
     protected void BindCenter(bool visible)
@@ -454,7 +473,13 @@ namespace MToolKit.ContextMenus.Presentation
     protected void SelectAction(MenuAction action)
     { CancelSelectionReset(); if (IsBound && action != null) Session.Select(action.Id); }
     protected virtual void ActivateAction(MenuAction action)
-    { if (IsBound && Session.Select(action.Id)) ConfirmChosenWidget(); }
+    {
+      var observed = Session; long generation = BindingGeneration;
+      if (!OwnsBinding(observed, generation) || action == null) return;
+      bool selected = observed.Select(action.Id);
+      if (OwnsBinding(observed, generation) && selected) ConfirmChosenWidget();
+    }
+
     protected void ConfirmChosenWidget()
     {
       widgetConfirmation = true;
@@ -757,9 +782,12 @@ namespace MToolKit.ContextMenus.Presentation
     }
     public virtual void Point(Vector2 position)
     {
-      if (!IsBound) return;
+      var observed = Session; long generation = BindingGeneration;
+      if (!OwnsBinding(observed, generation)) return;
       CancelSelectionReset();
-      Session.InteractionMode = MenuInteractionMode.Pointer;
+      if (!OwnsBinding(observed, generation)) return;
+      observed.InteractionMode = MenuInteractionMode.Pointer;
+      if (!OwnsBinding(observed, generation)) return;
       PointerControlOwnsInput = false;
       PointerHitObject = null;
       var events = navigationLease?.Owner != null ? navigationLease.Owner : EventSystem.current;
@@ -767,7 +795,7 @@ namespace MToolKit.ContextMenus.Presentation
       if (pointerEvent == null) pointerEvent = new PointerEventData(events);
       pointerEvent.Reset(); pointerEvent.position = position;
       pointerHits.Clear(); events.RaycastAll(pointerEvent, pointerHits);
-      if (pointerHits.Count == 0) return;
+      if (!OwnsBinding(observed, generation) || pointerHits.Count == 0) return;
       var hit = pointerHits[0].gameObject;
       PointerHitObject = hit;
       // Center information and auxiliary controls belong to the selected action. Crossing
@@ -787,9 +815,12 @@ namespace MToolKit.ContextMenus.Presentation
 
     protected void ClearPointerSelection()
     {
-      if (!IsBound || Session.InteractionMode != MenuInteractionMode.Pointer) return;
+      var observed = Session; long generation = BindingGeneration;
+      if (!OwnsBinding(observed, generation) || observed.InteractionMode != MenuInteractionMode.Pointer) return;
       bool hovered = SetPointerHovered(null);
-      if (!Session.ClearSelection() && hovered) Refresh(false);
+      if (!OwnsBinding(observed, generation)) return;
+      bool cleared = observed.ClearSelection();
+      if (OwnsBinding(observed, generation) && !cleared && hovered) Refresh(false);
     }
 
     /// <summary>One event-driven unscaled neutral timer; no per-frame input polling.</summary>

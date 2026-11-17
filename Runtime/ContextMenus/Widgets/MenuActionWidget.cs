@@ -156,7 +156,8 @@ namespace MToolKit.ContextMenus.Widgets
       if (!BindSprite(ActionImage, state.Image, true, generation, state)) return;
       if (Highlight != null) Highlight.enabled = state.IsSelected;
       if (Check != null) Check.enabled = state.Availability.IsChecked;
-      if (Button != null) Button.interactable = state.Availability.Visible && state.Availability.Enabled && state.Activate != null;
+      if (Button != null) Button.interactable = state.Availability.Visible && state.Availability.Enabled
+        && (state.Action?.Behavior.IsInteractive ?? (state.Activate != null));
       if (Progress != null)
       {
         var progress = state.Details?.Progress;

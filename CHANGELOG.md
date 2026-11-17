@@ -55,6 +55,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Preserve enabled hover feedback for actions activated through the semantic input router. Fence pointer, selection and activation callbacks against presenter replacement, including reused session/context instances. Target selection-reset fixtures by their bound action rather than native control order. (v1.25.7)
+
 - Place radial paging controls above the outer composition, show them only for the focused menu's available pages, and measure complete labels/glyphs. Add shared local-Back suppression, explicit navigation prompt cleanup, stacked secondary rows, and a reusable gallery command HUD with per-binding glyph columns. Preserve theme/profile authoring and all four presentations. (v1.25.6)
 
 - Clear abandoned pointer selections and reset analog selection after a configurable unscaled neutral grace period. Preserve center/auxiliary controls, submenu paths, input ownership and safe hold/release behavior; retain empty selection across availability refreshes and restore concentric ring navigation. Keep runtime binding-identity coverage on the selected center. (v1.25.5)

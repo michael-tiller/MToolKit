@@ -249,73 +249,92 @@ namespace MToolKit.ContextMenus.Presentation
 
     private void SelectPointerAction(MenuAction action, int ring)
     {
-      if (!IsBound) return;
+      var observed = Session; long generation = BindingGeneration;
+      if (!OwnsBinding(observed, generation)) return;
       CancelSelectionReset();
-      if (!action.Behavior.IsInteractive)
+      if (!OwnsBinding(observed, generation)) return;
+      bool interactive = action.Behavior.IsInteractive;
+      if (!OwnsBinding(observed, generation)) return;
+      if (!interactive)
       {
-        Session.InteractionMode = MenuInteractionMode.Pointer;
+        observed.InteractionMode = MenuInteractionMode.Pointer;
+        if (!OwnsBinding(observed, generation)) return;
         hasTarget = false;
         ClearPointerSelection();
         return;
       }
-      var before = Session.Selected; var mode = Session.InteractionMode;
+      var before = observed.Selected; var mode = observed.InteractionMode;
       bool changed = SetPointerHovered(action);
-      Session.InteractionMode = MenuInteractionMode.Pointer;
+      if (!OwnsBinding(observed, generation)) return;
+      observed.InteractionMode = MenuInteractionMode.Pointer;
+      if (!OwnsBinding(observed, generation)) return;
       SelectRingAction(action, ring);
-      if (changed && ReferenceEquals(before, Session.Selected) && mode == Session.InteractionMode) Refresh(false);
+      if (!OwnsBinding(observed, generation)) return;
+      if (changed && ReferenceEquals(before, observed.Selected) && mode == observed.InteractionMode) Refresh(false);
     }
 
     private void SelectRingAction(MenuAction action, int ring)
     {
-      if (!IsBound) return;
+      var observed = Session; long generation = BindingGeneration;
+      if (!OwnsBinding(observed, generation)) return;
+      bool interactive = action.Behavior.IsInteractive;
+      if (!OwnsBinding(observed, generation)) return;
       bool feedbackChanged = !hasTarget || focusedRing != ring;
-      hasTarget = action.Behavior.IsInteractive;
+      hasTarget = interactive;
       focusedRing = ring;
       if (!hasTarget) { Refresh(false); return; }
       if (ring == 0 && OuterGeometry != null)
       {
-        if (action != Session.ParentSelected) ChangeParentAsync(action, 0).Forget();
+        if (action != observed.ParentSelected) ChangeParentAsync(action, 0).Forget();
         else if (feedbackChanged) Refresh(false);
       }
       else
       {
-        bool same = Session.Selected == action;
-        if (!Session.Select(action.Id)) hasTarget = false;
+        bool same = observed.Selected == action;
+        bool selected = observed.Select(action.Id);
+        if (!OwnsBinding(observed, generation)) return;
+        if (!selected) hasTarget = false;
         if (same && feedbackChanged || !hasTarget) Refresh(false);
       }
     }
 
     private async UniTask ActivateRingActionAsync(MenuAction action, int ring)
     {
-      if (!IsBound) return;
+      var observed = Session; long generation = BindingGeneration;
+      if (!OwnsBinding(observed, generation)) return;
       hasTarget = true;
       if (ring == 0 && OuterGeometry != null)
       {
-        if (action != Session.ParentSelected) await ChangeParentAsync(action, 1);
+        if (action != observed.ParentSelected) await ChangeParentAsync(action, 1);
         else { focusedRing = 1; Refresh(false); }
         return;
       }
       focusedRing = ring;
-      if (Session.Select(action.Id)) ConfirmChosenWidget();
+      bool selected = observed.Select(action.Id);
+      if (OwnsBinding(observed, generation) && selected) ConfirmChosenWidget();
     }
 
     private async UniTask ChangeParentAsync(MenuAction action, int focus)
     {
-      if (!IsBound) return;
+      var observed = Session; long generation = BindingGeneration;
+      if (!OwnsBinding(observed, generation)) return;
       long request = ++branchRequest;
-      var session = Session;
-      session.GoBack();
-      if (!session.Select(action.Id)) return;
-      if (action.HasChildren) await session.EnterSubmenuAsync(action.Id);
-      if (!IsBound || Session != session || request != branchRequest) return;
+      observed.GoBack();
+      if (!OwnsBinding(observed, generation)) return;
+      if (!observed.Select(action.Id)) return;
+      if (!OwnsBinding(observed, generation)) return;
+      if (action.HasChildren) await observed.EnterSubmenuAsync(action.Id);
+      if (!OwnsBinding(observed, generation) || request != branchRequest) return;
       focusedRing = OuterGeometry != null ? focus : 0;
       Refresh(false);
     }
 
     public override void Point(Vector2 screenPosition)
     {
+      var observed = Session; long generation = BindingGeneration;
+      if (!OwnsBinding(observed, generation)) return;
       base.Point(screenPosition);
-      if (!IsBound) return;
+      if (!OwnsBinding(observed, generation)) return;
       if (PointerControlOwnsInput) return;
       var camera = Context.Canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : Context.Canvas.worldCamera;
       if (!Profile.DrawSegments)
@@ -351,7 +370,8 @@ namespace MToolKit.ContextMenus.Presentation
         var action = innerActions[inner];
         bool preview = Profile.Navigation == MenuNavigationPolicy.Concentric && OuterGeometry == null && action.HasChildren;
         SelectPointerAction(action, 0);
-        if (preview) Session.EnterSubmenuAsync(action.Id).Forget();
+        if (!OwnsBinding(observed, generation)) return;
+        if (preview) observed.EnterSubmenuAsync(action.Id).Forget();
         return;
       }
       hasTarget = false;

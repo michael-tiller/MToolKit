@@ -302,6 +302,81 @@ namespace MToolKit.Tests.Editor.ContextMenus
     }
 
     [Test]
+    public void RoutedPieButtonReportsInteractivityWithoutOwningNativeActivation()
+    {
+      int calls = 0, external = 0;
+      var events = CreateEventSystem();
+      var presenter = Presenter<RadialMenuPresenter>(new[] { Command("floor", () => calls++) }, out var profile);
+      ConfigureOverlappingCenter(presenter, profile);
+      profile.DrawSegments = false; profile.ShowCenter = false;
+      using var input = new PointerInputScope();
+      profile.InputBindings.Configure(point: input.Reference(input.Point), click: input.Reference(input.Click), routePointerClick: true);
+      presenter.Unbind(); presenter.Bind(session, profile, context);
+      MenuActionWidget widget = null;
+      foreach (var item in presenter.GetComponentsInChildren<MenuActionWidget>())
+        if (item.Label != null && item.Label.text == "floor") { widget = item; break; }
+      Assert.That(widget, Is.Not.Null);
+      var state = RoutedWidgetState(widget);
+      Assert.That(state.Availability.Visible && state.Availability.Enabled && state.Action.Behavior.IsInteractive, Is.True);
+      Assert.That(state.Activate, Is.Null, "Semantic routing retains the sole gameplay activation callback.");
+      Assert.That(widget.Button.enabled, Is.False, "Native pointer dispatch remains disabled for this routed item.");
+      Assert.That(widget.Button.IsInteractable(), Is.True, "An available routed action must not advertise a disabled cursor or Selectable state.");
+      widget.Button.onClick.AddListener(() => external++);
+      widget.Button.onClick.Invoke();
+      Assert.That(external, Is.EqualTo(1), "Existing prefab callbacks remain independent of menu routing.");
+      Assert.That(calls, Is.Zero, "Invoking a native Button event must not execute the semantic gameplay command.");
+      ConfigureKnownControlRaycast(presenter.GetComponentInParent<Canvas>(), widget.gameObject);
+      Canvas.ForceUpdateCanvases();
+      var rect = (RectTransform)widget.transform;
+      var screen = RectTransformUtility.WorldToScreenPoint(presenter.GetComponentInParent<Canvas>().worldCamera, rect.TransformPoint(rect.rect.center));
+      using var router = new MenuInputRouter(presenter, profile.InputBindings);
+      input.Send(screen, false); input.Send(screen, true); input.Send(screen, false);
+      ExecuteEvents.Execute(widget.gameObject, new PointerEventData(events) { position = screen, button = PointerEventData.InputButton.Left }, ExecuteEvents.pointerClickHandler);
+      Assert.That(calls, Is.EqualTo(1), "The routed press/release plus native event dispatch executes the gameplay command exactly once.");
+      Assert.That(external, Is.EqualTo(1), "A disabled native Button receives no duplicate pointer click.");
+      Assert.That(session.IsOpen, Is.True);
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void RoutedPieDisabledAndHeaderButtonsRemainNonInteractable(bool header)
+    {
+      int calls = 0;
+      var target = new MenuAction("target", new MenuLabel("target"),
+        header ? (IMenuActionBehavior)new MenuHeaderBehavior() : new MenuCommandBehavior(_ => calls++, MenuActionOutcome.Keep),
+        state: _ => new MenuActionState(true, header));
+      var presenter = Presenter<RadialMenuPresenter>(new[] { target }, out var profile);
+      profile.DrawSegments = false; profile.ShowCenter = false;
+      profile.InputBindings.Configure(routePointerClick: true);
+      presenter.Unbind(); presenter.Bind(session, profile, context);
+      MenuActionWidget widget = null;
+      foreach (var item in presenter.GetComponentsInChildren<MenuActionWidget>())
+        if (item.Label != null && item.Label.text == "target") { widget = item; break; }
+      Assert.That(widget, Is.Not.Null);
+      Assert.That(widget.Button.enabled, Is.False);
+      Assert.That(widget.Button.IsInteractable(), Is.False, "Disabled commands and noninteractive headers retain disabled feedback.");
+      Assert.That(RoutedWidgetState(widget).Activate, Is.Null);
+      widget.Button.onClick.Invoke();
+      Assert.That(calls, Is.Zero);
+    }
+
+    [Test]
+    public void NativeFooterButtonWithoutAnActionDescriptorRemainsInteractable()
+    {
+      var root = new GameObject("Native footer control", typeof(RectTransform), typeof(Image), typeof(Button)); cleanup.Add(root);
+      var widget = root.AddComponent<MenuActionWidget>(); widget.UseSkin = false; widget.Button = root.GetComponent<Button>();
+      int calls = 0;
+      widget.Bind(new MenuWidgetState(null, MenuActionState.Available, activate: () => calls++));
+      Assert.That(widget.Button.enabled, Is.True);
+      Assert.That(widget.Button.IsInteractable(), Is.True);
+      widget.Button.onClick.Invoke();
+      Assert.That(calls, Is.EqualTo(1));
+    }
+
+    private static MenuWidgetState RoutedWidgetState(MenuActionWidget widget)
+      => (MenuWidgetState)typeof(MenuActionWidget).GetProperty("State", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(widget);
+
+    [Test]
     public void ButtonOnlyRadialAcceptsVisibleItemCornerOutsideTheAnnulus()
     {
       int first = 0, second = 0;

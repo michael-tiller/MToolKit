@@ -48,9 +48,25 @@ namespace MToolKit.Tests.Editor.ContextMenus
       {
         Vector3 point = Presenter is RadialMenuPresenter radial && Profile.DrawSegments
           ? Presenter.Root.TransformPoint(radial.InnerGeometry.Segments[0].ContentAnchor)
-          : Presenter.GetComponentInChildren<MenuActionWidget>().transform.position;
+          : FirstWidget.transform.position;
         Presenter.Point(RectTransformUtility.WorldToScreenPoint(null, point));
         Assert.That(Session.Selected, Is.SameAs(First));
+      }
+      public MenuActionWidget FirstWidget
+      {
+        get
+        {
+          var state = typeof(MenuActionWidget).GetProperty("State",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+          Assert.That(state, Is.Not.Null);
+          foreach (var widget in Presenter.GetComponentsInChildren<MenuActionWidget>())
+          {
+            if (widget is MenuCenterWidget) continue;
+            if (ReferenceEquals((state.GetValue(widget) as MenuWidgetState)?.Action, First)) return widget;
+          }
+          Assert.Fail("The visible row/segment widget must be bound to the first action.");
+          return null;
+        }
       }
       public void Dispose()
       { Presenter.Unbind(); Object.DestroyImmediate(canvasRoot); context.Dispose(); Session.Dispose(); Object.DestroyImmediate(Profile); }
@@ -128,7 +144,7 @@ namespace MToolKit.Tests.Editor.ContextMenus
     {
       using var fixture = new Fixture(mode);
       fixture.PointAtFirst();
-      var widget = fixture.Presenter.GetComponentInChildren<MenuActionWidget>();
+      var widget = fixture.FirstWidget;
       widget.OnPointerExit(new PointerEventData(EventSystem.current) { position = new Vector2(-10000, -10000) });
       Assert.That(fixture.Session.Selected, Is.Null);
     }
