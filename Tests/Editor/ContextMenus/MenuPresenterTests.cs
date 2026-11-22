@@ -520,6 +520,112 @@ namespace MToolKit.Tests.Editor.ContextMenus
       Assert.That(events.sendNavigationEvents, Is.EqualTo(original));
     }
 
+    [Test]
+    public void WheelSelectionUsesInsetArcAndClearsPreviousDefaultBarAcrossThemeUpdates()
+    {
+      var first = Command("first"); var second = Command("second");
+      var presenter = Presenter<RadialMenuPresenter>(new[] { first, second }, out var profile);
+      var skin = ScriptableObject.CreateInstance<MenuSkin>(); cleanup.Add(skin);
+      skin.SetColor(MenuVisualRole.Selected, Color.blue); skin.SetColor(MenuVisualRole.Label, Color.white);
+      profile.Skin = skin; profile.ShowCenter = false; profile.ShowBackControl = false;
+      var initialTheme = ScriptableObject.CreateInstance<MToolKit.Theme.Theme>(); cleanup.Add(initialTheme);
+      using var themes = new MenuThemeLayerTests.FakeThemeService(initialTheme);
+      var canvas = presenter.GetComponentInParent<Canvas>(); presenter.Unbind(); context.Dispose();
+      context = new MenuPresentationContext(canvas, Vector2.zero, themes: themes, labelOverride: label => label.Fallback);
+      presenter.Bind(session, profile, context);
+      Assert.That(presenter.GetComponentsInChildren<NativeRadialGraphic>().Length, Is.EqualTo(2));
+      // Wedges are inserted at the first sibling; hierarchy order is not action order.
+      var sectors = new[] { ArcSector(presenter, 0, 0), ArcSector(presenter, 0, 1) };
+      Assert.That(SelectionArcWidth(sectors[0]), Is.EqualTo(4).Within(.01f));
+      Assert.That(SelectionArcWidth(sectors[1]), Is.Zero);
+      Assert.That(SelectionArcColor(sectors[0]), Is.EqualTo(Color.blue));
+      foreach (var widget in presenter.GetComponentsInChildren<MenuActionWidget>())
+        if (widget.Highlight != null) Assert.That(widget.Highlight.enabled, Is.False, "Native ring sectors replace their default rectangular selection bars.");
+      Assert.That(session.Select(second.Id), Is.True);
+      Assert.That(SelectionArcWidth(sectors[0]), Is.Zero); Assert.That(SelectionArcWidth(sectors[1]), Is.EqualTo(4).Within(.01f));
+      skin.SetColor(MenuVisualRole.Selected, Color.cyan); skin.SetColor(MenuVisualRole.Label, Color.yellow);
+      var nextTheme = ScriptableObject.CreateInstance<MToolKit.Theme.Theme>(); cleanup.Add(nextTheme); themes.SetTheme(nextTheme);
+      Assert.That(SelectionArcColor(sectors[1]), Is.EqualTo(Color.cyan), "The band follows the existing Selected visual role after a live theme notification.");
+      Assert.That(sectors[1].BorderColor, Is.EqualTo(Color.yellow), "Existing Label semantics supply contrast without a new global theme role.");
+      foreach (var widget in presenter.GetComponentsInChildren<MenuActionWidget>())
+        if (widget.Highlight != null) Assert.That(widget.Highlight.enabled, Is.False, "Live theme updates preserve native arc ownership.");
+      session.ClearSelection();
+      foreach (var sector in sectors) Assert.That(SelectionArcWidth(sector), Is.Zero);
+    }
+
+    [Test]
+    public void ConcentricArcsRetainThePathParentAndMoveBetweenVisibleChildSectors()
+    {
+      var first = new MenuAction("parent", new MenuLabel("parent"), children: new[] { Command("child-one"), Command("child-two") });
+      var second = new MenuAction("other", new MenuLabel("other"), children: new[] { Command("other-child") });
+      var presenter = Presenter<RadialMenuPresenter>(new[] { first, second }, out var profile);
+      profile.Navigation = MenuNavigationPolicy.Concentric; profile.ShowCenter = false; profile.ShowBackControl = false;
+      profile.WidgetSize = new Vector2(40, 40); profile.MinimumTargetSize = 32; profile.ChildArcDegrees = 150;
+      presenter.Unbind(); presenter.Bind(session, profile, context);
+      session.EnterSubmenuAsync(first.Id).GetAwaiter().GetResult();
+      Assert.That(presenter.OuterGeometry, Is.Not.Null);
+      Assert.That(SelectionArcWidth(ArcSector(presenter, 0, 0)), Is.EqualTo(4).Within(.01f));
+      Assert.That(SelectionArcWidth(ArcSector(presenter, 0, 1)), Is.Zero);
+      Assert.That(SelectionArcWidth(ArcSector(presenter, 1, 0)), Is.EqualTo(4).Within(.01f));
+      Assert.That(session.Select("child-two"), Is.True);
+      Assert.That(SelectionArcWidth(ArcSector(presenter, 1, 0)), Is.Zero);
+      Assert.That(SelectionArcWidth(ArcSector(presenter, 1, 1)), Is.EqualTo(4).Within(.01f));
+      session.ClearSelection();
+      Assert.That(SelectionArcWidth(ArcSector(presenter, 1, 1)), Is.Zero);
+      Assert.That(SelectionArcWidth(ArcSector(presenter, 0, 0)), Is.EqualTo(4).Within(.01f), "The visible navigation parent remains associated with its child arc.");
+      session.GoBack(); session.EnterSubmenuAsync(second.Id).GetAwaiter().GetResult();
+      Assert.That(SelectionArcWidth(ArcSector(presenter, 0, 0)), Is.Zero);
+      Assert.That(SelectionArcWidth(ArcSector(presenter, 0, 1)), Is.EqualTo(4).Within(.01f));
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void PieAndListKeepTheirDefaultRectangularSelectionBars(bool list)
+    {
+      MenuProfile profile;
+      MenuPresenterBase presenter = list ? (MenuPresenterBase)Presenter<ListMenuPresenter>(new[] { Command("first"), Command("second") }, out profile)
+        : Presenter<RadialMenuPresenter>(new[] { Command("first"), Command("second") }, out profile);
+      profile.DrawSegments = false; profile.ShowCenter = false; profile.ShowBackControl = false;
+      presenter.Unbind(); presenter.Bind(session, profile, context);
+      foreach (var widget in presenter.GetComponentsInChildren<MenuActionWidget>())
+        if (widget.Label != null && widget.Label.text == "first")
+        { Assert.That(widget.Highlight.enabled, Is.True); return; }
+      Assert.Fail("The selected default item must remain present.");
+    }
+
+    [Test]
+    public void NativeSectorArcDoesNotTakeOverCustomWidgetVisuals()
+    {
+      var presenter = Presenter<RadialMenuPresenter>(new[] { Command("first") }, out var profile);
+      var prefab = new GameObject("Custom selection widget", typeof(RectTransform), typeof(RecordingMenuWidget)); cleanup.Add(prefab);
+      var marker = new GameObject("Authored marker", typeof(RectTransform), typeof(Image)); marker.transform.SetParent(prefab.transform, false);
+      marker.GetComponent<Image>().color = Color.magenta;
+      profile.ItemPrefab = prefab; profile.ShowCenter = false; profile.ShowBackControl = false;
+      presenter.Unbind(); presenter.Bind(session, profile, context);
+      var custom = presenter.GetComponentInChildren<RecordingMenuWidget>();
+      Assert.That(custom.State.IsSelected, Is.True);
+      Assert.That(custom.GetComponentInChildren<Image>().enabled, Is.True);
+      Assert.That(custom.GetComponentInChildren<Image>().color, Is.EqualTo(Color.magenta));
+      Assert.That(SelectionArcWidth(presenter.GetComponentInChildren<NativeRadialGraphic>()), Is.EqualTo(4).Within(.01f));
+    }
+
+    private static NativeRadialGraphic ArcSector(RadialMenuPresenter presenter, int ring, int segment)
+    {
+      foreach (var sector in presenter.GetComponentsInChildren<NativeRadialGraphic>())
+        if (sector.Geometry.RingIndex == ring && sector.Geometry.SegmentIndex == segment) return sector;
+      Assert.Fail("Expected visible sector " + ring + "/" + segment); return null;
+    }
+    private static float SelectionArcWidth(NativeRadialGraphic graphic)
+    {
+      var property = typeof(NativeRadialGraphic).GetProperty("OuterHighlightWidth");
+      Assert.That(property, Is.Not.Null, "Native sector selection requires an inset outer band."); return (float)property.GetValue(graphic);
+    }
+    private static Color SelectionArcColor(NativeRadialGraphic graphic)
+    {
+      var property = typeof(NativeRadialGraphic).GetProperty("OuterHighlightColor");
+      Assert.That(property, Is.Not.Null); return (Color)property.GetValue(graphic);
+    }
+
     private EventSystem CreateEventSystem()
     {
       if (!capturedEventSystem) { previousEventSystem = EventSystem.current; capturedEventSystem = true; }

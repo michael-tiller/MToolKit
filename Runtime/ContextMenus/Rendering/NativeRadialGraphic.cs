@@ -13,6 +13,8 @@ namespace MToolKit.ContextMenus.Rendering
     [SerializeField, Min(0)] private float borderWidth = 1;
     [SerializeField] private Color borderColor = new Color(1, 1, 1, .4f);
     [SerializeField] private bool radialBorders = true;
+    [SerializeField, Min(0)] private float outerHighlightWidth;
+    [SerializeField] private Color outerHighlightColor = Color.white;
     private RadialSegmentGeometry geometry;
     private bool hasGeometry;
 
@@ -26,6 +28,18 @@ namespace MToolKit.ContextMenus.Rendering
     {
       get => borderColor;
       set { if (borderColor == value) return; borderColor = value; SetVerticesDirty(); }
+    }
+
+    /// <summary>Optional selection decoration entirely inside the existing sector envelope; zero disables it.</summary>
+    public float OuterHighlightWidth
+    {
+      get => outerHighlightWidth;
+      set { value = Mathf.Max(0, value); if (outerHighlightWidth == value) return; outerHighlightWidth = value; SetVerticesDirty(); }
+    }
+    public Color OuterHighlightColor
+    {
+      get => outerHighlightColor;
+      set { if (outerHighlightColor == value) return; outerHighlightColor = value; SetVerticesDirty(); }
     }
 
     public void SetGeometry(RadialSegmentGeometry value)
@@ -56,20 +70,32 @@ namespace MToolKit.ContextMenus.Rendering
       int edges = Math.Max(1, Math.Min(2048, (int)Math.Ceiling(Math.Abs(sweep) / Math.Max(.25f, degreesPerEdge))));
       AddBand(helper, geometry.InnerRadius, geometry.OuterRadius, geometry.StartAngle, sweep, edges, color);
       float width = Math.Min(borderWidth, (geometry.OuterRadius - geometry.InnerRadius) * .5f);
-      if (width <= 0 || borderColor.a <= 0) return;
-      AddBand(helper, Math.Max(geometry.InnerRadius, geometry.OuterRadius - width), geometry.OuterRadius,
-        geometry.StartAngle, sweep, edges, borderColor);
-      if (geometry.InnerRadius > 0)
-        AddBand(helper, geometry.InnerRadius, geometry.InnerRadius + width,
+      if (width > 0 && borderColor.a > 0)
+      {
+        AddBand(helper, Math.Max(geometry.InnerRadius, geometry.OuterRadius - width), geometry.OuterRadius,
           geometry.StartAngle, sweep, edges, borderColor);
-      if (!radialBorders || Math.Abs(sweep) >= 360) return;
-      // Side decoration is inset into the sector envelope, including the angular gap.
-      float edgeSweep = Math.Sign(sweep) * Math.Min(Math.Abs(sweep) * .5f,
-        width / Math.Max(1, geometry.InnerRadius) * Mathf.Rad2Deg);
-      AddBand(helper, geometry.InnerRadius, geometry.OuterRadius,
-        geometry.StartAngle, edgeSweep, 1, borderColor);
-      AddBand(helper, geometry.InnerRadius, geometry.OuterRadius,
-        geometry.StartAngle + sweep - edgeSweep, edgeSweep, 1, borderColor);
+        if (geometry.InnerRadius > 0)
+          AddBand(helper, geometry.InnerRadius, geometry.InnerRadius + width,
+            geometry.StartAngle, sweep, edges, borderColor);
+        if (radialBorders && Math.Abs(sweep) < 360)
+        {
+          // Side decoration stays inside the gap-trimmed sector envelope.
+          float edgeSweep = Math.Sign(sweep) * Math.Min(Math.Abs(sweep) * .5f,
+            width / Math.Max(1, geometry.InnerRadius) * Mathf.Rad2Deg);
+          AddBand(helper, geometry.InnerRadius, geometry.OuterRadius,
+            geometry.StartAngle, edgeSweep, 1, borderColor);
+          AddBand(helper, geometry.InnerRadius, geometry.OuterRadius,
+            geometry.StartAngle + sweep - edgeSweep, edgeSweep, 1, borderColor);
+        }
+      }
+      float highlight = Math.Min(outerHighlightWidth, geometry.OuterRadius - geometry.InnerRadius);
+      if (highlight <= 0 || outerHighlightColor.a <= 0) return;
+      float highlightInner = geometry.OuterRadius - highlight;
+      Vector3 contrast = new Vector3(color.r - outerHighlightColor.r, color.g - outerHighlightColor.g, color.b - outerHighlightColor.b);
+      if (color.a > 0 && borderColor.a > 0 && contrast.sqrMagnitude <= .01f)
+        AddBand(helper, Math.Max(geometry.InnerRadius, highlightInner - 1), highlightInner,
+          geometry.StartAngle, sweep, edges, borderColor);
+      AddBand(helper, highlightInner, geometry.OuterRadius, geometry.StartAngle, sweep, edges, outerHighlightColor);
     }
 
     private static void AddBand(VertexHelper helper, float inner, float outer, float start,

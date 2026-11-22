@@ -554,7 +554,15 @@ namespace MToolKit.ContextMenus.Samples.Editor
         }
         if (widget.Label != null) widget.Label.rectTransform.sizeDelta = new Vector2(96, 20);
       }
-      widget.Highlight.gameObject.name = "Selection marker";
+      // Wheel selection is indicated by the native sector's outer edge.
+      // Keep row/Pie/secondary markers; only generated radial widgets omit it.
+      if (radial)
+      {
+        var marker = widget.Highlight.gameObject;
+        widget.Highlight = null;
+        Object.DestroyImmediate(marker);
+      }
+      else widget.Highlight.gameObject.name = "Selection marker";
       widget.Check.rectTransform.anchoredPosition = new Vector2(-5, -5);
       widget.Check.rectTransform.sizeDelta = new Vector2(8, 8);
       root.gameObject.AddComponent<LayoutElement>().preferredHeight = 40;

@@ -39,7 +39,20 @@ namespace MToolKit.ContextMenus.Widgets
     private IDisposable promptBinding;
     private Button subscribedButton;
     private long bindingGeneration;
+    private bool suppressSelectionHighlight;
     protected MenuWidgetState State { get; private set; }
+
+    // Only the owning presenter sets this for factory-created widgets. Theme callbacks must retain that ownership.
+    internal bool SuppressSelectionHighlight
+    {
+      get => suppressSelectionHighlight;
+      set
+      {
+        if (suppressSelectionHighlight == value) return;
+        suppressSelectionHighlight = value;
+        if (Highlight != null) Highlight.enabled = State != null && State.IsSelected && !value;
+      }
+    }
 
     public void Configure(TMP_Text label, Image icon, Graphic highlight, Graphic check,
       Button button, TMP_Text description = null, Image actionImage = null)
@@ -83,7 +96,7 @@ namespace MToolKit.ContextMenus.Widgets
       var oldTheme = themeSubscription; themeSubscription = null;
       var oldPrompt = promptBinding; promptBinding = null;
       var oldButton = subscribedButton; subscribedButton = null;
-      State = null;
+      State = null; suppressSelectionHighlight = false;
       if (oldButton != null) oldButton.onClick.RemoveListener(Activate);
       Exception failure = null;
       // Restore the old complete preset bindings before subscription disposal can bind a new owner.
@@ -154,7 +167,7 @@ namespace MToolKit.ContextMenus.Widgets
       if (Variant != null) Variant.text = state.Details?.VariantText ?? string.Empty;
       if (!BindSprite(Icon, state.Icon, false, generation, state)) return;
       if (!BindSprite(ActionImage, state.Image, true, generation, state)) return;
-      if (Highlight != null) Highlight.enabled = state.IsSelected;
+      if (Highlight != null) Highlight.enabled = state.IsSelected && !suppressSelectionHighlight;
       if (Check != null) Check.enabled = state.Availability.IsChecked;
       if (Button != null) Button.interactable = state.Availability.Visible && state.Availability.Enabled
         && (state.Action?.Behavior.IsInteractive ?? (state.Activate != null));

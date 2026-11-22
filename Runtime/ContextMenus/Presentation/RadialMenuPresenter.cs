@@ -227,6 +227,8 @@ namespace MToolKit.ContextMenus.Presentation
           ? MenuVisualRole.Hovered : selected ? MenuVisualRole.Selected : MenuVisualRole.Normal, state);
         graphic.BorderColor = ColorFor(selected ? MenuVisualRole.Label : MenuVisualRole.OuterBorder, state);
         graphic.BorderWidth = selected ? 3 : 1;
+        graphic.OuterHighlightWidth = Profile.DrawSegments && selected ? 4 : 0;
+        graphic.OuterHighlightColor = ColorFor(MenuVisualRole.Selected, state);
         var item = Item(index);
         MenuWidgetFactory.Place(item.Rect, geometry.ContentAnchor, Profile.WidgetSize);
         var filter = item.GameObject.GetComponent<MenuSectorHitFilter>();
@@ -242,6 +244,8 @@ namespace MToolKit.ContextMenus.Presentation
           Profile.InputBindings.RoutePointerClick || !action.Behavior.IsInteractive ? null : () => ActivateRingActionAsync(action, selectedRing).Forget(),
           () => SelectRingAction(action, selectedRing)));
         ConfigureNavigation(item);
+        // Only factory-owned widgets defer their selection marker to the native sector.
+        if (item.DefaultWidget != null) item.DefaultWidget.SuppressSelectionHighlight = Profile.DrawSegments;
         if (item.DefaultWidget?.Background != null && Profile.DrawSegments)
           item.DefaultWidget.Background.color = Color.clear;
       }
