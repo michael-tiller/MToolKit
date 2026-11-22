@@ -248,7 +248,12 @@ namespace MToolKit.ContextMenus.Samples.Tests.Editor
       AssertMedia(actions[0], true, true, artwork, "Build");
       AssertMedia(actions[1], true, false, artwork, "Equipment");
       AssertMedia(actions[2], false, true, artwork, "Interactions");
-      AssertMedia(actions[3], false, false, artwork, "Preferences");
+      AssertMedia(actions[3], true, false, artwork, "Preferences");
+      Assert.That(actions[3].Children.Count, Is.GreaterThan(0));
+      var preferencesHeader = actions[3].Children[0];
+      Assert.That(preferencesHeader.Id.Value, Is.EqualTo("gallery.settings/gallery.preferences-header"));
+      Assert.That(preferencesHeader.Behavior.IsInteractive, Is.False);
+      AssertMedia(preferencesHeader, false, false, artwork, "Preferences header");
       AssertMedia(actions[4], true, true, artwork, "Unavailable recipe");
       var revolver = actions[1].Children[0];
       AssertMedia(revolver, true, true, artwork, "Equipment selection");

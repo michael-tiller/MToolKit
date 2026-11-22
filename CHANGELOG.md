@@ -55,6 +55,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Keep gallery media coverage aligned with the icon-only NestedWheel defaults. (v1.25.13)
+
 - Use icon-only sectors in the supplied NestedWheel style while retaining selected-action details in its center. (v1.25.12)
 
 - Render the wheel selection indicator as a theme-aware inset outer arc, preserving rectangular Pie and List markers and custom widget ownership. (v1.25.11)
