@@ -32,6 +32,30 @@ function New-CiUnityStartInfo {
  if([string]::IsNullOrWhiteSpace($start.EnvironmentVariables['ALLUSERSPROFILE'])){$start.EnvironmentVariables['ALLUSERSPROFILE']=[Environment]::GetFolderPath([Environment+SpecialFolder]::CommonApplicationData)}
  return $start
 }
+function Start-CiQueuedUnity {
+ [CmdletBinding()]
+ param(
+  [Parameter(Mandatory)][string]$ProjectPath,
+  [Parameter(Mandatory)][Diagnostics.ProcessStartInfo]$StartInfo,
+  [Parameter(Mandatory)][string]$TaskId,
+  [Parameter(Mandatory)][string]$Owner,
+  [Parameter(Mandatory)][string]$Summary,
+  [Parameter(Mandatory)][ValidateRange(1,86400)][int]$ExpectedSeconds,
+  [Parameter(Mandatory)][ValidateRange(1,86400)][int]$QueueTimeoutSeconds
+ )
+ # The consumer snapshot is pinned by the reviewed job approval. Its adapter
+ # selects Captain's configured queue or the consumer's checked-in fallback.
+ $project=(Resolve-Path -LiteralPath $ProjectPath -ErrorAction Stop).Path
+ $adapter=Join-Path $project 'Tools/Captain/UnityEditorLaunch.psm1'
+ if(-not(Test-Path -LiteralPath $adapter -PathType Leaf)){throw 'Pinned consumer is missing the Captain Unity queue adapter.'}
+ $module=Import-Module -Name $adapter -Force -PassThru -DisableNameChecking -ErrorAction Stop
+ $launch=$module.ExportedCommands['Start-DirigibleUnityEditor']
+ if($null -eq $launch){throw 'Pinned consumer adapter does not export the Captain Unity queue launcher.'}
+ $process=& $launch -StartInfo $StartInfo -ProjectPath $project -TaskId $TaskId -Owner $Owner `
+  -Summary $Summary -ExpectedSeconds $ExpectedSeconds -QueueTimeoutSeconds $QueueTimeoutSeconds
+ if($process -isnot [Diagnostics.Process]){throw 'Captain Unity queue did not return the owned launcher process.'}
+ return $process
+}
 function Assert-CiJobApproval {
  param($Approval,[hashtable]$Environment,$Event)
  foreach($field in @('WorkflowSha','MergeSha','HeadSha')){if($Approval.$field -notmatch '^[a-f0-9]{40}$'){throw 'Approval requires exact Git identities.'}}

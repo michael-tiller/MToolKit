@@ -55,6 +55,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Route licensed menu CI Unity stages through the pinned consumer's Captain Editor queue. (v1.25.14)
+
 - Keep gallery media coverage aligned with the icon-only NestedWheel defaults. (v1.25.13)
 
 - Use icon-only sectors in the supplied NestedWheel style while retaining selected-action details in its center. (v1.25.12)

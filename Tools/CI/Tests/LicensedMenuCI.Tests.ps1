@@ -356,3 +356,71 @@ Describe 'Focused action presentation integration selection' {
   $integration[0].CommandElements[4].VariablePath.UserPath|Should Be 'integrationClasses'
  }
 }
+
+Describe 'Captain queue ownership for licensed Unity stages' {
+ BeforeEach {
+  $project=Join-Path $TestDrive 'queue-consumer'
+  $adapter=Join-Path $project 'Tools/Captain/UnityEditorLaunch.psm1'
+  $null=New-Item -ItemType Directory -Force -Path (Split-Path -Parent $adapter)
+  $global:LicensedMenuQueueCalls=@()
+  $global:LicensedMenuQueueFailure=$false
+  $start=[Diagnostics.ProcessStartInfo]::new()
+  $start.FileName=Join-Path $PSHOME 'powershell.exe'
+  $start.Arguments='-NoLogo -NoProfile -NonInteractive -Command "Start-Sleep -Milliseconds 400; exit 23"'
+  $start.UseShellExecute=$false;$start.CreateNoWindow=$true
+ }
+ AfterEach {
+  Remove-Variable -Name LicensedMenuQueueCalls,LicensedMenuQueueFailure -Scope Global -ErrorAction SilentlyContinue
+ }
+ It 'fails closed when the pinned consumer adapter or its queue entry point is missing' {
+  Get-Command Start-CiQueuedUnity -ErrorAction SilentlyContinue | Should Not BeNullOrEmpty
+  { Start-CiQueuedUnity -ProjectPath $project -StartInfo $start -TaskId 'menu-ci/42/1' -Owner 'menu-ci/MTK' -Summary 'framework' -ExpectedSeconds 1800 -QueueTimeoutSeconds 1800 } | Should Throw
+  [IO.File]::WriteAllText($adapter,'function Other { }; Export-ModuleMember -Function Other')
+  { Start-CiQueuedUnity -ProjectPath $project -StartInfo $start -TaskId 'menu-ci/42/1' -Owner 'menu-ci/MTK' -Summary 'framework' -ExpectedSeconds 1800 -QueueTimeoutSeconds 1800 } | Should Throw
+  @($global:LicensedMenuQueueCalls).Count | Should Be 0
+ }
+ It 'passes the original start info and stage ownership to the queue and returns its live child handle' {
+  Get-Command Start-CiQueuedUnity -ErrorAction SilentlyContinue | Should Not BeNullOrEmpty
+  @'
+function Start-DirigibleUnityEditor {
+ param($StartInfo,$ProjectPath,$TaskId,$Owner,$Summary,$ExpectedSeconds,$QueueTimeoutSeconds)
+ $global:LicensedMenuQueueCalls += [pscustomobject]@{StartInfo=$StartInfo;ProjectPath=$ProjectPath;TaskId=$TaskId;Owner=$Owner;Summary=$Summary;ExpectedSeconds=$ExpectedSeconds;QueueTimeoutSeconds=$QueueTimeoutSeconds}
+ if ($global:LicensedMenuQueueFailure) { throw 'Queue denied launch' }
+ return [Diagnostics.Process]::Start($StartInfo)
+}
+Export-ModuleMember -Function Start-DirigibleUnityEditor
+'@ | Set-Content -LiteralPath $adapter -Encoding ascii
+  $process=Start-CiQueuedUnity -ProjectPath $project -StartInfo $start -TaskId 'menu-ci/42/1' -Owner 'menu-ci/MTK' -Summary 'framework' -ExpectedSeconds 1800 -QueueTimeoutSeconds 1800
+  try {
+   $process | Should BeOfType ([Diagnostics.Process])
+   $process.WaitForExit(10000) | Should Be $true
+   $process.ExitCode | Should Be 23
+  } finally { if ($process) { $process.Dispose() } }
+  @($global:LicensedMenuQueueCalls).Count | Should Be 1
+  $call=$global:LicensedMenuQueueCalls[0]
+  [object]::ReferenceEquals($call.StartInfo,$start) | Should Be $true
+  $call.ProjectPath | Should Be $project
+  $call.TaskId | Should Be 'menu-ci/42/1'
+  $call.Owner | Should Be 'menu-ci/MTK'
+  $call.Summary | Should Be 'framework'
+  $call.ExpectedSeconds | Should Be 1800
+  $call.QueueTimeoutSeconds | Should Be 1800
+  $global:LicensedMenuQueueFailure=$true
+  { Start-CiQueuedUnity -ProjectPath $project -StartInfo $start -TaskId 'menu-ci/42/1' -Owner 'menu-ci/MTK' -Summary 'gallery' -ExpectedSeconds 1800 -QueueTimeoutSeconds 1800 } | Should Throw
+  @($global:LicensedMenuQueueCalls).Count | Should Be 2
+ }
+ It 'routes all declared stages through the queue and waits for the owned launcher' {
+  $tokens=$null;$errors=$null
+  $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot '../Invoke-LicensedMenuCI.ps1'),[ref]$tokens,[ref]$errors)
+  @($errors).Count | Should Be 0
+  $stage=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ceq 'Run-UnityStage'},$true))
+  $stage.Count | Should Be 1
+  $starts=@($stage[0].FindAll({param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -ceq 'Start-CiQueuedUnity'},$true))
+  $starts.Count | Should Be 1
+  $stage[0].Extent.Text | Should Not Match '\[Diagnostics\.Process\]::Start\(\$info\)'
+  $stage[0].Extent.Text | Should Match '\$process\.WaitForExit\(1800000\)'
+  $stage[0].Extent.Text | Should Match '\$process\.Dispose\(\)'
+  $stages=@($ast.FindAll({param($node) $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -ceq 'Run-UnityStage' -and $node.CommandElements.Count -gt 1},$true) | ForEach-Object {$_.CommandElements[1].Value})
+  ($stages -join ',') | Should Be 'setup,framework,integration,gallery'
+ }
+}

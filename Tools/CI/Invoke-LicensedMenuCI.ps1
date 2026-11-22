@@ -103,7 +103,10 @@ try {
   }
   $info.Arguments+=' "-screen-width" "1600" "-screen-height" "1000"'
   $started=[DateTime]::UtcNow
-  $process=[Diagnostics.Process]::Start($info)
+  $process=Start-CiQueuedUnity -ProjectPath $project -StartInfo $info `
+   -TaskId ('licensed-menu-ci/'+$approval.Repository+'/'+$approval.RunId+'/'+$approval.RunAttempt) `
+   -Owner ('licensed-menu-ci/'+$approval.Repository) -Summary ('Licensed menu CI: '+$Stage) `
+   -ExpectedSeconds 1800 -QueueTimeoutSeconds 1800
   if($null -eq $process){throw 'Unity launcher did not start.'}
   try{
    if(-not $process.WaitForExit(1800000)){
