@@ -10,7 +10,18 @@ not a roadmap milestone.
 
 ## [Unreleased]
 
+
 ### Added
+
+- Add optional native list scrolling alongside default pagination, with typed/inline authoring, clipped flyout columns, keyboard/controller selection reveal and viewport navigation. Preserve native release/drag ownership and prevent stationary-pointer hover from taking selection back during scrolling. (v1.25.0)
+
+- Add independent optional icon and full-color image sprites to runtime/authored menu actions, scoped child and secondary placements, widget snapshots and default item/center widgets. Preserve authored artwork color, collapse empty artwork slots, and clear reused visuals safely. Supply original artwork and editable examples across all four menu presentations, including dynamic inventory and auxiliary actions. (v1.24.0)
+
+- Add reusable MTK Theme style-set assets and compact menu state slots with independent Swatch, Typeset and Spacing tokens. Add typed Wheel, Nested Wheel, Pie and List presentation theme sources, preserving runtime profile identities and input ownership. Preview token-preserving legacy conversion, retain ambiguous/raw overrides, and fence rebuilds against edits to referenced style assets. (v1.23.0)
+
+- Add shared menu-style configuration assets and an editor wizard with specialized layout foldouts, guarded previews and in-place profile rebuilding. Expose sparse shared/per-style MTK Swatch, Typeset and Spacing overrides with skin fallback, visual states and a live backdrop role. Bind native widget content layouts and typography while preserving custom targets, callback ownership and pooled baselines. (v1.22.0)
+
+- Add the `MToolKit.ContextMenus` module with runtime/authored hierarchical actions, shared sessions, inline list foldouts, native annular rendering, replacement and partial-arc concentric presentations, configurable widgets/profiles, semantic input ownership, secondary actions, theme bindings and optional transitions. Ship ten editable presenter/widget prefabs, six menu profiles, a host config and saved gallery scene; retain a safe fresh-destination generator and authoring/migration documentation. Add optional scoped rebinder registration for runtime action instances. (v1.21.0)
 
 - Add per-key source-rectangle, alpha-bound and monochrome-ink sizing for central keycap artwork. Fit visible symbols without enlarging caps, retain source/importer identities and release prepared pixels on failure; verify actual authored arrows/Caps/Context art, legacy scale, colors and native rendering in Dirigible. (v1.20.0)
 
@@ -38,8 +49,57 @@ not a roadmap milestone.
 
 - Add independent camera pan and zoom sensitivity settings with neutral defaults, finite 10–300% ranges, Apply/Cancel/default baselines and INI persistence. Preserve existing binding behavior and legacy files without the new keys. (v1.8.0)
 
+### Changed
+
+- Consolidate the sample into WheelContextMenu, PieContextMenu, ListContextMenu and NestedWheelContextMenu, retaining the optional custom-center and custom-presenter examples. Preserve renamed profile GUIDs, remove the redundant single-ring preset, and supply shared authoring sources and reproducible themed widget prefabs. (v1.22.0)
+
 ### Fixed
 
+- Keep gallery PlayMode layout and media regression coverage valid in Unity batch mode. (v1.25.15)
+
+- Route licensed menu CI Unity stages through the pinned consumer's Captain Editor queue. (v1.25.14)
+
+- Keep gallery media coverage aligned with the icon-only NestedWheel defaults. (v1.25.13)
+
+- Use icon-only sectors in the supplied NestedWheel style while retaining selected-action details in its center. (v1.25.12)
+
+- Render the wheel selection indicator as a theme-aware inset outer arc, preserving rectangular Pie and List markers and custom widget ownership. (v1.25.11)
+
+- Give Pie menu titles readable room beside icons and images with wider typed theme defaults and non-overlapping button spacing. Rebuild the supplied profile in place and validate native labels, bounds and paging. (v1.25.10)
+
+- Keep the menu1.25.8 fix note in Unreleased rather than repeating it in historical release sections. (v1.25.9)
+
+- Give routed menu outside clicks one input owner so a submenu-opening press cannot become a native backdrop cancellation on release. Preserve native fallback, supplied widgets and scrolling controls. Reproduce deeper Pie replacement with the saved prefab and real Input System UI module. (v1.25.8)
+
+- Preserve enabled hover feedback for actions activated through the semantic input router. Fence pointer, selection and activation callbacks against presenter replacement, including reused session/context instances. Target selection-reset fixtures by their bound action rather than native control order. (v1.25.7)
+
+- Place radial paging controls above the outer composition, show them only for the focused menu's available pages, and measure complete labels/glyphs. Add shared local-Back suppression, explicit navigation prompt cleanup, stacked secondary rows, and a reusable gallery command HUD with per-binding glyph columns. Preserve theme/profile authoring and all four presentations. (v1.25.6)
+
+- Clear abandoned pointer selections and reset analog selection after a configurable unscaled neutral grace period. Preserve center/auxiliary controls, submenu paths, input ownership and safe hold/release behavior; retain empty selection across availability refreshes and restore concentric ring navigation. Keep runtime binding-identity coverage on the selected center. (v1.25.5)
+
+- Keep confirmation glyphs out of menu items and in the selected action's center, preserving explicit secondary bindings and clearing center ownership with selection. Correct the button-only corner test to sample settled layout while preserving all raycast/semantic assertions. (v1.25.4)
+
+- Reserve measured footer glyph widths as layout minima under compression; keep wide paging keycaps visible at default menu widths and release space on rebinding. Validate the default-width native mesh regression and actual saved-gallery footer. (v1.25.3)
+
+- Let native TMP glyph widths drive default footer layout so wide keyboard caps render, operation labels stay separate and rebinding releases extra space. Verify actual sprite meshes and layout with a focused native regression. (v1.25.2)
+
+- Use native TMP glyph-only binding hints throughout default menu widgets, navigation and the saved gallery while preserving live rebinding and custom widget ownership. Author reusable keyboard, mouse and neutral controller glyph assets with unique, compact atlas names and protect existing sample assets during generation. (v1.25.1)
+
+- Keep independently wired icons and labels visible beneath optional artwork containers, including initially inactive custom prefabs and widget reuse. Continue collapsing empty dedicated artwork leaves. (v1.24.1)
+
+- Avoid invalidating every input prompt when menu routing enables or disables unchanged actions. Preserve synchronous binding, device and context refreshes; verify bulk, overlapping and deferred menu leases plus existing prompt ownership regressions. (v1.21.4)
+
+- Preserve Generic Image glyph fallback after Sprite destruction and refresh native UI materials after glyph atlas rebakes, retaining the accepted native regression fixture alongside hierarchical menus. (v1.21.3)
+
+- Write the generated Unity package manifest as UTF-8 without a byte-order mark, preserving non-ASCII local dependency paths for package resolution. (v1.21.2)
+
+- Give the standalone menu gallery an explicit clearing camera so static UI remains visible when switching presentations. (v1.21.2)
+
+- Hydrate ignored CI dependency directories around tracked candidate files without overwriting them. Recognize directory-only ignore rules, preserve equivalent tracked Git text checkout line endings, and retain raw and canonical digests with private hydration receipts. (v1.21.1)
+
+- Apply the dedicated center theme role to default menu center backgrounds and enlarge the gallery center's description area without reducing text or interaction sizes. (v1.21.1)
+
+- Retain independently acquired Addressables references for repeated assets and overlapping groups; release failed, canceled and unregistered acquisitions. Return menu provider/command/asset continuations to their captured Unity owner before framework state evaluation and cleanup, and reject stale worker notifications after replacement. Observe DI-owned request/canvas lifetime, retain live foreign-action prompt bindings, measure actual radial center/auxiliary bounds, and complete independent owned cleanup when custom widget or presenter lifecycle callbacks throw or reenter. (v1.21.0)
 - Normalize destroyed Unity Sprite wrappers before Image glyph fallback so usable Generic artwork is selected and exhausted lookups return real null. Preserve native TMP atlas presentation independently of its optional Sprite object; cover nine native destruction/compatibility cases in the consuming project. (v1.20.2)
 
 - Refresh active UGUI materials after native input-atlas rebakes so unchanged text and Images recover from Unity's invalidated stencil-material cache. Queue one native material update without polling or forcing layout; verify the reproduced missing-label failure in Dirigible. (v1.20.1)
@@ -88,6 +148,7 @@ not a roadmap milestone.
 
 ### Fixed
 
+
 - Bootstrapper fallback polls the enabled Input System backend safely when keyboard or mouse devices are absent, preserving keyboard and mouse-button readiness and configured action ownership (v1.2.1).
 - Sequential ES3 saves wait for a cancellable next-frame boundary after each controller, preserving durable receipts, aborted-batch cleanup and safe retry (v1.2.1).
 - Routine graph routing and node execution use Debug; dialogue Information messages, warnings and errors retain their existing levels (v1.2.1).
@@ -116,6 +177,7 @@ not a roadmap milestone.
 - Refactored duplicate "enqueue all outputs" pattern into helper methods across objective executors (v1.0.1)
 
 ### Fixed
+
 
 - `Bootstrapper`: guard `OnBootstrappedAsync`/`ForceQuit` against running after the Single-mode scene load has already destroyed the bootstrapper object (v1.0.2)
 - `GlobalInstaller`: log the destroyed plugin's type name when skipping it during initialization, and warn (not verbose) when `NavigationPlugin` is missing for canvas visibility handling (v1.0.2)
@@ -163,6 +225,7 @@ not a roadmap milestone.
 - `SubviewButton.targetSubview` is no longer `[Required]`, and `OnClickSetSubview` null-guards a missing target — it logs a warning (Serilog) and returns instead of throwing, so a tab whose subview isn't wired degrades gracefully rather than NRE-ing.
 
 ### Fixed
+
 
 - `GameLoader` scene loading probed the key with `Addressables.LoadResourceLocationsAsync` before calling `LoadSceneAsync`. A manifest scene with no location made Addressables raise `InvalidKeyException` through its own delayed-action pump, which reaches the Unity console as an unhandled *error log* some frames later — during an EditMode run that log lands in whichever unrelated test is executing and fails it (observed poisoning `ES3SaveableTests` from `GameLoaderTests`). The probe returns an empty result instead of logging, so a missing scene now yields one deliberate warning and the same graceful skip.
 
@@ -222,6 +285,7 @@ API break, not a roadmap point.
 
 ### Fixed
 
+
 - `NavigationInstaller.Install(IContainerBuilder builder)` was calling `base.Configure(builder)`, which resolved to `LifetimeScope`'s empty stub instead of this class's override — `INavigationService` and `IModalService` were silently dropped from the parent scope's registrations. Root cause of the `SaveTruncationDialogPresenter` not wiring in dependent game scopes. Now calls `Configure(builder)` directly.
 
 ## [0.6.0] - 2026-05-19
@@ -252,5 +316,6 @@ API break, not a roadmap point.
 - `.gitignore` excludes Windows-reserved filenames `CON` / `CON.meta`.
 
 ### Fixed
+
 
 - `GraphRunner.HandleMessageAsync` — per-dispatch reentrancy guard (`HashSet<string> executedThisDispatch`) prevents nodes wired into authoring-time feedback edges (e.g. `Check → Increment → Check` for re-evaluate-after-increment) from executing N times on a single message. Quest objective progress now increments by 1 per matching event as intended. `MaxExecutionSteps` (256) remains as the runaway safety net.

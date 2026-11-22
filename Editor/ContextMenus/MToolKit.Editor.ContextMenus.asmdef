@@ -1,0 +1,21 @@
+{
+    "name":  "MToolKit.Editor.ContextMenus",
+    "includePlatforms":  [
+                             "Editor"
+                         ],
+    "autoReferenced":  true,
+    "rootNamespace":  "MToolKit.Editor.ContextMenus",
+    "references":  [
+                       "MToolKit.ContextMenus",
+                       "MToolKit.Runtime",
+                       "MToolKit.Theme",
+                       "UnityEngine.UI",
+                       "Unity.TextMeshPro",
+                       "Unity.InputSystem",
+                       "Unity.Addressables",
+                       "UniTask"
+                   ],
+    "defineConstraints":  [
+                              "ENABLE_INPUT_SYSTEM"
+                          ]
+}

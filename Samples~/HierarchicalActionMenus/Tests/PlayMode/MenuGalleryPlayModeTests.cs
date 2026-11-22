@@ -1,0 +1,1036 @@
+#if UNITY_EDITOR
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
+using MToolKit.ContextMenus.Configuration;
+using MToolKit.ContextMenus.Geometry;
+using MToolKit.ContextMenus.Hosting;
+using MToolKit.ContextMenus.Presentation;
+using MToolKit.ContextMenus.Rendering;
+using MToolKit.ContextMenus.Widgets;
+using MToolKit.Theme;
+using NUnit.Framework;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.LowLevel;
+using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
+using UnityEngine.UI;
+using Object = UnityEngine.Object;
+
+namespace MToolKit.ContextMenus.Samples.Tests
+{
+  /// <summary>
+  /// Runs the saved gallery and its real input asset. Generate the sample with
+  /// Tools/MToolKit/Samples/Create Action Menu Gallery before running this assembly.
+  /// A 1600 x 1000 viewport accommodates the authored two-ring composition.
+  /// </summary>
+  public sealed class MenuGalleryPlayModeTests
+  {
+    private const float Timeout = 8;
+    private readonly List<EventSystem> disabledEventSystems = new();
+    private readonly List<MenuGalleryController> suspendedGalleries = new();
+    private readonly HashSet<GamepadButton> heldButtons = new();
+    private MenuGalleryController gallery;
+    private Scene galleryScene, priorActiveScene;
+    private Gamepad gamepad;
+    private Mouse mouse;
+    private readonly List<Object> ownedObjects = new();
+    private Vector2 stick;
+    private InputSettings.UpdateMode priorUpdateMode;
+    private InputSettings.EditorInputBehaviorInPlayMode priorEditorInputBehavior;
+    private InputSettings.BackgroundBehavior priorBackgroundBehavior;
+    private bool priorRunInBackground;
+    private GameObject priorSelection;
+    private EventSystem priorEvents;
+    private bool capturedInputSettings;
+    private CurrentTheme previousGlobalTheme;
+    private string pointerTrace;
+
+    [UnitySetUp]
+    public IEnumerator LoadSavedGallery()
+    {
+      previousGlobalTheme = CurrentTheme.HasInstance ? CurrentTheme.Instance : null;
+      string[] scenes = AssetDatabase.FindAssets("ActionMenuGallery t:Scene", new[] { "Assets/Samples" });
+      Assert.That(scenes.Length, Is.EqualTo(1),
+        "Generate exactly one persisted ActionMenuGallery scene with the sample builder before running PlayMode tests.");
+      string scenePath = AssetDatabase.GUIDToAssetPath(scenes[0]);
+      priorActiveScene = SceneManager.GetActiveScene();
+      priorEvents = EventSystem.current;
+      priorSelection = priorEvents != null ? priorEvents.currentSelectedGameObject : null;
+      // The runner may enter PlayMode from this same saved gallery. Suspend that
+      // pre-existing controller's owned input before loading the test instance.
+      foreach (var existing in Object.FindObjectsByType<MenuGalleryController>(FindObjectsSortMode.None))
+        if (existing.enabled) { suspendedGalleries.Add(existing); existing.enabled = false; }
+      foreach (var events in Object.FindObjectsByType<EventSystem>(FindObjectsSortMode.None))
+        if (events.enabled) { disabledEventSystems.Add(events); events.enabled = false; }
+      priorUpdateMode = InputSystem.settings.updateMode;
+      priorEditorInputBehavior = InputSystem.settings.editorInputBehaviorInPlayMode;
+      priorBackgroundBehavior = InputSystem.settings.backgroundBehavior;
+      priorRunInBackground = Application.runInBackground;
+      capturedInputSettings = true;
+      Application.runInBackground = true;
+      InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+      InputSystem.settings.updateMode = InputSettings.UpdateMode.ProcessEventsInDynamicUpdate;
+      // Tests inject only the devices assigned to their owned asset. Route those
+      // events to PlayMode even when automation leaves an Inspector tab focused.
+      InputSystem.settings.editorInputBehaviorInPlayMode =
+        InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+      gamepad = InputSystem.AddDevice<Gamepad>();
+      var load = EditorSceneManager.LoadSceneAsyncInPlayMode(scenePath, new LoadSceneParameters(LoadSceneMode.Additive));
+      yield return WaitFor(() => load.isDone, "Saved gallery scene did not load");
+      galleryScene = SceneManager.GetSceneByPath(scenePath);
+      Assert.That(galleryScene.IsValid() && galleryScene.isLoaded, Is.True);
+      SceneManager.SetActiveScene(galleryScene);
+      foreach (var root in galleryScene.GetRootGameObjects())
+      {
+        gallery = root.GetComponentInChildren<MenuGalleryController>(true);
+        if (gallery != null) break;
+      }
+      Assert.That(gallery, Is.Not.Null, "Saved scene has no gallery controller");
+      int activeGalleries = 0;
+      foreach (var candidate in Object.FindObjectsByType<MenuGalleryController>(FindObjectsSortMode.None))
+        if (candidate.isActiveAndEnabled) activeGalleries++;
+      Assert.That(activeGalleries, Is.EqualTo(1), "The test must own exactly one enabled gallery/input source");
+      yield return WaitFor(() => gallery.MenuService?.IsOpen == true, "Gallery did not open its initial menu");
+      Assert.That(CurrentTheme.HasInstance, Is.EqualTo(previousGlobalTheme != null), "The gallery changed global theme ownership");
+      if (previousGlobalTheme != null) Assert.That(CurrentTheme.Instance, Is.SameAs(previousGlobalTheme));
+      Assert.That(gallery.InputModule.actionsAsset, Is.Not.SameAs(gallery.InputActions),
+        "The sample must route the InputService runtime clone rather than mutate the authored asset");
+      gallery.InputModule.actionsAsset.devices = new InputDevice[] { gamepad };
+      yield return Neutral();
+    }
+
+    [UnityTearDown]
+    public IEnumerator RestoreOwnedState()
+    {
+      if (gallery != null) gallery.Host.Close();
+      if (gamepad != null && gamepad.added)
+      {
+        InputSystem.QueueStateEvent(gamepad, new GamepadState());
+        yield return null;
+      }
+      if (priorActiveScene.IsValid() && priorActiveScene.isLoaded) SceneManager.SetActiveScene(priorActiveScene);
+      if (galleryScene.IsValid() && galleryScene.isLoaded)
+      {
+        var unload = SceneManager.UnloadSceneAsync(galleryScene);
+        if (unload != null) yield return WaitFor(() => unload.isDone, "Gallery scene did not unload");
+      }
+      // The controller owns the gallery's DontDestroyOnLoad theme and cloned input asset.
+      yield return null;
+      if (gamepad != null && gamepad.added) InputSystem.RemoveDevice(gamepad);
+      if (mouse != null && mouse.added) InputSystem.RemoveDevice(mouse);
+      mouse = null;
+      foreach (var owned in ownedObjects) if (owned != null) Object.Destroy(owned);
+      ownedObjects.Clear();
+      gamepad = null; heldButtons.Clear(); stick = Vector2.zero;
+      if (capturedInputSettings)
+      {
+        InputSystem.settings.updateMode = priorUpdateMode;
+        InputSystem.settings.editorInputBehaviorInPlayMode = priorEditorInputBehavior;
+        InputSystem.settings.backgroundBehavior = priorBackgroundBehavior;
+        Application.runInBackground = priorRunInBackground;
+      }
+      capturedInputSettings = false;
+      foreach (var existing in suspendedGalleries) if (existing != null) existing.enabled = true;
+      suspendedGalleries.Clear();
+      foreach (var events in disabledEventSystems) if (events != null) events.enabled = true;
+      disabledEventSystems.Clear();
+      if (priorEvents != null && priorEvents.isActiveAndEnabled)
+      {
+        EventSystem.current = priorEvents;
+        priorEvents.SetSelectedGameObject(priorSelection);
+      }
+      gallery = null; galleryScene = default;
+    }
+
+    [UnityTest]
+    public IEnumerator Four_saved_profiles_and_a_custom_center_configuration_create_native_presentations()
+    {
+      string[] styles = { MenuGalleryController.WheelContextMenu, MenuGalleryController.PieContextMenu,
+        MenuGalleryController.ListContextMenu, MenuGalleryController.NestedWheelContextMenu };
+      foreach (string style in styles)
+      {
+        yield return Open(style);
+        var profile = gallery.HostConfig.Resolve(style);
+        Assert.That(AssetDatabase.GetAssetPath(profile), Does.EndWith(".asset"));
+        Assert.That(AssetDatabase.GetAssetPath(profile.PresenterPrefab), Does.EndWith(".prefab"));
+        Assert.That(AssetDatabase.GetAssetPath(profile.ItemPrefab), Does.EndWith(".prefab"));
+        var presenter = gallery.MenuService.Presenter;
+        if (style == MenuGalleryController.ListContextMenu) Assert.That(presenter, Is.TypeOf<ListMenuPresenter>());
+        else Assert.That(presenter, Is.TypeOf<RadialMenuPresenter>(),
+          style + " fell back to a list; run with enough viewport space for the authored radial profile");
+        AssertContained();
+        var widgets = presenter.Root.GetComponentsInChildren<MenuActionWidget>();
+        int actionWidgetCount = 0;
+        bool anyLabel = false, anyIcon = false;
+        foreach (var widget in widgets)
+        {
+          if (widget is MenuCenterWidget || widget.BackgroundRole == MenuVisualRole.Auxiliary) continue;
+          actionWidgetCount++;
+          anyLabel |= widget.Label != null && !string.IsNullOrEmpty(widget.Label.text);
+          anyIcon |= widget.Icon != null && widget.Icon.enabled && widget.Icon.sprite != null;
+        }
+        Assert.That(actionWidgetCount, Is.GreaterThanOrEqualTo(5), style + " has no authored action widgets");
+        Assert.That(anyIcon, Is.True, style);
+        if (style == MenuGalleryController.WheelContextMenu || style == MenuGalleryController.NestedWheelContextMenu)
+          Assert.That(anyLabel, Is.False, style + " sector item prefab is deliberately icon-only");
+        else Assert.That(anyLabel, Is.True, style);
+        var graphics = presenter.Root.GetComponentsInChildren<NativeRadialGraphic>();
+        if (style == MenuGalleryController.PieContextMenu || style == MenuGalleryController.ListContextMenu)
+          Assert.That(graphics.Length, Is.Zero, style + " should not render background wedges");
+        else
+        {
+          Assert.That(graphics.Length, Is.EqualTo(5), style);
+          var mesh = graphics[0].canvasRenderer.GetMesh();
+          Assert.That(mesh, Is.Not.Null, style + " produced no uGUI sector mesh");
+          Assert.That(mesh.vertexCount, Is.GreaterThan(0), style + " produced an empty uGUI sector mesh");
+        }
+      }
+      // Richer center information is a configuration of the canonical wheel, not another root style.
+      var canonicalWheel = gallery.HostConfig.Resolve(MenuGalleryController.WheelContextMenu);
+      string profilePath = AssetDatabase.GetAssetPath(canonicalWheel);
+      int profileFolder = profilePath.LastIndexOf("/Profiles/", StringComparison.Ordinal);
+      Assert.That(profileFolder, Is.GreaterThanOrEqualTo(0));
+      var customCenter = AssetDatabase.LoadAssetAtPath<GameObject>(profilePath.Substring(0, profileFolder) + "/Prefabs/CustomCenter.prefab");
+      Assert.That(customCenter, Is.Not.Null);
+      var configuredWheel = Object.Instantiate(canonicalWheel);
+      ownedObjects.Add(configuredWheel);
+      configuredWheel.CenterPrefab = customCenter;
+      var context = new MenuContext(gallery.State);
+      yield return gallery.MenuService.OpenAsync(new MenuOpenRequest(gallery.ActionSet.Create(context), context,
+        gallery.Canvas, new Vector2(Screen.width * .5f, Screen.height * .5f), profile: configuredWheel)).ToCoroutine();
+      yield return gallery.MenuService.Session.EnterSubmenuAsync("gallery.build").ToCoroutine();
+      Assert.That(gallery.MenuService.Session.Select("gallery.build/gallery.wall"), Is.True);
+      yield return null; yield return null;
+      var boundCenter = gallery.MenuService.Presenter.Root.GetComponentInChildren<GalleryCenterWidget>();
+      Assert.That(boundCenter, Is.Not.Null);
+      Assert.That(boundCenter.BoundAction, Is.EqualTo("gallery.build/gallery.wall"));
+      Assert.That(boundCenter.Title.text, Is.EqualTo("Wall"));
+      Assert.That(boundCenter.Details.text, Does.Contain("Cost: 2 stone"));
+      AssertContained();
+    }
+
+    [UnityTest]
+    public IEnumerator Independent_icons_and_images_bind_across_four_styles_dynamic_children_and_auxiliaries()
+    {
+      var imageProperty = typeof(MenuActionWidget).GetProperty("ActionImage");
+      Assert.That(imageProperty, Is.Not.Null, "The default widget must expose its artwork target.");
+      var actionImage = typeof(MenuAction).GetProperty("Image");
+      Assert.That(actionImage, Is.Not.Null, "Action artwork must be independent of the compact icon.");
+      string[] expectedIds = { "gallery.build", "gallery.equipment", "gallery.interactions", "gallery.settings", "gallery.unavailable" };
+      foreach (string style in new[] { MenuGalleryController.WheelContextMenu, MenuGalleryController.PieContextMenu,
+        MenuGalleryController.ListContextMenu, MenuGalleryController.NestedWheelContextMenu })
+      {
+        yield return Open(style);
+        var session = gallery.MenuService.Session;
+        Assert.That(session.Actions.Count, Is.EqualTo(expectedIds.Length), style);
+        for (int i = 0; i < expectedIds.Length; i++)
+          Assert.That(session.Actions[i].Id.Value, Is.EqualTo(expectedIds[i]), style);
+        int iconOnly = 0, imageOnly = 0, both = 0, neither = 0;
+        foreach (var widget in gallery.MenuService.Presenter.Root.GetComponentsInChildren<MenuActionWidget>())
+        {
+          if (widget is MenuCenterWidget || widget.BackgroundRole == MenuVisualRole.Auxiliary) continue;
+          var image = imageProperty.GetValue(widget) as Image;
+          Assert.That(image, Is.Not.Null, style + "/" + widget.name);
+          bool hasIcon = widget.Icon != null && widget.Icon.enabled && widget.Icon.sprite != null;
+          bool hasImage = image.enabled && image.gameObject.activeSelf && image.sprite != null;
+          if (hasIcon && hasImage) both++;
+          else if (hasIcon) iconOnly++;
+          else if (hasImage) imageOnly++;
+          else neither++;
+        }
+        Assert.That(new[] { iconOnly, imageOnly, both, neither }, Is.EqualTo(new[] { 2, 1, 2, 0 }), style);
+        AssertContained();
+      }
+
+      var active = gallery.MenuService.Session;
+      yield return active.EnterSubmenuAsync("gallery.equipment").ToCoroutine();
+      Assert.That(active.Select("gallery.equipment/gallery.equip-revolver"), Is.True);
+      yield return null; yield return null;
+      var center = gallery.MenuService.Presenter.Root.GetComponentInChildren<MenuCenterWidget>();
+      Assert.That(center, Is.Not.Null);
+      var centerImage = imageProperty.GetValue(center) as Image;
+      Assert.That(centerImage, Is.Not.Null);
+      Assert.That(centerImage.enabled && centerImage.sprite != null, Is.True, "Selected artwork did not reach the center.");
+      bool auxiliaryImage = false;
+      foreach (var widget in center.SecondaryContainer.GetComponentsInChildren<MenuActionWidget>())
+      {
+        var image = imageProperty.GetValue(widget) as Image;
+        auxiliaryImage |= image != null && image.enabled && image.gameObject.activeSelf && image.sprite != null;
+      }
+      Assert.That(auxiliaryImage, Is.True, "An independent secondary action image was lost.");
+
+      yield return Open(MenuGalleryController.ListContextMenu);
+      active = gallery.MenuService.Session;
+      yield return active.EnterSubmenuAsync("gallery.settings").ToCoroutine();
+      yield return null; yield return null;
+      var stateProperty = typeof(MenuActionWidget).GetProperty("State", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+      Assert.That(stateProperty, Is.Not.Null);
+      MenuActionWidget header = null;
+      foreach (var widget in gallery.MenuService.Presenter.Root.GetComponentsInChildren<MenuActionWidget>())
+      {
+        var state = stateProperty.GetValue(widget) as MenuWidgetState;
+        if (state?.Action?.Id.Value == "gallery.settings/gallery.preferences-header") { header = widget; break; }
+      }
+      Assert.That(header, Is.Not.Null, "Preferences header must be visible in the list.");
+      var headerImage = imageProperty.GetValue(header) as Image;
+      Assert.That(header.isActiveAndEnabled, Is.True, "Preferences header must be active.");
+      Assert.That(header.Icon, Is.Not.Null, "The list widget must provide an icon target.");
+      Assert.That(headerImage, Is.Not.Null, "The list widget must provide an artwork target.");
+      Assert.That(!header.Icon.enabled || header.Icon.sprite == null, Is.True, "Header must not show an icon.");
+      Assert.That(!headerImage.enabled || headerImage.sprite == null, Is.True, "Header must not show artwork.");
+      yield return active.EnterSubmenuAsync("gallery.settings/gallery.inventory").ToCoroutine();
+      Assert.That(active.Actions.Count, Is.GreaterThan(0));
+      foreach (var action in active.Actions)
+      {
+        Assert.That(action.Icon, Is.Not.Null);
+        Assert.That(actionImage.GetValue(action) as Sprite, Is.Not.Null, "Dynamic children dropped their image.");
+      }
+      AssertContained();
+    }
+
+    [UnityTest]
+    public IEnumerator NestedWheel_sectors_keep_icons_without_titles_while_center_and_shared_labels_remain()
+    {
+      yield return Open(MenuGalleryController.NestedWheelContextMenu);
+      yield return WaitForPresentationLayout();
+      var session = gallery.MenuService.Session;
+      var sharedLabels = new Dictionary<string, string>();
+      foreach (var action in session.RootActions) sharedLabels.Add(action.Id.Value, action.Label.ToString());
+      var stateProperty = typeof(MenuActionWidget).GetProperty("State", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+      Assert.That(stateProperty, Is.Not.Null);
+
+      HashSet<string> AssertIconOnlySectors(RadialMenuPresenter radial)
+      {
+        Assert.That(radial, Is.Not.Null, "Validate the native NestedWheel rather than a fallback");
+        var visibleActions = new HashSet<string>();
+        foreach (var widget in radial.Root.GetComponentsInChildren<MenuActionWidget>())
+        {
+          if (widget is MenuCenterWidget || widget.BackgroundRole == MenuVisualRole.Auxiliary) continue;
+          var state = stateProperty.GetValue(widget) as MenuWidgetState;
+          Assert.That(state?.Action, Is.Not.Null);
+          visibleActions.Add(state.Action.Id.Value);
+          Assert.That(state.Label, Is.Not.Empty, "Hiding a sector title must not delete its shared presentation label");
+          bool visibleTitle = widget.Label != null && widget.Label.isActiveAndEnabled
+            && widget.Label.gameObject.activeInHierarchy && !string.IsNullOrWhiteSpace(widget.Label.text);
+          Assert.That(visibleTitle, Is.False, "NestedWheel sector titles belong in the selected center, not under icons: " + state.Action.Id.Value);
+          if (state.Action.Icon != null)
+            Assert.That(widget.Icon != null && widget.Icon.isActiveAndEnabled && widget.Icon.sprite != null, Is.True,
+              "Keep the supplied sector icon visible: " + state.Action.Id.Value);
+          if (state.Action.Image != null)
+            Assert.That(widget.ActionImage != null && widget.ActionImage.isActiveAndEnabled && widget.ActionImage.sprite != null, Is.True,
+              "Keep independently authored sector artwork visible: " + state.Action.Id.Value);
+        }
+        Assert.That(visibleActions.Count, Is.GreaterThan(0));
+        return visibleActions;
+      }
+
+      void AssertSelectedCenter(RadialMenuPresenter radial)
+      {
+        Assert.That(session.Selected, Is.Not.Null);
+        var center = radial.Root.GetComponentInChildren<MenuCenterWidget>();
+        Assert.That(center, Is.Not.Null);
+        Assert.That(center.Label != null && center.Label.isActiveAndEnabled, Is.True);
+        Assert.That(center.Label.text, Is.EqualTo(session.Selected.Label.ToString()), "The selected center retains the full shared action title");
+      }
+
+      var rootRadial = gallery.MenuService.Presenter as RadialMenuPresenter;
+      Assert.That(AssertIconOnlySectors(rootRadial).Contains("gallery.build"), Is.True);
+      Assert.That(session.Select("gallery.build"), Is.True);
+      yield return Tap(GamepadButton.South);
+      yield return WaitFor(() => gallery.MenuService.Session.Path.Count == 1, "Controller confirmation did not enter Build");
+      yield return WaitForPresentationLayout();
+      var buildRadial = gallery.MenuService.Presenter as RadialMenuPresenter;
+      Assert.That(buildRadial.InnerGeometry, Is.Not.Null); Assert.That(buildRadial.OuterGeometry, Is.Not.Null);
+      var buildVisible = AssertIconOnlySectors(buildRadial);
+      Assert.That(buildVisible.Contains("gallery.build"), Is.True, "Validate the visible parent ring");
+      Assert.That(buildVisible.Contains(session.Selected.Id.Value), Is.True, "Validate the selected child ring");
+      AssertSelectedCenter(buildRadial);
+
+      Assert.That(session.Select("gallery.build/gallery.doors"), Is.True);
+      yield return Tap(GamepadButton.South);
+      yield return WaitFor(() => gallery.MenuService.Session.Path.Count == 2, "Controller confirmation did not enter Doors");
+      yield return WaitForPresentationLayout();
+      var doorsRadial = gallery.MenuService.Presenter as RadialMenuPresenter;
+      Assert.That(doorsRadial.InnerGeometry, Is.Not.Null); Assert.That(doorsRadial.OuterGeometry, Is.Not.Null);
+      var doorsVisible = AssertIconOnlySectors(doorsRadial);
+      Assert.That(doorsVisible.Contains("gallery.build/gallery.doors"), Is.True);
+      Assert.That(doorsVisible.Contains(session.Selected.Id.Value), Is.True);
+      AssertSelectedCenter(doorsRadial);
+      foreach (var action in session.RootActions) Assert.That(action.Label.ToString(), Is.EqualTo(sharedLabels[action.Id.Value]));
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero, "Controller submenu navigation must not execute a gameplay command");
+    }
+
+    [UnityTest]
+    public IEnumerator NestedWheelContextMenu_partial_arc_slides_through_three_authored_submenu_levels()
+    {
+      yield return Open(MenuGalleryController.NestedWheelContextMenu);
+      string[] path = { "gallery.build", "gallery.build/gallery.doors", "gallery.build/gallery.doors/gallery.metal-doors" };
+      for (int depth = 0; depth < path.Length; depth++)
+      {
+        Assert.That(gallery.MenuService.Session.Select(path[depth]), Is.True);
+        yield return Tap(GamepadButton.South);
+        int expected = depth + 1;
+        yield return WaitFor(() => gallery.MenuService.Session.Path.Count == expected, "Concentric submenu did not enter");
+        var radial = gallery.MenuService.Presenter as RadialMenuPresenter;
+        Assert.That(radial, Is.Not.Null, "The two-ring sample unexpectedly fell back");
+        Assert.That(radial.InnerGeometry, Is.Not.Null);
+        Assert.That(radial.OuterGeometry, Is.Not.Null);
+        Assert.That(gallery.MenuService.Session.ParentSelected.Id.ToString(), Is.EqualTo(path[depth]));
+        float arc = 0;
+        foreach (var segment in radial.OuterGeometry.Segments) arc += Math.Abs(segment.SweepAngle);
+        Assert.That(arc, Is.LessThan(180), "Outer children must occupy a partial parent-associated arc");
+        var child = radial.OuterGeometry.Segments[0];
+        Assert.That(child.InnerRadius, Is.GreaterThan(radial.InnerGeometry.Segments[0].OuterRadius));
+        Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(null, radial.Root.TransformPoint(child.ContentAnchor));
+        NativeRadialGraphic actual = null;
+        foreach (var graphic in radial.Root.GetComponentsInChildren<NativeRadialGraphic>())
+          if (graphic.Geometry.RingIndex == 1 && graphic.Geometry.SegmentIndex == 0) { actual = graphic; break; }
+        Assert.That(actual, Is.Not.Null);
+        Assert.That(actual.IsRaycastLocationValid(screenPoint, null), Is.True, "Visible child wedge must accept its actual canvas-space hit");
+        AssertContained();
+      }
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero, "Entering a submenu must not execute its descendants");
+      for (int depth = 2; depth >= 0; depth--)
+      {
+        yield return Tap(GamepadButton.East);
+        int expected = depth;
+        yield return WaitFor(() => gallery.MenuService.Session.Path.Count == expected, "Back did not restore the parent frame");
+      }
+      yield return Tap(GamepadButton.East);
+      Assert.That(gallery.MenuService.IsOpen, Is.False);
+    }
+
+    [UnityTest]
+    public IEnumerator PieContextMenu_branch_replaces_the_whole_presenter_and_restores_it_after_recursive_Back()
+    {
+      yield return Open(MenuGalleryController.PieContextMenu);
+      Assert.That(gallery.MenuService.Session.Select("gallery.interactions"), Is.True);
+      yield return Tap(GamepadButton.South);
+      yield return WaitFor(() => gallery.MenuService.Presenter is GalleryCustomPresenter, "Authored branch did not replace the entire presenter");
+      Assert.That(gallery.MenuService.Session.Path.Count, Is.EqualTo(1));
+      Assert.That(gallery.MenuService.Presenter.Root.GetComponentsInChildren<NativeRadialGraphic>().Length, Is.Zero);
+      yield return Tap(GamepadButton.DpadDown);
+      yield return Tap(GamepadButton.DpadDown);
+      Assert.That(gallery.MenuService.Session.Selected.Id.ToString(), Is.EqualTo("gallery.interactions/gallery.conversation"));
+      yield return Tap(GamepadButton.South);
+      Assert.That(gallery.MenuService.Session.Path.Count, Is.EqualTo(2));
+      Assert.That(gallery.MenuService.Presenter, Is.TypeOf<GalleryCustomPresenter>(), "Ancestor presentation override must survive deeper navigation");
+      yield return Tap(GamepadButton.East);
+      Assert.That(gallery.MenuService.Session.Path.Count, Is.EqualTo(1));
+      Assert.That(gallery.MenuService.Presenter, Is.TypeOf<GalleryCustomPresenter>());
+      yield return Tap(GamepadButton.East);
+      yield return WaitFor(() => gallery.MenuService.Presenter is RadialMenuPresenter, "Back did not restore the original PieContextMenu presenter");
+      Assert.That(gallery.MenuService.Session.Path.Count, Is.Zero);
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero);
+      AssertContained();
+    }
+
+    [UnityTest]
+    public IEnumerator List_gamepad_foldout_renders_live_structured_check_state()
+    {
+      yield return Open(MenuGalleryController.ListContextMenu);
+      Assert.That(gallery.MenuService.Session.Select("gallery.settings"), Is.True);
+      yield return Tap(GamepadButton.South);
+      Assert.That(gallery.MenuService.Session.Path.Count, Is.Zero, "Default list navigation must expand inline");
+      Assert.That(HasRow("gallery.settings/gallery.snap", 1), Is.True);
+      Assert.That(gallery.MenuService.Session.Select("gallery.settings/gallery.snap"), Is.True);
+      yield return Tap(GamepadButton.South);
+      Assert.That(gallery.State.IsChecked("gallery.snap"), Is.True);
+      Assert.That(gallery.MenuService.IsOpen, Is.True);
+      MenuActionWidget snap = FindWidget("Snap to grid");
+      Assert.That(snap, Is.Not.Null);
+      Assert.That(snap.Check, Is.Not.Null);
+      Assert.That(snap.Check.enabled, Is.True, "The prefab's structured check graphic was not updated");
+      yield return Tap(GamepadButton.DpadDown);
+      Assert.That(gallery.MenuService.Session.Selected.Id.ToString(), Is.EqualTo("gallery.settings/gallery.careful"), "Real D-pad input did not navigate the expanded list");
+      Assert.That(gallery.MenuService.Session.Select("gallery.settings"), Is.True);
+      yield return Tap(GamepadButton.South);
+      Assert.That(HasRow("gallery.settings/gallery.snap", 1), Is.False);
+    }
+
+    [UnityTest]
+    public IEnumerator Gamepad_analog_ring_focus_and_secondary_use_the_real_rebindable_sample_actions()
+    {
+      yield return Open(MenuGalleryController.NestedWheelContextMenu);
+      var radial = (RadialMenuPresenter)gallery.MenuService.Presenter;
+      yield return Aim(radial.InnerGeometry.Segments[1]);
+      Assert.That(gallery.MenuService.Session.Selected.Id.ToString(), Is.EqualTo("gallery.equipment"));
+      yield return Tap(GamepadButton.South);
+      yield return WaitFor(() => gallery.MenuService.Session.Path.Count == 1, "Gamepad confirmation did not enter equipment");
+      radial = (RadialMenuPresenter)gallery.MenuService.Presenter;
+      Assert.That(radial.FocusedRing, Is.EqualTo(1));
+      yield return Aim(radial.OuterGeometry.Segments[0]);
+      Assert.That(gallery.MenuService.Session.Selected.Id.ToString(), Is.EqualTo("gallery.equipment/gallery.equip-revolver"));
+      yield return Tap(GamepadButton.West);
+      Assert.That(gallery.State.VariantChanges, Is.EqualTo(1));
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero);
+      Assert.That(gallery.MenuService.IsOpen, Is.True);
+      gallery.ToggleCommands();
+      yield return null;
+      Assert.That(gallery.MenuService.Session.Selected.Evaluate(gallery.MenuService.Session.Context).Enabled, Is.False);
+      yield return Tap(GamepadButton.West);
+      Assert.That(gallery.State.VariantChanges, Is.EqualTo(2), "Secondary availability must be independent of primary availability");
+      yield return Tap(GamepadButton.RightShoulder);
+      Assert.That(radial.FocusedRing, Is.Zero);
+      yield return Tap(GamepadButton.RightShoulder);
+      Assert.That(radial.FocusedRing, Is.EqualTo(1));
+      gallery.ToggleCommands();
+      yield return null;
+      Assert.That(gallery.MenuService.Session.Selected.Evaluate(gallery.MenuService.Session.Context).Enabled, Is.True);
+      yield return Neutral();
+      yield return Tap(GamepadButton.South);
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero, "Neutral stick must not confirm a stale angular target");
+      Assert.That(gallery.State.GameplayFireEvents, Is.Zero);
+      Assert.That(gallery.State.GameplayMoveEvents, Is.Zero);
+    }
+
+    [UnityTest]
+    public IEnumerator Hold_release_executes_once_and_gameplay_controls_restore_after_the_gesture()
+    {
+      gallery.Host.Close();
+      yield return Neutral();
+      Button priorControl = null;
+      foreach (var control in gallery.Canvas.GetComponentsInChildren<Button>())
+        if (control.onClick.GetPersistentEventCount() > 0) { priorControl = control; break; }
+      Assert.That(priorControl, Is.Not.Null, "Saved scene has no authored gallery control");
+      EventSystem.current.SetSelectedGameObject(priorControl.gameObject);
+      bool priorNativeNavigation = EventSystem.current.sendNavigationEvents;
+      yield return Hold(GamepadButton.LeftShoulder, true);
+      yield return WaitFor(() => gallery.MenuService.IsOpen, "Bound gamepad hold did not open the wheel");
+      string focusAtClose = null;
+      gallery.MenuService.Session.Closed += () => focusAtClose = EventSystem.current.currentSelectedGameObject?.name;
+      Assert.That(gallery.MenuService.Presenter, Is.TypeOf<RadialMenuPresenter>());
+      var radial = (RadialMenuPresenter)gallery.MenuService.Presenter;
+      yield return Aim(radial.InnerGeometry.Segments[1]);
+      yield return Tap(GamepadButton.South);
+      Assert.That(gallery.MenuService.Session.Path.Count, Is.EqualTo(1));
+      radial = (RadialMenuPresenter)gallery.MenuService.Presenter;
+      yield return Aim(radial.InnerGeometry.Segments[0]);
+      Assert.That(gallery.MenuService.Session.Selected.Id.ToString(), Is.EqualTo("gallery.equipment/gallery.equip-revolver"));
+      Assert.That(gallery.State.GameplayMoveEvents, Is.Zero, "Menu analog input also moved the player while the wheel was open");
+      yield return Hold(GamepadButton.LeftShoulder, false);
+      yield return WaitFor(() => !gallery.MenuService.IsOpen, "Release did not confirm the held wheel");
+      Assert.That(gallery.State.CommandsExecuted, Is.EqualTo(1));
+      Assert.That(gallery.State.LastCommand, Does.Contain("Revolver"));
+      Assert.That(gallery.State.GameplayFireEvents, Is.Zero, "Menu confirmation also fired the gameplay action");
+      Assert.That(EventSystem.current.currentSelectedGameObject, Is.SameAs(priorControl.gameObject),
+        "Closing the menu did not restore previous focus; Closed callback=" + focusAtClose
+        + ", native move=" + gallery.InputModule.move.action.ReadValue<Vector2>());
+      Assert.That(EventSystem.current.sendNavigationEvents, Is.EqualTo(priorNativeNavigation), "Closing the menu retained native-navigation ownership");
+      EventSystem.current.SetSelectedGameObject(null); // Return focus to gameplay before testing its restored Submit binding.
+      yield return Neutral();
+      yield return Tap(GamepadButton.South);
+      Assert.That(gallery.State.GameplayFireEvents, Is.EqualTo(1), "Prior gameplay Fire state was not restored");
+      yield return Stick(Vector2.up);
+      Assert.That(gallery.State.GameplayMoveEvents, Is.GreaterThan(0), "Prior gameplay Move state was not restored");
+      Assert.That(gallery.State.CommandsExecuted, Is.EqualTo(1));
+    }
+
+    [UnityTest]
+    public IEnumerator Hold_release_without_an_angular_target_cancels_without_executing()
+    {
+      gallery.Host.Close(); yield return Neutral();
+      yield return Hold(GamepadButton.LeftShoulder, true);
+      yield return WaitFor(() => gallery.MenuService.IsOpen, "Hold did not open the authored WheelContextMenu profile");
+      yield return Hold(GamepadButton.LeftShoulder, false);
+      yield return WaitFor(() => !gallery.MenuService.IsOpen, "Neutral hold release did not cancel");
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero);
+      Assert.That(gallery.State.GameplayFireEvents, Is.Zero);
+    }
+
+    [UnityTest]
+    public IEnumerator Rendered_center_secondary_owns_an_overlapping_wedge_click_and_executes_once()
+    {
+      var profile = Object.Instantiate(gallery.HostConfig.Resolve(MenuGalleryController.WheelContextMenu));
+      ownedObjects.Add(profile);
+      // This supported composition deliberately overlaps its standard center with the ring.
+      profile.InnerRadius = 40; profile.RingWidth = 160;
+      var context = new MenuContext(gallery.State);
+      yield return gallery.MenuService.OpenAsync(new MenuOpenRequest(gallery.ActionSet.Create(context), context,
+        gallery.Canvas, new Vector2(Screen.width * .5f, Screen.height * .5f), profile: profile)).ToCoroutine();
+      yield return gallery.MenuService.Session.EnterSubmenuAsync("gallery.equipment").ToCoroutine();
+      Assert.That(gallery.MenuService.Session.Select("gallery.equipment/gallery.equip-bow"), Is.True);
+      yield return null; yield return null;
+      var radial = gallery.MenuService.Presenter as RadialMenuPresenter;
+      Assert.That(radial, Is.Not.Null);
+      var center = radial.Root.GetComponentInChildren<MenuCenterWidget>();
+      Assert.That(center, Is.Not.Null);
+      var auxiliaries = center.SecondaryContainer.GetComponentsInChildren<Button>();
+      Assert.That(auxiliaries.Length, Is.EqualTo(2));
+      var button = auxiliaries[0];
+      Vector2 point = RectTransformUtility.WorldToScreenPoint(null,
+        button.transform.TransformPoint(((RectTransform)button.transform).rect.center));
+      Assert.That(RectTransformUtility.ScreenPointToLocalPointInRectangle(radial.Root, point, null, out var local), Is.True);
+      Assert.That(radial.InnerGeometry.HitTest(local), Is.GreaterThanOrEqualTo(0),
+        "The authored secondary layout must actually overlap a visible native sector for this regression");
+      AssertTopRaycastIsInside(point, button.transform);
+      yield return MouseClick(point);
+      Assert.That(gallery.State.VariantChanges, Is.EqualTo(1), "Semantic and native pointer callbacks duplicated or lost the auxiliary action: " + pointerTrace);
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero, "The primary wedge also executed through the overlapping center control");
+      Assert.That(gallery.MenuService.IsOpen, Is.True);
+    }
+
+    [UnityTest]
+    public IEnumerator Pie_submenu_replacement_preserves_the_open_menu_through_the_parent_click_release()
+    {
+      yield return Open(MenuGalleryController.PieContextMenu);
+      var profile = gallery.HostConfig.Resolve(MenuGalleryController.PieContextMenu);
+      Assert.That(AssetDatabase.GetAssetPath(profile.ItemPrefab), Does.EndWith("/Prefabs/InteractionButton.prefab"));
+      Assert.That(gallery.MenuService.Presenter, Is.TypeOf<RadialMenuPresenter>());
+      Assert.That(profile.DrawSegments, Is.False);
+
+      Vector2 ItemCenter(string label)
+      {
+        var widget = FindWidget(label);
+        Assert.That(widget, Is.Not.Null, "The saved Pie layout has no " + label + " item");
+        var rect = (RectTransform)widget.transform;
+        Vector2 point = RectTransformUtility.WorldToScreenPoint(null, rect.TransformPoint(rect.rect.center));
+        AssertTopRaycastIsInside(point, widget.transform);
+        return point;
+      }
+
+      yield return MouseClick(ItemCenter("Build"));
+      Assert.That(gallery.MenuService.IsOpen, Is.True, "Opening Build must survive its complete native click: " + pointerTrace);
+      Assert.That(gallery.MenuService.Session.ParentSelected.Id.Value, Is.EqualTo("gallery.build"));
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero);
+
+      Vector2 doorsPoint = ItemCenter("Doors");
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = doorsPoint });
+      yield return null; yield return null;
+      pointerTrace = string.Empty;
+      TracePointer("doors-hover");
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = doorsPoint, buttons = 1 });
+      yield return null; yield return null;
+      TracePointer("doors-pressed");
+      string pathAfterPress = gallery.MenuService.Session != null ? string.Join(" > ", gallery.MenuService.Session.Path) : "closed";
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero, "Pressing a submenu parent must not execute a child command");
+      // Do not move the pointer to a child. The release belongs to this original parent gesture,
+      // even if replacement layout has placed an empty region under the same screen position.
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = doorsPoint });
+      yield return null; yield return null;
+      TracePointer("doors-released");
+      Assert.That(gallery.MenuService.IsOpen, Is.True,
+        "The parent click release dismissed the replacement before its final action could be chosen. Press path=" + pathAfterPress + "; " + pointerTrace);
+      Assert.That(gallery.MenuService.Session.Path.Count, Is.EqualTo(2), pointerTrace);
+      Assert.That(gallery.MenuService.Session.ParentSelected.Id.Value, Is.EqualTo("gallery.build/gallery.doors"));
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero);
+
+      yield return MouseClick(ItemCenter("Wooden door"));
+      Assert.That(gallery.State.CommandsExecuted, Is.EqualTo(1), "A new independent final-action click executes exactly once: " + pointerTrace);
+      Assert.That(gallery.State.LastCommand, Does.Contain("Wooden door"));
+      Assert.That(gallery.MenuService.IsOpen, Is.False, "The authored final command requests Close after execution");
+
+      yield return Open(MenuGalleryController.PieContextMenu);
+      Vector2 outside = new Vector2(2, 2);
+      var outsideHits = new List<RaycastResult>();
+      EventSystem.current.RaycastAll(new PointerEventData(EventSystem.current) { position = outside }, outsideHits);
+      Assert.That(outsideHits.Count, Is.GreaterThan(0));
+      Assert.That(outsideHits[0].gameObject.name, Is.EqualTo("Menu outside click"), "Use an actual independent outside gesture for dismissal coverage");
+      yield return MouseClick(outside);
+      Assert.That(gallery.MenuService.IsOpen, Is.False, "A new outside click must still dismiss the menu: " + pointerTrace);
+      Assert.That(gallery.State.CommandsExecuted, Is.EqualTo(1), "Outside dismissal must not execute or duplicate a gameplay command");
+    }
+
+    [UnityTest]
+    public IEnumerator Saved_Pie_titles_fit_their_native_buttons_without_overlap_or_pagination()
+    {
+      mouse ??= InputSystem.AddDevice<Mouse>();
+      gallery.InputModule.actionsAsset.devices = new InputDevice[] { gamepad, mouse };
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = new Vector2(Screen.width * .5f, Screen.height * .5f) });
+      yield return null; yield return null;
+      yield return WaitForPresentationLayout();
+      yield return Open(MenuGalleryController.PieContextMenu);
+      yield return WaitForPresentationLayout();
+
+      var session = gallery.MenuService.Session;
+      Assert.That(gallery.MenuService.Presenter, Is.TypeOf<RadialMenuPresenter>(), "Read the saved Pie layout rather than an accessible fallback");
+      Assert.That(session.RootActions.Count, Is.EqualTo(5), "Validate all five supplied root actions together");
+      Assert.That(session.PageCount, Is.EqualTo(1), "The supplied root presentation must not hide titles on a second page");
+      var items = new List<MenuActionWidget>();
+      foreach (var widget in gallery.MenuService.Presenter.Root.GetComponentsInChildren<MenuActionWidget>())
+        if (!(widget is MenuCenterWidget) && widget.BackgroundRole != MenuVisualRole.Auxiliary) items.Add(widget);
+      Assert.That(items.Count, Is.EqualTo(session.RootActions.Count));
+      var bounds = new List<Rect>();
+      var corners = new Vector3[4];
+      var camera = gallery.Canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : gallery.Canvas.worldCamera;
+      foreach (var item in items)
+      {
+        Assert.That(item.Label, Is.Not.Null);
+        var label = item.Label;
+        Assert.That(label.gameObject.activeInHierarchy && !string.IsNullOrEmpty(label.text), Is.True);
+        label.ForceMeshUpdate();
+        int visibleGlyphs = 0;
+        for (int index = 0; index < label.textInfo.characterCount; index++)
+          if (label.textInfo.characterInfo[index].isVisible) visibleGlyphs++;
+        Assert.That(visibleGlyphs, Is.GreaterThan(0), "The title must generate visible glyph geometry: " + label.text);
+        Assert.That(label.fontSize, Is.GreaterThanOrEqualTo(16f), "Preserve the supplied readable typography floor for " + label.text);
+        Assert.That(label.isTextTruncated, Is.False, "The rendered title must be complete: " + label.text);
+        Assert.That(label.preferredWidth, Is.LessThanOrEqualTo(label.rectTransform.rect.width + .5f),
+          label.text + " has insufficient label room after the prefab's actual icon, image, hint and spacing slots");
+        ((RectTransform)item.transform).GetWorldCorners(corners);
+        var minimum = new Vector2(float.MaxValue, float.MaxValue);
+        var maximum = new Vector2(float.MinValue, float.MinValue);
+        foreach (var corner in corners)
+        {
+          Vector2 screen = RectTransformUtility.WorldToScreenPoint(camera, corner);
+          minimum = Vector2.Min(minimum, screen); maximum = Vector2.Max(maximum, screen);
+        }
+        bounds.Add(Rect.MinMaxRect(minimum.x, minimum.y, maximum.x, maximum.y));
+      }
+      for (int first = 0; first < bounds.Count; first++)
+        for (int second = first + 1; second < bounds.Count; second++)
+          Assert.That(bounds[first].Overlaps(bounds[second]), Is.False,
+            "Wider readable Pie buttons must remain independently selectable: " + items[first].Label.text + " / " + items[second].Label.text);
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero, "Reading the supplied layout must not execute gameplay actions");
+    }
+
+    [UnityTest]
+    public IEnumerator Rendered_PieContextMenu_button_accepts_its_visible_corner_outside_the_annulus()
+    {
+      // Device/context changes refresh glyphs and the menu composition. Settle the owned
+      // mouse context before sampling a corner of the live layout, not inside MouseClick afterward.
+      mouse ??= InputSystem.AddDevice<Mouse>();
+      gallery.InputModule.actionsAsset.devices = new InputDevice[] { gamepad, mouse };
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = new Vector2(Screen.width * .5f, Screen.height * .5f) });
+      yield return null; yield return null;
+      yield return WaitForPresentationLayout();
+      var profile = Object.Instantiate(gallery.HostConfig.Resolve(MenuGalleryController.PieContextMenu));
+      ownedObjects.Add(profile);
+      // Override the saved button size to exercise a visible corner outside
+      // the radial band's hit area while preserving the authored layout.
+      profile.WidgetSize = new Vector2(216, 88);
+      Assert.That(profile.Validate(out string diagnostic), Is.True, diagnostic);
+      var context = new MenuContext(gallery.State);
+      yield return gallery.MenuService.OpenAsync(new MenuOpenRequest(gallery.ActionSet.Create(context), context,
+        gallery.Canvas, new Vector2(Screen.width * .5f, Screen.height * .5f), profile: profile)).ToCoroutine();
+      yield return null; yield return null;
+      yield return WaitForPresentationLayout();
+      var radial = (RadialMenuPresenter)gallery.MenuService.Presenter;
+      var band = radial.InnerGeometry.Segments[0];
+      var build = FindWidget("Build");
+      Assert.That(build, Is.Not.Null);
+      var rect = (RectTransform)build.transform;
+      Vector2 point = default;
+      bool found = false;
+      foreach (var corner in new[] { new Vector2(rect.rect.xMin + 3, rect.rect.yMin + 3),
+        new Vector2(rect.rect.xMax - 3, rect.rect.yMin + 3), new Vector2(rect.rect.xMin + 3, rect.rect.yMax - 3),
+        new Vector2(rect.rect.xMax - 3, rect.rect.yMax - 3) })
+      {
+        Vector2 candidate = RectTransformUtility.WorldToScreenPoint(null, rect.TransformPoint(corner));
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(radial.Root, candidate, null, out var local)
+            && (local.sqrMagnitude < band.InnerRadius * band.InnerRadius || local.sqrMagnitude >= band.OuterRadius * band.OuterRadius)
+            && radial.InnerGeometry.HitTest(local) == -1) { point = candidate; found = true; break; }
+      }
+      Assert.That(found, Is.True, "The authored PieContextMenu button needs a visible corner outside the circular hit bands");
+      AssertTopRaycastIsInside(point, build.transform);
+      string sampledGeometry = "sampledRoot=" + radial.Root.position + " sampledBuildPos=" + rect.position
+        + " sampledBuildRect=" + rect.rect + " sampledBuildScale=" + rect.lossyScale + " sampledCorner=" + point;
+      yield return MouseClick(point);
+      pointerTrace += sampledGeometry;
+      Assert.That(gallery.MenuService.IsOpen, Is.True, pointerTrace);
+      Assert.That(gallery.MenuService.Session.Path.Count, Is.EqualTo(1), pointerTrace);
+      Assert.That(gallery.MenuService.Session.ParentSelected.Id.Value, Is.EqualTo("gallery.build"));
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero);
+    }
+
+    [UnityTest]
+    public IEnumerator Closing_semantic_submit_does_not_activate_the_restored_sidebar()
+    {
+      gallery.Host.Close(); yield return Neutral();
+      Button priorControl = null;
+      foreach (var control in gallery.Canvas.GetComponentsInChildren<Button>())
+        if (control.onClick.GetPersistentEventCount() > 0) { priorControl = control; break; }
+      Assert.That(priorControl, Is.Not.Null);
+      int sidebarSubmits = 0;
+      UnityEngine.Events.UnityAction recordSubmit = () => sidebarSubmits++;
+      priorControl.onClick.AddListener(recordSubmit);
+      var failures = new List<string>();
+      try
+      {
+        foreach (string style in new[] { MenuGalleryController.ListContextMenu, MenuGalleryController.WheelContextMenu })
+        {
+          gallery.Host.Close(); yield return Neutral();
+          EventSystem.current.SetSelectedGameObject(priorControl.gameObject);
+          sidebarSubmits = 0;
+          int commands = 0;
+          var menuContext = new MenuContext(gallery.State);
+          var leaf = new MenuAction("submit.handoff", new MenuLabel("Close once"),
+            new MenuCommandBehavior(_ => commands++, MenuActionOutcome.Close));
+          var gameplay = new List<InputAction>();
+          var player = gallery.InputModule.actionsAsset.FindActionMap("Player");
+          if (player != null) foreach (var action in player.actions) gameplay.Add(action);
+          yield return gallery.MenuService.OpenAsync(new MenuOpenRequest(new[] { leaf }, menuContext, gallery.Canvas,
+            new Vector2(Screen.width * .5f, Screen.height * .5f), profile: gallery.HostConfig.Resolve(style),
+            gameplayActions: gameplay)).ToCoroutine();
+          if (gallery.MenuService.Presenter is RadialMenuPresenter radial)
+            yield return Aim(radial.InnerGeometry.Segments[0]);
+          yield return Tap(GamepadButton.South);
+          if (commands != 1) failures.Add(style + ": command calls=" + commands);
+          if (sidebarSubmits != 0) failures.Add(style + ": restored sidebar submits=" + sidebarSubmits);
+          if (gallery.MenuService.IsOpen) failures.Add(style + ": menu reopened or failed to close");
+        }
+      }
+      finally
+      {
+        priorControl.onClick.RemoveListener(recordSubmit);
+        gallery.Host.Close();
+      }
+      Assert.That(failures, Is.Empty, string.Join("; ", failures));
+    }
+    [UnityTest]
+    public IEnumerator Live_theme_and_UI_scale_changes_preserve_viewport_containment_at_the_screen_edge()
+    {
+      yield return Open(MenuGalleryController.WheelContextMenu);
+      var graphics = gallery.MenuService.Presenter.Root.GetComponentsInChildren<NativeRadialGraphic>();
+      NativeRadialGraphic normal = null;
+      foreach (var graphic in graphics) if (graphic.Geometry.SegmentIndex == 1) { normal = graphic; break; }
+      Assert.That(normal, Is.Not.Null);
+      Color before = normal.color;
+      var theme = gallery.StandaloneTheme.Current;
+      gallery.ToggleTheme();
+      yield return null;
+      Assert.That(gallery.StandaloneTheme.Current, Is.Not.SameAs(theme));
+      Assert.That(normal.color, Is.Not.EqualTo(before), "An open native menu did not consume the semantic theme change");
+      gallery.IncreaseScale(); gallery.IncreaseScale();
+      yield return null; yield return null;
+      Assert.That(gallery.ScaleCanvas.RequestedUserScale, Is.GreaterThan(1));
+      Assert.That(gallery.MenuService.IsOpen, Is.True);
+      AssertContained();
+      gallery.OpenAtEdge();
+      yield return WaitFor(() => gallery.MenuService.IsOpen && gallery.MenuService.Presenter != null, "Scaled edge menu did not open");
+      yield return null;
+      AssertContained();
+      Assert.That(((IMenuViewportAwarePresenter)gallery.MenuService.Presenter).FitsViewport, Is.True);
+    }
+
+    [UnityTest]
+    public IEnumerator Saved_list_scrolling_masks_rows_scrolls_without_activation_and_reveals_gamepad_selection()
+    {
+      var profile = Object.Instantiate(gallery.HostConfig.Resolve(MenuGalleryController.ListContextMenu));
+      ownedObjects.Add(profile);
+      var overflow = typeof(MenuProfile).GetProperty("ListOverflow");
+      Assert.That(overflow, Is.Not.Null, "The saved list prefab needs the authorable scrolling policy.");
+      overflow.SetValue(profile, Enum.Parse(overflow.PropertyType, "Scrolling"));
+      profile.MaximumVisibleItems = 4; profile.RowHeight = 48; profile.ListWidth = 320;
+      profile.Navigation = MenuNavigationPolicy.Inline;
+      // Keep the saved action references: Configure replaces the entire binding set.
+      Assert.That(profile.InputBindings.UseNativeUguiNavigation, Is.False);
+      Assert.That(profile.InputBindings.RoutePointerClick, Is.True);
+      Assert.That(profile.InputBindings.Navigate, Is.Not.Null); Assert.That(profile.InputBindings.Click, Is.Not.Null);
+      Assert.That(profile.InputBindings.Submit, Is.Not.Null);
+      int executions = 0;
+      var actions = new MenuAction[24];
+      for (int i = 0; i < actions.Length; i++)
+        actions[i] = new MenuAction("scroll." + i, new MenuLabel("Scroll " + i),
+          new MenuCommandBehavior(_ => executions++, MenuActionOutcome.Keep));
+      var gameplay = new List<InputAction>();
+      foreach (var action in gallery.InputModule.actionsAsset.FindActionMap("Player").actions) gameplay.Add(action);
+      var menuContext = new MenuContext(gallery.State);
+      yield return gallery.MenuService.OpenAsync(new MenuOpenRequest(actions, menuContext, gallery.Canvas,
+        new Vector2(Screen.width * .5f, Screen.height * .5f), profile: profile, gameplayActions: gameplay)).ToCoroutine();
+      yield return null; yield return null;
+      var presenter = gallery.MenuService.Presenter;
+      var session = gallery.MenuService.Session;
+      var scroll = presenter.Root.GetComponentInChildren<ScrollRect>();
+      Assert.That(scroll, Is.Not.Null); Assert.That(scroll.viewport.GetComponent<RectMask2D>(), Is.Not.Null);
+      Assert.That(session.Rows.Count, Is.EqualTo(24)); Assert.That(session.PageCount, Is.EqualTo(1));
+      Assert.That(scroll.content.rect.height, Is.GreaterThan(scroll.viewport.rect.height));
+
+      MenuActionWidget Row(int index)
+      {
+        foreach (var widget in presenter.Root.GetComponentsInChildren<MenuActionWidget>(true))
+          if (widget.Label != null && widget.Label.text == "Scroll " + index) return widget;
+        Assert.Fail("Saved list widget missing: Scroll " + index); return null;
+      }
+      Vector2 Point(MenuActionWidget widget) => RectTransformUtility.WorldToScreenPoint(null,
+        widget.transform.TransformPoint(((RectTransform)widget.transform).rect.center));
+      mouse ??= InputSystem.AddDevice<Mouse>();
+      gallery.InputModule.actionsAsset.devices = new InputDevice[] { gamepad, mouse };
+
+      var clipped = Row(4);
+      var hits = new List<RaycastResult>();
+      EventSystem.current.RaycastAll(new PointerEventData(EventSystem.current) { position = Point(clipped) }, hits);
+      foreach (var hit in hits)
+        Assert.That(hit.gameObject.transform.IsChildOf(clipped.transform), Is.False,
+          "The real GraphicRaycaster must reject the first clipped row over the footer.");
+
+      Vector2 point = Point(Row(1));
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = point }); yield return null; yield return null;
+      float beforeWheel = scroll.content.anchoredPosition.y;
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = point, scroll = new Vector2(0, -120) });
+      yield return null; yield return null;
+      Assert.That(scroll.content.anchoredPosition.y, Is.GreaterThan(beforeWheel + .1f));
+      Assert.That(executions, Is.Zero); Assert.That(session.PageIndex, Is.Zero);
+
+      scroll.StopMovement(); scroll.verticalNormalizedPosition = 1; yield return null; yield return null;
+      point = Point(Row(1));
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = point }); yield return null; yield return null;
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = point, buttons = 1 }); yield return null; yield return null;
+      Assert.That(executions, Is.Zero, "Press must leave time for the native row gesture to become a drag.");
+      // Native ScrollRect captures its starting cursor when the drag threshold is crossed.
+      // A second held movement must follow that begin event before release can demonstrate scrolling.
+      var dragStart = point + Vector2.up * 32;
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = dragStart, buttons = 1 }); yield return null; yield return null;
+      var end = point + Vector2.up * 96;
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = end, buttons = 1 }); yield return null; yield return null;
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = end }); yield return null; yield return null;
+      Assert.That(executions, Is.Zero, "A native ScrollRect drag must cancel its row click.");
+      Assert.That(scroll.content.anchoredPosition.y, Is.GreaterThan(.1f));
+
+      scroll.StopMovement(); scroll.verticalNormalizedPosition = 1; yield return null; yield return null;
+      yield return MouseClick(Point(Row(0)));
+      Assert.That(executions, Is.EqualTo(1), "An eligible native release must execute exactly once.");
+      for (int i = 0; i < 23; i++) yield return Tap(GamepadButton.DpadDown);
+      Assert.That(session.Selected.Id.Value, Is.EqualTo("scroll.23"));
+      var corners = new Vector3[4]; ((RectTransform)Row(23).transform).GetWorldCorners(corners);
+      foreach (var corner in corners)
+      {
+        var local = scroll.viewport.InverseTransformPoint(corner);
+        Assert.That(local.y, Is.GreaterThanOrEqualTo(scroll.viewport.rect.yMin - 1));
+        Assert.That(local.y, Is.LessThanOrEqualTo(scroll.viewport.rect.yMax + 1));
+      }
+      yield return Tap(GamepadButton.South);
+      Assert.That(executions, Is.EqualTo(2));
+      Assert.That(gallery.State.GameplayFireEvents, Is.Zero);
+    }
+
+    private IEnumerator Open(string style)
+    {
+      yield return gallery.OpenAsync(style, new Vector2(Screen.width * .5f, Screen.height * .5f)).ToCoroutine();
+      yield return null; yield return null;
+      Assert.That(gallery.MenuService.IsOpen, Is.True, style);
+      Assert.That(gallery.MenuService.Presenter, Is.Not.Null, style);
+    }
+    private IEnumerator Aim(RadialSegmentGeometry geometry) => Stick(geometry.ContentAnchor.normalized);
+    private IEnumerator Stick(Vector2 direction) { stick = direction; yield return Send(); }
+    private IEnumerator Neutral() { heldButtons.Clear(); stick = Vector2.zero; yield return Send(); }
+    private IEnumerator Hold(GamepadButton button, bool value)
+    { if (value) heldButtons.Add(button); else heldButtons.Remove(button); yield return Send(); }
+    private IEnumerator Tap(GamepadButton button)
+    { yield return Hold(button, true); yield return Hold(button, false); }
+    private IEnumerator Send()
+    {
+      var state = new GamepadState { leftStick = stick };
+      foreach (var button in heldButtons) state = state.WithButton(button);
+      InputSystem.QueueStateEvent(gamepad, state);
+      yield return null; yield return null;
+    }
+    private IEnumerator MouseClick(Vector2 point)
+    {
+      pointerTrace = string.Empty;
+      mouse ??= InputSystem.AddDevice<Mouse>();
+      gallery.InputModule.actionsAsset.devices = new InputDevice[] { gamepad, mouse };
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = point });
+      yield return null; yield return null;
+      TracePointer("hover");
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = point, buttons = 1 });
+      yield return null; yield return null;
+      TracePointer("pressed");
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = point });
+      yield return null; yield return null;
+      TracePointer("released");
+    }
+    private void TracePointer(string stage)
+    {
+      var module = gallery.InputModule;
+      var hit = module.GetLastRaycastResult(mouse.deviceId).gameObject;
+      var presenter = gallery.MenuService.Presenter as MenuPresenterBase;
+      var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+      var activeProfile = presenter != null ? (MenuProfile)typeof(MenuPresenterBase).GetProperty("Profile", flags).GetValue(presenter) : null;
+      var presentation = presenter != null ? (MenuPresentationContext)typeof(MenuPresenterBase).GetProperty("Context", flags).GetValue(presenter) : null;
+      var routed = presenter != null ? typeof(MenuPresenterBase).GetField("routedOutsideClick", flags)?.GetValue(presenter) : null;
+      string geometry = "none";
+      if (presenter != null)
+      {
+        geometry = "root=" + presenter.Root.position + "/" + presenter.Root.rect;
+        foreach (var widget in presenter.Root.GetComponentsInChildren<MenuActionWidget>())
+          if (widget.Label != null && widget.Label.text == "Build")
+          { var rect = (RectTransform)widget.transform; geometry += " Build=" + rect.position + "/" + rect.rect + "/scale=" + rect.lossyScale; break; }
+      }
+      string backdrops = "none";
+      if (presenter != null)
+        foreach (Transform sibling in presenter.Root.parent)
+          if (sibling.name == "Menu outside click")
+          {
+            var button = sibling.GetComponent<Button>();
+            backdrops += " " + sibling.GetInstanceID() + ":active=" + sibling.gameObject.activeInHierarchy + ",enabled=" + button.enabled;
+          }
+      pointerTrace += stage + " point=" + module.point.action.ReadValue<Vector2>()
+        + " click=" + module.leftClick.action.ReadValue<float>() + " device=" + mouse.deviceId
+        + " moduleActive=" + module.isActiveAndEnabled + "/" + (EventSystem.current.currentInputModule == module)
+        + " focus=" + Application.isFocused + "/" + EventSystem.current.isFocused
+        + " nativeHit=" + (hit != null ? hit.name : "none")
+        + " open=" + gallery.MenuService.IsOpen
+        + " profile=" + (activeProfile != null ? activeProfile.name : "none")
+        + " route=" + activeProfile?.InputBindings.RoutePointerClick + "/outside=" + routed
+        + " resolvedPoint=" + presentation?.ResolveInputAction(activeProfile?.InputBindings.Point)?.ToString()
+        + " resolvedClick=" + presentation?.ResolveInputAction(activeProfile?.InputBindings.Click)?.ToString()
+        + " backdrops=" + backdrops + " geometry=" + geometry
+        + " selected=" + gallery.MenuService.Session?.Selected?.Id.Value + "; ";
+    }
+    private static void AssertTopRaycastIsInside(Vector2 point, Transform expected)
+    {
+      var hits = new List<RaycastResult>();
+      EventSystem.current.RaycastAll(new PointerEventData(EventSystem.current) { position = point }, hits);
+      Assert.That(hits.Count, Is.GreaterThan(0), "The real rendered GraphicRaycaster produced no UI hit");
+      Assert.That(hits[0].module, Is.TypeOf<GraphicRaycaster>());
+      Assert.That(hits[0].gameObject.transform.IsChildOf(expected), Is.True,
+        "The actual topmost raycast belongs to a different visual than the expected authored widget");
+    }
+    private static IEnumerator WaitForPresentationLayout()
+    {
+      // Unity Test Framework rejects WaitForEndOfFrame in batch mode. Advance a real
+      // frame and explicitly rebuild uGUI before inspecting layout and raycasts.
+      if (Application.isBatchMode)
+      {
+        yield return null;
+        Canvas.ForceUpdateCanvases();
+      }
+      else yield return new WaitForEndOfFrame();
+    }
+    private static IEnumerator WaitFor(Func<bool> condition, string diagnostic)
+    {
+      float deadline = Time.realtimeSinceStartup + Timeout;
+      while (!condition())
+      {
+        if (Time.realtimeSinceStartup >= deadline) Assert.Fail(diagnostic + " (" + Timeout + " second timeout)");
+        yield return null;
+      }
+    }
+    private bool HasRow(string id, int depth)
+    {
+      foreach (var row in gallery.MenuService.Session.Rows)
+        if (row.Action.Id.ToString() == id && row.Depth == depth) return true;
+      return false;
+    }
+    private MenuActionWidget FindWidget(string label)
+    {
+      foreach (var widget in gallery.MenuService.Presenter.Root.GetComponentsInChildren<MenuActionWidget>())
+        if (widget.Label != null && widget.Label.text == label) return widget;
+      return null;
+    }
+    private void AssertContained()
+    {
+      var presenter = gallery.MenuService.Presenter;
+      var aware = presenter as IMenuViewportAwarePresenter;
+      Assert.That(aware, Is.Not.Null);
+      Assert.That(aware.FitsViewport, Is.True, aware.PlacementDiagnostic);
+      var corners = new Vector3[4]; presenter.Root.GetWorldCorners(corners);
+      Rect viewport = gallery.Canvas.pixelRect;
+      var camera = gallery.Canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : gallery.Canvas.worldCamera;
+      foreach (var corner in corners)
+      {
+        Vector2 point = RectTransformUtility.WorldToScreenPoint(camera, corner);
+        Assert.That(point.x, Is.InRange(viewport.xMin - 2, viewport.xMax + 2), "Menu extends beyond the horizontal viewport");
+        Assert.That(point.y, Is.InRange(viewport.yMin - 2, viewport.yMax + 2), "Menu extends beyond the vertical viewport");
+      }
+    }
+  }
+}
+#endif

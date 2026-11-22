@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using MToolKit.Runtime.Input.Interfaces;
 using MToolKit.Runtime.Input.Prompts;
 using R3;
@@ -16,7 +17,7 @@ namespace MToolKit.Runtime.Input
   ///   Provides conflict detection and binding management with proper interactive rebinding
   /// </summary>
   [Serializable]
-  public class InputRebinderService : IDisposable, IInputRebinderService, IInputBindingChangeSource
+  public class InputRebinderService : IDisposable, IInputRebinderService, IScopedInputRebinderService, IInputBindingChangeSource
   {
     private static readonly Lazy<ILogger> logLazy = new(() => Log.Logger.ForContext<InputRebinderService>().ForFeature("Core.Services.InputRebinderService"));
     private static ILogger log => logLazy.Value ?? Logger.None;
@@ -30,11 +31,7 @@ namespace MToolKit.Runtime.Input
 
     [ShowInInspector]
     [ReadOnly]
-    private readonly Dictionary<string, InputAction> registeredActions = new();
-
-    [ShowInInspector]
-    [ReadOnly]
-    private readonly Dictionary<string, List<InputBinding>> originalBindings = new();
+    private readonly Dictionary<InputAction, ActionRegistration> registeredActions = new(ActionReferenceComparer.Instance);
 
     [ShowInInspector]
     [ReadOnly]
@@ -45,6 +42,7 @@ namespace MToolKit.Runtime.Input
     private bool isRebinding;
 
     private List<(InputAction action, bool enabled)> capturedActionStates;
+    private bool disposed;
 
     [ShowInInspector]
     [ReadOnly]
@@ -56,28 +54,56 @@ namespace MToolKit.Runtime.Input
     /// <param name="action">The input action to register</param>
     public void RegisterAction(InputAction action)
     {
+      ThrowIfDisposed();
       if (action == null)
       {
         log.ForMethod().Error("Cannot register null input action");
         return;
       }
 
-      string key = GetActionKey(action);
-      if (registeredActions.ContainsKey(key))
-      {
-        log.ForMethod().Warning("Action {ActionName} is already registered", action.name);
-        return;
-      }
+      GetOrCreateRegistration(action).Permanent = true;
+    }
 
-      registeredActions[key] = action;
+    /// <summary>Registers this execution instance until the returned owner releases it.</summary>
+    public IDisposable RegisterScopedAction(InputAction action)
+    {
+      ThrowIfDisposed();
+      if (action == null) throw new ArgumentNullException(nameof(action));
+      var registration = GetOrCreateRegistration(action);
+      registration.Scopes++;
+      return new ScopedRegistration(this, action, registration);
+    }
 
-      // Store original bindings for reset functionality
-      List<InputBinding> bindings = new();
-      foreach (InputBinding binding in action.bindings)
-        bindings.Add(binding);
-      originalBindings[key] = bindings;
-
+    private ActionRegistration GetOrCreateRegistration(InputAction action)
+    {
+      if (registeredActions.TryGetValue(action, out var registration)) return registration;
+      registration = new ActionRegistration();
+      registeredActions.Add(action, registration);
       log.ForMethod().Verbose("Registered action {ActionName} for rebinding", action.name);
+      return registration;
+    }
+
+    private void ReleaseScopedAction(InputAction action, ActionRegistration registration)
+    {
+      if (disposed || !registeredActions.TryGetValue(action, out var current)
+        || !ReferenceEquals(current, registration)) return;
+      registration.Scopes--;
+      if (registration.Permanent || registration.Scopes > 0) return;
+
+      var operation = currentRebindingOperation;
+      try
+      {
+        // Cancel before the host can destroy its input asset; callbacks still see a valid action.
+        if (operation != null && ReferenceEquals(operation.action, action)) operation.Cancel();
+      }
+      finally
+      {
+        if (operation != null && ReferenceEquals(currentRebindingOperation, operation)
+          && ReferenceEquals(operation.action, action)) CleanupRebindingOperation();
+        // A cancellation callback may have acquired a new scope or made this registration permanent.
+        if (registeredActions.TryGetValue(action, out current) && ReferenceEquals(current, registration)
+          && !registration.Permanent && registration.Scopes == 0) registeredActions.Remove(action);
+      }
     }
 
     /// <summary>
@@ -90,6 +116,7 @@ namespace MToolKit.Runtime.Input
     /// <returns>True if rebinding was started successfully</returns>
     public bool StartInteractiveRebinding(InputAction action, int bindingIndex, string[] excludeControls = null)
     {
+      ThrowIfDisposed();
       if (action == null)
       {
         log.ForMethod().Error("Cannot start interactive rebinding: action is null");
@@ -109,7 +136,7 @@ namespace MToolKit.Runtime.Input
       }
 
       // Register the action if not already registered
-      RegisterAction(action);
+      if (!registeredActions.ContainsKey(action)) RegisterAction(action);
 
       // Cancel any existing rebinding operation
       currentRebindingOperation?.Cancel();
@@ -139,18 +166,22 @@ namespace MToolKit.Runtime.Input
 
       // Configure the rebinding operation
       currentRebindingOperation = action.PerformInteractiveRebinding(bindingIndex)
-        .OnCancel(_ =>
+        .OnCancel(operation =>
         {
+          if (!ReferenceEquals(currentRebindingOperation, operation)) return;
           log.ForMethod().Information("Rebinding cancelled for {ActionName} binding {BindingIndex}", action.name, bindingIndex);
           CleanupRebindingOperation();
           OnRebindingCompleted.OnNext((action, bindingIndex, false));
         })
         .OnComplete(operation =>
         {
+          if (!ReferenceEquals(currentRebindingOperation, operation)) return;
           string newPath = operation.action.bindings[bindingIndex].effectivePath;
 
           // Check for conflicts
-          if (CheckBindingConflict(action, bindingIndex, newPath))
+          bool conflict = CheckBindingConflict(action, bindingIndex, newPath);
+          if (!ReferenceEquals(currentRebindingOperation, operation)) return;
+          if (conflict)
           {
             log.ForMethod().Warning("Binding conflict detected for {ActionName} binding {BindingIndex} with path {NewPath}",
               action.name, bindingIndex, newPath);
@@ -163,6 +194,7 @@ namespace MToolKit.Runtime.Input
             log.ForMethod().Information("Rebinding completed for {ActionName} binding {BindingIndex} to {NewPath}",
               action.name, bindingIndex, newPath);
             OnBindingChanged.OnNext((action, bindingIndex, newPath));
+            if (!ReferenceEquals(currentRebindingOperation, operation)) return;
             CleanupRebindingOperation();
             OnRebindingCompleted.OnNext((action, bindingIndex, true));
           }
@@ -211,18 +243,22 @@ namespace MToolKit.Runtime.Input
 
       // Configure the rebinding operation for this part
       currentRebindingOperation = action.PerformInteractiveRebinding(partIndex)
-        .OnCancel(_ =>
+        .OnCancel(operation =>
         {
+          if (!ReferenceEquals(currentRebindingOperation, operation)) return;
           log.ForMethod().Information("Composite rebinding cancelled for {ActionName} part {PartIndex}", action.name, partIndex);
           CleanupRebindingOperation();
           OnRebindingCompleted.OnNext((action, partIndex, false));
         })
         .OnComplete(operation =>
         {
+          if (!ReferenceEquals(currentRebindingOperation, operation)) return;
           string newPath = operation.action.bindings[partIndex].effectivePath;
 
           // Check for conflicts
-          if (CheckBindingConflict(action, partIndex, newPath))
+          bool conflict = CheckBindingConflict(action, partIndex, newPath);
+          if (!ReferenceEquals(currentRebindingOperation, operation)) return;
+          if (conflict)
           {
             log.ForMethod().Warning("Binding conflict detected for {ActionName} part {PartIndex} with path {NewPath}",
               action.name, partIndex, newPath);
@@ -235,6 +271,7 @@ namespace MToolKit.Runtime.Input
           log.ForMethod().Information("Composite part rebinding completed for {ActionName} part {PartIndex} to {NewPath}",
             action.name, partIndex, newPath);
           OnBindingChanged.OnNext((action, partIndex, newPath));
+          if (!ReferenceEquals(currentRebindingOperation, operation)) return;
 
           // Check if there are more parts to rebind
           int nextPartIndex = partIndex + 1;
@@ -334,8 +371,9 @@ namespace MToolKit.Runtime.Input
     /// </summary>
     public void ResetAllBindings()
     {
-      foreach (InputAction action in registeredActions.Values)
-        ResetActionBindings(action);
+      var actions = new List<InputAction>(registeredActions.Keys);
+      foreach (InputAction action in actions)
+        if (registeredActions.ContainsKey(action)) ResetActionBindings(action);
 
       log.ForMethod().Information("Reset all action bindings");
     }
@@ -352,7 +390,7 @@ namespace MToolKit.Runtime.Input
       if (string.IsNullOrEmpty(newBindingPath))
         return false;
 
-      foreach (InputAction registeredAction in registeredActions.Values)
+      foreach (InputAction registeredAction in registeredActions.Keys)
       {
         if (registeredAction == action || registeredAction.actionMap != action.actionMap) continue;
 
@@ -408,7 +446,7 @@ namespace MToolKit.Runtime.Input
       if (string.IsNullOrEmpty(bindingPath))
         return result;
 
-      foreach (InputAction registeredAction in registeredActions.Values)
+      foreach (InputAction registeredAction in registeredActions.Keys)
         for (int i = 0; i < registeredAction.bindings.Count; i++)
         {
           InputBinding binding = registeredAction.bindings[i];
@@ -422,7 +460,7 @@ namespace MToolKit.Runtime.Input
     /// <summary>
     ///   Get all registered actions
     /// </summary>
-    public IReadOnlyCollection<InputAction> RegisteredActions => registeredActions.Values;
+    public IReadOnlyCollection<InputAction> RegisteredActions => registeredActions.Keys;
 
     /// <summary>
     ///   Clean up the current rebinding operation
@@ -458,19 +496,51 @@ namespace MToolKit.Runtime.Input
       else action.Disable();
     }
 
-    private string GetActionKey(InputAction action)
+    private void ThrowIfDisposed()
     {
-      return $"{action.actionMap?.name}_{action.name}";
+      if (disposed) throw new ObjectDisposedException(nameof(InputRebinderService));
     }
 
     public void Dispose()
     {
-      CleanupRebindingOperation();
+      if (disposed) return;
+      disposed = true;
+      try { CleanupRebindingOperation(); }
+      finally { registeredActions.Clear(); }
       OnBindingChanged?.Dispose();
       OnBindingConflictDetected?.Dispose();
       OnRebindingStarted?.Dispose();
       OnRebindingCompleted?.Dispose();
       OnBindingConflictFound?.Dispose();
+    }
+
+    private sealed class ActionRegistration
+    {
+      public bool Permanent;
+      public int Scopes;
+    }
+
+    private sealed class ScopedRegistration : IDisposable
+    {
+      private InputRebinderService owner;
+      private readonly InputAction action;
+      private readonly ActionRegistration registration;
+      public ScopedRegistration(InputRebinderService owner, InputAction action, ActionRegistration registration)
+      { this.owner = owner; this.action = action; this.registration = registration; }
+      public void Dispose()
+      {
+        var current = owner;
+        if (current == null) return;
+        owner = null;
+        current.ReleaseScopedAction(action, registration);
+      }
+    }
+
+    private sealed class ActionReferenceComparer : IEqualityComparer<InputAction>
+    {
+      public static readonly ActionReferenceComparer Instance = new();
+      public bool Equals(InputAction first, InputAction second) => ReferenceEquals(first, second);
+      public int GetHashCode(InputAction action) => RuntimeHelpers.GetHashCode(action);
     }
   }
 

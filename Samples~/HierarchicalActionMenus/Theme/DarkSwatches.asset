@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 45fbce37dce57414e9c3983ee9bb1c1a, type: 3}
+  m_Name: DarkSwatches
+  m_EditorClassIdentifier: MToolKit.Theme::MToolKit.Theme.Swatch.SwatchRegistry
+  <Swatches>k__BackingField:
+  - {fileID: 11400000, guid: 8bc1c29a352b79541a5532cb86ea3710, type: 2}
+  - {fileID: 11400000, guid: 2a5110a22a9845b42abea6d46aa49da1, type: 2}
+  - {fileID: 11400000, guid: 1e74035555639e1488d95d9c2b35e2fd, type: 2}
+  - {fileID: 11400000, guid: 860928c7ebba6c44488716f4293a310d, type: 2}
+  - {fileID: 11400000, guid: 26264b73793b2a4439f7897ccdcf9b14, type: 2}
+  - {fileID: 11400000, guid: 1147800d1f23c29419d54926d2fcd50d, type: 2}
+  - {fileID: 11400000, guid: 98cc0d4ae255b814e95b6219a1a1036d, type: 2}
+  - {fileID: 11400000, guid: a0e2a648483d36542a8945cc223b68ed, type: 2}
+  - {fileID: 11400000, guid: c5a2a3651234394408fc67da780a8891, type: 2}
+  - {fileID: 11400000, guid: f230a80acafad8147b4517816d374c1a, type: 2}
+  - {fileID: 11400000, guid: 5dea5a96ec51bca47ba0753c271113d5, type: 2}
+  - {fileID: 11400000, guid: bff8ef8c2d4bdd1419c3f0ae90e27d96, type: 2}
+  - {fileID: 11400000, guid: 2125675abe6ec144f971a3fcbbb358fd, type: 2}

@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 527af193db476fb47bd95cf82045c708, type: 3}
+  m_Name: GalleryThemeOverrides_Any
+  m_EditorClassIdentifier: MToolKit.ContextMenus::MToolKit.ContextMenus.Configuration.MenuStyleSet
+  <Background>k__BackingField: {fileID: 0}
+  <Foreground>k__BackingField: {fileID: 11400000, guid: c5a2a3651234394408fc67da780a8891, type: 2}
+  <Description>k__BackingField: {fileID: 11400000, guid: f230a80acafad8147b4517816d374c1a, type: 2}
+  <Icon>k__BackingField: {fileID: 11400000, guid: 5dea5a96ec51bca47ba0753c271113d5, type: 2}
+  <Border>k__BackingField: {fileID: 0}
+  <LabelTypeset>k__BackingField: {fileID: 11400000, guid: 6d6e48447c8bf1a44ab1dabcc68d70f1, type: 2}
+  <DescriptionTypeset>k__BackingField: {fileID: 11400000, guid: adcebe066bae7a443900d616ef5e5e90, type: 2}
+  <Spacing>k__BackingField: {fileID: 11400000, guid: 3c380649d9a255241937f7a89ae37b29, type: 2}
+  <OverrideTheme>k__BackingField: 0
+  <Normal>k__BackingField: {fileID: 0}
+  <Hovered>k__BackingField: {fileID: 0}
+  <Selected>k__BackingField: {fileID: 0}
+  <Disabled>k__BackingField: {fileID: 0}
+  <PanelBackground>k__BackingField: {fileID: 0}
+  <CenterBackground>k__BackingField: {fileID: 0}
+  <AuxiliaryBackground>k__BackingField: {fileID: 0}
+  <Backdrop>k__BackingField: {fileID: 0}
+  <InnerBorder>k__BackingField: {fileID: 0}
+  <OuterBorder>k__BackingField: {fileID: 0}
+  <Separator>k__BackingField: {fileID: 0}
+  <Checked>k__BackingField: {fileID: 0}

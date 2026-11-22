@@ -1,0 +1,5 @@
+# Preserve native Unity serializer output for the authored menu samples.
+# Source-code whitespace checks remain unchanged.
+/Samples~/HierarchicalActionMenus/**/*.asset whitespace=-blank-at-eol
+/Samples~/HierarchicalActionMenus/**/*.prefab whitespace=-blank-at-eol
+/Samples~/HierarchicalActionMenus/**/*.unity whitespace=-blank-at-eol

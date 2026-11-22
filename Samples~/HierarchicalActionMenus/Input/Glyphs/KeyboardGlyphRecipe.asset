@@ -1,0 +1,648 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c113a190aacc4484910277a379e7b428, type: 3}
+  m_Name: KeyboardGlyphRecipe
+  m_EditorClassIdentifier: MToolKit.Editor.Input::MToolKit.Editor.Input.InputKeycapBakeProfile
+  Catalog: {fileID: 11400000, guid: 2c5ff65feb4d7fe489ca58803f9bc6bc, type: 2}
+  LocalizationCollection: {fileID: 0}
+  SpriteAssetPath: Assets/Samples/MToolKit/1.21.0/HierarchicalActionMenus/Input/Glyphs/Ka68e50281d2844a4493572a672ed0cd4.asset
+  Font: {fileID: 11400000, guid: e23d0cab75b0d154c85af2e89d76824d, type: 2}
+  FontMaterial: {fileID: 0}
+  FontSize: 40
+  SharedHeight: 64
+  MinimumWidth: 64
+  HorizontalPadding: 6
+  VerticalPadding: 2
+  BorderWidth: 2
+  SpriteLabelSpacing: 6
+  BorderSprite: {fileID: 0}
+  BorderImageMode: 0
+  BackgroundSprite: {fileID: 0}
+  BackgroundImageMode: 0
+  BackgroundPrefab: {fileID: 0}
+  BackgroundColor:
+    serializedVersion: 2
+    rgba: 4280819740
+  BorderColor:
+    serializedVersion: 2
+    rgba: 4287659120
+  TextColor:
+    serializedVersion: 2
+    rgba: 4294967295
+  OverrideFontColor: 0
+  FontColor:
+    serializedVersion: 2
+    rgba: 4294967295
+  UniformCharacters: 1
+  LocaleSource: 0
+  Locales:
+  - en
+  LocaleFontOverrides: []
+  Keys:
+  - ControlPath: a
+    SpriteName: keycap-a
+    Label: A
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: b
+    SpriteName: keycap-b
+    Label: B
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: c
+    SpriteName: keycap-c
+    Label: C
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: d
+    SpriteName: keycap-d
+    Label: D
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: e
+    SpriteName: keycap-e
+    Label: E
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: f
+    SpriteName: keycap-f
+    Label: F
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: g
+    SpriteName: keycap-g
+    Label: G
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: h
+    SpriteName: keycap-h
+    Label: H
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: i
+    SpriteName: keycap-i
+    Label: I
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: j
+    SpriteName: keycap-j
+    Label: J
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: k
+    SpriteName: keycap-k
+    Label: K
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: l
+    SpriteName: keycap-l
+    Label: L
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: m
+    SpriteName: keycap-m
+    Label: M
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: n
+    SpriteName: keycap-n
+    Label: N
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: o
+    SpriteName: keycap-o
+    Label: O
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: p
+    SpriteName: keycap-p
+    Label: P
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: q
+    SpriteName: keycap-q
+    Label: Q
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: r
+    SpriteName: keycap-r
+    Label: R
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: s
+    SpriteName: keycap-s
+    Label: S
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: t
+    SpriteName: keycap-t
+    Label: T
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: u
+    SpriteName: keycap-u
+    Label: U
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: v
+    SpriteName: keycap-v
+    Label: V
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: w
+    SpriteName: keycap-w
+    Label: W
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: x
+    SpriteName: keycap-x
+    Label: X
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: y
+    SpriteName: keycap-y
+    Label: Y
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: z
+    SpriteName: keycap-z
+    Label: Z
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: 0
+    SpriteName: keycap-0
+    Label: 0
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: 1
+    SpriteName: keycap-1
+    Label: 1
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: 2
+    SpriteName: keycap-2
+    Label: 2
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: 3
+    SpriteName: keycap-3
+    Label: 3
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: 4
+    SpriteName: keycap-4
+    Label: 4
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: 5
+    SpriteName: keycap-5
+    Label: 5
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: 6
+    SpriteName: keycap-6
+    Label: 6
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: 7
+    SpriteName: keycap-7
+    Label: 7
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: 8
+    SpriteName: keycap-8
+    Label: 8
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: 9
+    SpriteName: keycap-9
+    Label: 9
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: enter
+    SpriteName: keycap-enter
+    Label: Enter
+    LocalizationKey: input.key.enter
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: backspace
+    SpriteName: keycap-backspace
+    Label: Backspace
+    LocalizationKey: input.key.backspace
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: space
+    SpriteName: keycap-space
+    Label: Space
+    LocalizationKey: input.key.space
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: leftShift
+    SpriteName: keycap-left-shift
+    Label: LShift
+    LocalizationKey: input.key.leftShift
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: tab
+    SpriteName: keycap-tab
+    Label: Tab
+    LocalizationKey: input.key.tab
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: escape
+    SpriteName: keycap-escape
+    Label: Escape
+    LocalizationKey: input.key.escape
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: leftCtrl
+    SpriteName: keycap-left-ctrl
+    Label: LCtrl
+    LocalizationKey: input.key.leftCtrl
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: upArrow
+    SpriteName: keycap-up-arrow
+    Label: Up Arrow
+    LocalizationKey: input.key.upArrow
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: downArrow
+    SpriteName: keycap-down-arrow
+    Label: Down Arrow
+    LocalizationKey: input.key.downArrow
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: leftArrow
+    SpriteName: keycap-left-arrow
+    Label: Left Arrow
+    LocalizationKey: input.key.leftArrow
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: rightArrow
+    SpriteName: keycap-right-arrow
+    Label: Right Arrow
+    LocalizationKey: input.key.rightArrow
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: minus
+    SpriteName: keycap-minus
+    Label: '-'
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: equals
+    SpriteName: keycap-equals
+    Label: =
+    LocalizationKey: 
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: pageDown
+    SpriteName: keycap-page-down
+    Label: Page Down
+    LocalizationKey: input.key.pageDown
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: pageUp
+    SpriteName: keycap-page-up
+    Label: Page Up
+    LocalizationKey: input.key.pageUp
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: f1
+    SpriteName: keycap-f1
+    Label: F1
+    LocalizationKey: input.key.f1
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: f2
+    SpriteName: keycap-f2
+    Label: F2
+    LocalizationKey: input.key.f2
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  - ControlPath: f8
+    SpriteName: keycap-f8
+    Label: F8
+    LocalizationKey: input.key.f8
+    Platform: 0
+    ContentMode: 0
+    ContentSprite: {fileID: 0}
+    ArtworkSizing: 0
+    SpriteSize: {x: 32, y: 32}
+    WidthRule: 0
+    FixedWidth: 0
+  outputOwner: 6f19a442e9dab3142b7ca640c1bcc0af
+  bakedAssets:
+  - {fileID: 11400000, guid: 794ff88dbc890f94ea206bd1c6f19ad4, type: 2}
+  - {fileID: 11400000, guid: 1b28819a573bc4245a3ac0d1be48ac3a, type: 2}

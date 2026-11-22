@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1c039122c65746f69139d686ced9af16, type: 3}
+  m_Name: StockProvider
+  m_EditorClassIdentifier: MToolKit.ContextMenus.Samples::MToolKit.ContextMenus.Samples.GalleryChildrenProviderSO
+  <IdPrefix>k__BackingField: gallery.stock
+  <Icon>k__BackingField: {fileID: 21300000, guid: 996c53c5383eb0a469df9e7e6454dcfc, type: 3}
+  <Image>k__BackingField: {fileID: 21300000, guid: 174053b467139d040aa5ef1e7ea33bf7, type: 3}
