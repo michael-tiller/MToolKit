@@ -549,6 +549,54 @@ namespace MToolKit.ContextMenus.Samples.Tests
     }
 
     [UnityTest]
+    public IEnumerator Saved_Pie_titles_fit_their_native_buttons_without_overlap_or_pagination()
+    {
+      mouse ??= InputSystem.AddDevice<Mouse>();
+      gallery.InputModule.actionsAsset.devices = new InputDevice[] { gamepad, mouse };
+      InputSystem.QueueStateEvent(mouse, new MouseState { position = new Vector2(Screen.width * .5f, Screen.height * .5f) });
+      yield return null; yield return null;
+      yield return new WaitForEndOfFrame();
+      yield return Open(MenuGalleryController.PieContextMenu);
+      yield return new WaitForEndOfFrame();
+
+      var session = gallery.MenuService.Session;
+      Assert.That(gallery.MenuService.Presenter, Is.TypeOf<RadialMenuPresenter>(), "Read the saved Pie layout rather than an accessible fallback");
+      Assert.That(session.RootActions.Count, Is.EqualTo(5), "Validate all five supplied root actions together");
+      Assert.That(session.PageCount, Is.EqualTo(1), "The supplied root presentation must not hide titles on a second page");
+      var items = new List<MenuActionWidget>();
+      foreach (var widget in gallery.MenuService.Presenter.Root.GetComponentsInChildren<MenuActionWidget>())
+        if (!(widget is MenuCenterWidget) && widget.BackgroundRole != MenuVisualRole.Auxiliary) items.Add(widget);
+      Assert.That(items.Count, Is.EqualTo(session.RootActions.Count));
+      var bounds = new List<Rect>();
+      var corners = new Vector3[4];
+      var camera = gallery.Canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : gallery.Canvas.worldCamera;
+      foreach (var item in items)
+      {
+        Assert.That(item.Label, Is.Not.Null);
+        var label = item.Label;
+        Assert.That(label.gameObject.activeInHierarchy && !string.IsNullOrEmpty(label.text), Is.True);
+        Assert.That(label.fontSize, Is.GreaterThanOrEqualTo(16f), "Preserve the supplied readable typography floor for " + label.text);
+        Assert.That(label.isTextTruncated, Is.False, "The rendered title must be complete: " + label.text);
+        Assert.That(label.preferredWidth, Is.LessThanOrEqualTo(label.rectTransform.rect.width + .5f),
+          label.text + " has insufficient label room after the prefab's actual icon, image, hint and spacing slots");
+        ((RectTransform)item.transform).GetWorldCorners(corners);
+        var minimum = new Vector2(float.MaxValue, float.MaxValue);
+        var maximum = new Vector2(float.MinValue, float.MinValue);
+        foreach (var corner in corners)
+        {
+          Vector2 screen = RectTransformUtility.WorldToScreenPoint(camera, corner);
+          minimum = Vector2.Min(minimum, screen); maximum = Vector2.Max(maximum, screen);
+        }
+        bounds.Add(Rect.MinMaxRect(minimum.x, minimum.y, maximum.x, maximum.y));
+      }
+      for (int first = 0; first < bounds.Count; first++)
+        for (int second = first + 1; second < bounds.Count; second++)
+          Assert.That(bounds[first].Overlaps(bounds[second]), Is.False,
+            "Wider readable Pie buttons must remain independently selectable: " + items[first].Label.text + " / " + items[second].Label.text);
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero, "Reading the supplied layout must not execute gameplay actions");
+    }
+
+    [UnityTest]
     public IEnumerator Rendered_PieContextMenu_button_accepts_its_visible_corner_outside_the_annulus()
     {
       // Device/context changes refresh glyphs and the menu composition. Settle the owned
@@ -560,8 +608,8 @@ namespace MToolKit.ContextMenus.Samples.Tests
       yield return new WaitForEndOfFrame();
       var profile = Object.Instantiate(gallery.HostConfig.Resolve(MenuGalleryController.PieContextMenu));
       ownedObjects.Add(profile);
-      // At the authored 90..240 band a 144x56 first button has no out-of-band
-      // corner. A supported size override provides a clear native hit beyond it.
+      // Override the saved button size to exercise a visible corner outside
+      // the radial band's hit area while preserving the authored layout.
       profile.WidgetSize = new Vector2(216, 88);
       Assert.That(profile.Validate(out string diagnostic), Is.True, diagnostic);
       var context = new MenuContext(gallery.State);

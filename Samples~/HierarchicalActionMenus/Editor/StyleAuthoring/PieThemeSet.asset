@@ -18,12 +18,12 @@ MonoBehaviour:
   CenterPrefab: {fileID: 0}
   SecondaryPrefab: {fileID: 0}
   MaximumVisibleItems: 8
-  WidgetSize: {x: 144, y: 56}
+  WidgetSize: {x: 300, y: 64}
   ShowCenter: 0
   Backdrop: 1
   Layout:
-    InnerRadius: 90
-    RingWidth: 150
+    InnerRadius: 250
+    RingWidth: 40
     StartAngle: 90
     Clockwise: 1
     AngularGap: 3

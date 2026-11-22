@@ -73,7 +73,7 @@ namespace MToolKit.Editor.ContextMenus
       config.OutputFolder = "Assets/MToolKit/Menus/" + Path.GetFileNameWithoutExtension(path);
       config.Styles = new MenuStyleRecipe[] {
         new SingleRingMenuStyleRecipe { AssetName = "WheelContextMenu", InnerRadius = 166, RingWidth = 100, AngularGap = 5 },
-        new ReplacementMenuStyleRecipe { AssetName = "PieContextMenu", InnerRadius = 166, RingWidth = 120 },
+        new ReplacementMenuStyleRecipe { AssetName = "PieContextMenu", InnerRadius = 250, RingWidth = 40 },
         new ListMenuStyleRecipe { AssetName = "ListContextMenu", MaximumVisibleItems = 10 },
         new ConcentricMenuStyleRecipe { AssetName = "NestedWheelContextMenu", InnerRadius = 166, RingWidth = 60, ChildRingWidth = 55 }
       };

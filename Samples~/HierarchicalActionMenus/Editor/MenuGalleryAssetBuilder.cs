@@ -154,8 +154,8 @@ namespace MToolKit.ContextMenus.Samples.Editor
       var wheel = Profile(outputRoot, "WheelContextMenu", radialPresenter, iconOnly, center, theme.Skin, bindings);
       wheel.SecondaryPrefab = secondary; wheel.AngularGap = 5; wheel.InnerRadius = 200;
       var interactions = Profile(outputRoot, "PieContextMenu", radialPresenter, pieItem, null, theme.Skin, bindings);
-      interactions.DrawSegments = false; interactions.ShowCenter = false; interactions.WidgetSize = new Vector2(144, 56);
-      interactions.InnerRadius = 90; interactions.RingWidth = 150;
+      interactions.DrawSegments = false; interactions.ShowCenter = false; interactions.WidgetSize = new Vector2(300, 64);
+      interactions.InnerRadius = 250; interactions.RingWidth = 40;
       var concentric = Profile(outputRoot, "NestedWheelContextMenu", radialPresenter, radial, center, theme.Skin, bindings);
       concentric.Navigation = MenuNavigationPolicy.Concentric; concentric.RingWidth = 60; concentric.RingGap = 10;
       concentric.ChildRingWidth = 55; concentric.ChildArcDegrees = 120; concentric.SecondaryPrefab = secondary; concentric.InnerRadius = 200;

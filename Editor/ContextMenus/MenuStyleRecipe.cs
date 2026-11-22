@@ -122,7 +122,9 @@ namespace MToolKit.Editor.ContextMenus
     public ReplacementMenuStyleRecipe()
     {
       DrawSegments = false;
-      WidgetSize = new Vector2(144, 56);
+      WidgetSize = new Vector2(300, 64);
+      InnerRadius = 250;
+      RingWidth = 40;
       OverrideShowCenter = true;
       ShowCenter = false;
     }

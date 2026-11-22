@@ -55,6 +55,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Give Pie menu titles readable room beside icons and images with wider typed theme defaults and non-overlapping button spacing. Rebuild the supplied profile in place and validate native labels, bounds and paging. (v1.25.10)
+
 - Keep the menu1.25.8 fix note in Unreleased rather than repeating it in historical release sections. (v1.25.9)
 
 - Give routed menu outside clicks one input owner so a submenu-opening press cannot become a native backdrop cancellation on release. Preserve native fallback, supplied widgets and scrolling controls. Reproduce deeper Pie replacement with the saved prefab and real Input System UI module. (v1.25.8)

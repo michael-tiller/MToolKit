@@ -28,8 +28,8 @@ MonoBehaviour:
   <ThemeOverrides>k__BackingField: {fileID: 0}
   <Navigation>k__BackingField: 1
   <Anchor>k__BackingField: 1
-  <InnerRadius>k__BackingField: 90
-  <RingWidth>k__BackingField: 150
+  <InnerRadius>k__BackingField: 250
+  <RingWidth>k__BackingField: 40
   <RingGap>k__BackingField: 12
   <ChildRingWidth>k__BackingField: 70
   <StartAngle>k__BackingField: 90
@@ -40,7 +40,7 @@ MonoBehaviour:
   <ListWidth>k__BackingField: 360
   <RowHeight>k__BackingField: 48
   <ListOverflow>k__BackingField: 0
-  <WidgetSize>k__BackingField: {x: 144, y: 56}
+  <WidgetSize>k__BackingField: {x: 300, y: 64}
   <ShowCenter>k__BackingField: 0
   <ShowBackControl>k__BackingField: 0
   <Backdrop>k__BackingField: 1

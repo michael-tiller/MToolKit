@@ -134,9 +134,9 @@ MonoBehaviour:
           useNativeUguiNavigation: 0
           routePointerClick: 0
         MaximumVisibleItems: 8
-        WidgetSize: {x: 144, y: 56}
-        InnerRadius: 90
-        RingWidth: 150
+        WidgetSize: {x: 300, y: 64}
+        InnerRadius: 250
+        RingWidth: 40
         StartAngle: 90
         Clockwise: 1
         AngularGap: 3
