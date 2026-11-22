@@ -18,7 +18,7 @@ MonoBehaviour:
   Description: 'Preferences: the same action in every presentation.'
   DescriptionKey: 
   TableName: Default String Table
-  Icon: {fileID: 0}
+  Icon: {fileID: 21300000, guid: 245a196eaa773584eada5e949310c76f, type: 3}
   Image: {fileID: 0}
   BindingHint: {fileID: 11400000, guid: 17f7ed4a12844af498544589d09ea1dd, type: 2}
   SecondaryActions: []

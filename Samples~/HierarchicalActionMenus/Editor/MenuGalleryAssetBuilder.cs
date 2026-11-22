@@ -139,7 +139,7 @@ namespace MToolKit.ContextMenus.Samples.Editor
       var theme = CreateThemes(outputRoot, font);
       var secondary = SavePrefab(outputRoot, "SecondaryAction", () => SecondaryWidget(font, theme.Label));
       var row = SavePrefab(outputRoot, "ListRow", () => ActionWidget("List row", font, theme.Label, true, true, false));
-      var radial = SavePrefab(outputRoot, "RadialLabelIcon", () => ActionWidget("Radial label and icon", font, theme.Label, true, true, true));
+      SavePrefab(outputRoot, "RadialLabelIcon", () => ActionWidget("Radial label and icon", font, theme.Label, true, true, true));
       var iconOnly = SavePrefab(outputRoot, "IconOnly", () => ActionWidget("Icon only", font, theme.Label, false, true, true));
       var pieItem = SavePrefab(outputRoot, "InteractionButton", () => ActionWidget("Interaction button", font, theme.Label, true, true, false));
       var center = SavePrefab(outputRoot, "CenterInformation", () => Center(font, theme.Label, theme.Description, secondary));
@@ -156,7 +156,7 @@ namespace MToolKit.ContextMenus.Samples.Editor
       var interactions = Profile(outputRoot, "PieContextMenu", radialPresenter, pieItem, null, theme.Skin, bindings);
       interactions.DrawSegments = false; interactions.ShowCenter = false; interactions.WidgetSize = new Vector2(300, 64);
       interactions.InnerRadius = 250; interactions.RingWidth = 40;
-      var concentric = Profile(outputRoot, "NestedWheelContextMenu", radialPresenter, radial, center, theme.Skin, bindings);
+      var concentric = Profile(outputRoot, "NestedWheelContextMenu", radialPresenter, iconOnly, center, theme.Skin, bindings);
       concentric.Navigation = MenuNavigationPolicy.Concentric; concentric.RingWidth = 60; concentric.RingGap = 10;
       concentric.ChildRingWidth = 55; concentric.ChildArcDegrees = 120; concentric.SecondaryPrefab = secondary; concentric.InnerRadius = 200;
       var custom = Profile(outputRoot, "ReplacementCards", customPresenter, pieItem, null, theme.LocalSkin, bindings);
@@ -354,7 +354,7 @@ namespace MToolKit.ContextMenus.Samples.Editor
       EditorUtility.SetDirty(provider);
       var inventory = Submenu("inventory", "Available inventory"); inventory.Provider = provider;
       var settings = Submenu("settings", "Preferences", header, toggle, careful, quick, inventory);
-      settings.Icon = null;
+      settings.Icon = icons[0];
       var disabled = Command("unavailable", "Unavailable recipe", "Cost: unavailable"); disabled.UnavailableReason = "Requires an unavailable ingredient";
       disabled.Image = artwork;
       var set = Asset<MenuActionSetSO>(root + "/Actions/GalleryActions.asset");

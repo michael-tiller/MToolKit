@@ -20,7 +20,7 @@ MonoBehaviour:
     m_SubObjectGUID: 
     m_EditorAssetChanged: 0
   <FallbackProfile>k__BackingField: {fileID: 11400000, guid: 489661d106aa95f45a67a85df6a70bc6, type: 2}
-  <ItemPrefab>k__BackingField: {fileID: 8730865244752353415, guid: 33446d88f7266084aa251cd0341dd2eb, type: 3}
+  <ItemPrefab>k__BackingField: {fileID: 3397992058179829663, guid: f86a5808bb02485489128d0f957c1ea0, type: 3}
   <CenterPrefab>k__BackingField: {fileID: 4184151602372344641, guid: 30d599ad9611a564bbc97a0dc15a7e1c, type: 3}
   <SecondaryPrefab>k__BackingField: {fileID: 6870953093944771511, guid: e16c226145e9dd646932818bb90f6319, type: 3}
   <Skin>k__BackingField: {fileID: 11400000, guid: 4d622ddd0ed61e845a7cc53f387753f4, type: 2}

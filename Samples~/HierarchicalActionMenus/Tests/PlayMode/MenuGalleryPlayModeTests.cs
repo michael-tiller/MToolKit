@@ -177,7 +177,8 @@ namespace MToolKit.ContextMenus.Samples.Tests
         }
         Assert.That(actionWidgetCount, Is.GreaterThanOrEqualTo(5), style + " has no authored action widgets");
         Assert.That(anyIcon, Is.True, style);
-        if (style == MenuGalleryController.WheelContextMenu) Assert.That(anyLabel, Is.False, "WheelContextMenu item prefab is deliberately icon-only");
+        if (style == MenuGalleryController.WheelContextMenu || style == MenuGalleryController.NestedWheelContextMenu)
+          Assert.That(anyLabel, Is.False, style + " sector item prefab is deliberately icon-only");
         else Assert.That(anyLabel, Is.True, style);
         var graphics = presenter.Root.GetComponentsInChildren<NativeRadialGraphic>();
         if (style == MenuGalleryController.PieContextMenu || style == MenuGalleryController.ListContextMenu)
@@ -275,6 +276,78 @@ namespace MToolKit.ContextMenus.Samples.Tests
         Assert.That(actionImage.GetValue(action) as Sprite, Is.Not.Null, "Dynamic children dropped their image.");
       }
       AssertContained();
+    }
+
+    [UnityTest]
+    public IEnumerator NestedWheel_sectors_keep_icons_without_titles_while_center_and_shared_labels_remain()
+    {
+      yield return Open(MenuGalleryController.NestedWheelContextMenu);
+      yield return new WaitForEndOfFrame();
+      var session = gallery.MenuService.Session;
+      var sharedLabels = new Dictionary<string, string>();
+      foreach (var action in session.RootActions) sharedLabels.Add(action.Id.Value, action.Label.ToString());
+      var stateProperty = typeof(MenuActionWidget).GetProperty("State", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+      Assert.That(stateProperty, Is.Not.Null);
+
+      HashSet<string> AssertIconOnlySectors(RadialMenuPresenter radial)
+      {
+        Assert.That(radial, Is.Not.Null, "Validate the native NestedWheel rather than a fallback");
+        var visibleActions = new HashSet<string>();
+        foreach (var widget in radial.Root.GetComponentsInChildren<MenuActionWidget>())
+        {
+          if (widget is MenuCenterWidget || widget.BackgroundRole == MenuVisualRole.Auxiliary) continue;
+          var state = stateProperty.GetValue(widget) as MenuWidgetState;
+          Assert.That(state?.Action, Is.Not.Null);
+          visibleActions.Add(state.Action.Id.Value);
+          Assert.That(state.Label, Is.Not.Empty, "Hiding a sector title must not delete its shared presentation label");
+          bool visibleTitle = widget.Label != null && widget.Label.isActiveAndEnabled
+            && widget.Label.gameObject.activeInHierarchy && !string.IsNullOrWhiteSpace(widget.Label.text);
+          Assert.That(visibleTitle, Is.False, "NestedWheel sector titles belong in the selected center, not under icons: " + state.Action.Id.Value);
+          if (state.Action.Icon != null)
+            Assert.That(widget.Icon != null && widget.Icon.isActiveAndEnabled && widget.Icon.sprite != null, Is.True,
+              "Keep the supplied sector icon visible: " + state.Action.Id.Value);
+          if (state.Action.Image != null)
+            Assert.That(widget.ActionImage != null && widget.ActionImage.isActiveAndEnabled && widget.ActionImage.sprite != null, Is.True,
+              "Keep independently authored sector artwork visible: " + state.Action.Id.Value);
+        }
+        Assert.That(visibleActions.Count, Is.GreaterThan(0));
+        return visibleActions;
+      }
+
+      void AssertSelectedCenter(RadialMenuPresenter radial)
+      {
+        Assert.That(session.Selected, Is.Not.Null);
+        var center = radial.Root.GetComponentInChildren<MenuCenterWidget>();
+        Assert.That(center, Is.Not.Null);
+        Assert.That(center.Label != null && center.Label.isActiveAndEnabled, Is.True);
+        Assert.That(center.Label.text, Is.EqualTo(session.Selected.Label.ToString()), "The selected center retains the full shared action title");
+      }
+
+      var rootRadial = gallery.MenuService.Presenter as RadialMenuPresenter;
+      Assert.That(AssertIconOnlySectors(rootRadial).Contains("gallery.build"), Is.True);
+      Assert.That(session.Select("gallery.build"), Is.True);
+      yield return Tap(GamepadButton.South);
+      yield return WaitFor(() => gallery.MenuService.Session.Path.Count == 1, "Controller confirmation did not enter Build");
+      yield return new WaitForEndOfFrame();
+      var buildRadial = gallery.MenuService.Presenter as RadialMenuPresenter;
+      Assert.That(buildRadial.InnerGeometry, Is.Not.Null); Assert.That(buildRadial.OuterGeometry, Is.Not.Null);
+      var buildVisible = AssertIconOnlySectors(buildRadial);
+      Assert.That(buildVisible.Contains("gallery.build"), Is.True, "Validate the visible parent ring");
+      Assert.That(buildVisible.Contains(session.Selected.Id.Value), Is.True, "Validate the selected child ring");
+      AssertSelectedCenter(buildRadial);
+
+      Assert.That(session.Select("gallery.build/gallery.doors"), Is.True);
+      yield return Tap(GamepadButton.South);
+      yield return WaitFor(() => gallery.MenuService.Session.Path.Count == 2, "Controller confirmation did not enter Doors");
+      yield return new WaitForEndOfFrame();
+      var doorsRadial = gallery.MenuService.Presenter as RadialMenuPresenter;
+      Assert.That(doorsRadial.InnerGeometry, Is.Not.Null); Assert.That(doorsRadial.OuterGeometry, Is.Not.Null);
+      var doorsVisible = AssertIconOnlySectors(doorsRadial);
+      Assert.That(doorsVisible.Contains("gallery.build/gallery.doors"), Is.True);
+      Assert.That(doorsVisible.Contains(session.Selected.Id.Value), Is.True);
+      AssertSelectedCenter(doorsRadial);
+      foreach (var action in session.RootActions) Assert.That(action.Label.ToString(), Is.EqualTo(sharedLabels[action.Id.Value]));
+      Assert.That(gallery.State.CommandsExecuted, Is.Zero, "Controller submenu navigation must not execute a gameplay command");
     }
 
     [UnityTest]
