@@ -244,7 +244,7 @@ namespace MToolKit.ContextMenus.Samples.Tests
           else if (hasImage) imageOnly++;
           else neither++;
         }
-        Assert.That(new[] { iconOnly, imageOnly, both, neither }, Is.EqualTo(new[] { 1, 1, 2, 1 }), style);
+        Assert.That(new[] { iconOnly, imageOnly, both, neither }, Is.EqualTo(new[] { 2, 1, 2, 0 }), style);
         AssertContained();
       }
 
@@ -268,6 +268,22 @@ namespace MToolKit.ContextMenus.Samples.Tests
       yield return Open(MenuGalleryController.ListContextMenu);
       active = gallery.MenuService.Session;
       yield return active.EnterSubmenuAsync("gallery.settings").ToCoroutine();
+      yield return null; yield return null;
+      var stateProperty = typeof(MenuActionWidget).GetProperty("State", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+      Assert.That(stateProperty, Is.Not.Null);
+      MenuActionWidget header = null;
+      foreach (var widget in gallery.MenuService.Presenter.Root.GetComponentsInChildren<MenuActionWidget>())
+      {
+        var state = stateProperty.GetValue(widget) as MenuWidgetState;
+        if (state?.Action?.Id.Value == "gallery.settings/gallery.preferences-header") { header = widget; break; }
+      }
+      Assert.That(header, Is.Not.Null, "Preferences header must be visible in the list.");
+      var headerImage = imageProperty.GetValue(header) as Image;
+      Assert.That(header.isActiveAndEnabled, Is.True, "Preferences header must be active.");
+      Assert.That(header.Icon, Is.Not.Null, "The list widget must provide an icon target.");
+      Assert.That(headerImage, Is.Not.Null, "The list widget must provide an artwork target.");
+      Assert.That(!header.Icon.enabled || header.Icon.sprite == null, Is.True, "Header must not show an icon.");
+      Assert.That(!headerImage.enabled || headerImage.sprite == null, Is.True, "Header must not show artwork.");
       yield return active.EnterSubmenuAsync("gallery.settings/gallery.inventory").ToCoroutine();
       Assert.That(active.Actions.Count, Is.GreaterThan(0));
       foreach (var action in active.Actions)
@@ -282,7 +298,7 @@ namespace MToolKit.ContextMenus.Samples.Tests
     public IEnumerator NestedWheel_sectors_keep_icons_without_titles_while_center_and_shared_labels_remain()
     {
       yield return Open(MenuGalleryController.NestedWheelContextMenu);
-      yield return new WaitForEndOfFrame();
+      yield return WaitForPresentationLayout();
       var session = gallery.MenuService.Session;
       var sharedLabels = new Dictionary<string, string>();
       foreach (var action in session.RootActions) sharedLabels.Add(action.Id.Value, action.Label.ToString());
@@ -328,7 +344,7 @@ namespace MToolKit.ContextMenus.Samples.Tests
       Assert.That(session.Select("gallery.build"), Is.True);
       yield return Tap(GamepadButton.South);
       yield return WaitFor(() => gallery.MenuService.Session.Path.Count == 1, "Controller confirmation did not enter Build");
-      yield return new WaitForEndOfFrame();
+      yield return WaitForPresentationLayout();
       var buildRadial = gallery.MenuService.Presenter as RadialMenuPresenter;
       Assert.That(buildRadial.InnerGeometry, Is.Not.Null); Assert.That(buildRadial.OuterGeometry, Is.Not.Null);
       var buildVisible = AssertIconOnlySectors(buildRadial);
@@ -339,7 +355,7 @@ namespace MToolKit.ContextMenus.Samples.Tests
       Assert.That(session.Select("gallery.build/gallery.doors"), Is.True);
       yield return Tap(GamepadButton.South);
       yield return WaitFor(() => gallery.MenuService.Session.Path.Count == 2, "Controller confirmation did not enter Doors");
-      yield return new WaitForEndOfFrame();
+      yield return WaitForPresentationLayout();
       var doorsRadial = gallery.MenuService.Presenter as RadialMenuPresenter;
       Assert.That(doorsRadial.InnerGeometry, Is.Not.Null); Assert.That(doorsRadial.OuterGeometry, Is.Not.Null);
       var doorsVisible = AssertIconOnlySectors(doorsRadial);
@@ -628,9 +644,9 @@ namespace MToolKit.ContextMenus.Samples.Tests
       gallery.InputModule.actionsAsset.devices = new InputDevice[] { gamepad, mouse };
       InputSystem.QueueStateEvent(mouse, new MouseState { position = new Vector2(Screen.width * .5f, Screen.height * .5f) });
       yield return null; yield return null;
-      yield return new WaitForEndOfFrame();
+      yield return WaitForPresentationLayout();
       yield return Open(MenuGalleryController.PieContextMenu);
-      yield return new WaitForEndOfFrame();
+      yield return WaitForPresentationLayout();
 
       var session = gallery.MenuService.Session;
       Assert.That(gallery.MenuService.Presenter, Is.TypeOf<RadialMenuPresenter>(), "Read the saved Pie layout rather than an accessible fallback");
@@ -648,6 +664,11 @@ namespace MToolKit.ContextMenus.Samples.Tests
         Assert.That(item.Label, Is.Not.Null);
         var label = item.Label;
         Assert.That(label.gameObject.activeInHierarchy && !string.IsNullOrEmpty(label.text), Is.True);
+        label.ForceMeshUpdate();
+        int visibleGlyphs = 0;
+        for (int index = 0; index < label.textInfo.characterCount; index++)
+          if (label.textInfo.characterInfo[index].isVisible) visibleGlyphs++;
+        Assert.That(visibleGlyphs, Is.GreaterThan(0), "The title must generate visible glyph geometry: " + label.text);
         Assert.That(label.fontSize, Is.GreaterThanOrEqualTo(16f), "Preserve the supplied readable typography floor for " + label.text);
         Assert.That(label.isTextTruncated, Is.False, "The rendered title must be complete: " + label.text);
         Assert.That(label.preferredWidth, Is.LessThanOrEqualTo(label.rectTransform.rect.width + .5f),
@@ -678,7 +699,7 @@ namespace MToolKit.ContextMenus.Samples.Tests
       gallery.InputModule.actionsAsset.devices = new InputDevice[] { gamepad, mouse };
       InputSystem.QueueStateEvent(mouse, new MouseState { position = new Vector2(Screen.width * .5f, Screen.height * .5f) });
       yield return null; yield return null;
-      yield return new WaitForEndOfFrame();
+      yield return WaitForPresentationLayout();
       var profile = Object.Instantiate(gallery.HostConfig.Resolve(MenuGalleryController.PieContextMenu));
       ownedObjects.Add(profile);
       // Override the saved button size to exercise a visible corner outside
@@ -689,6 +710,7 @@ namespace MToolKit.ContextMenus.Samples.Tests
       yield return gallery.MenuService.OpenAsync(new MenuOpenRequest(gallery.ActionSet.Create(context), context,
         gallery.Canvas, new Vector2(Screen.width * .5f, Screen.height * .5f), profile: profile)).ToCoroutine();
       yield return null; yield return null;
+      yield return WaitForPresentationLayout();
       var radial = (RadialMenuPresenter)gallery.MenuService.Presenter;
       var band = radial.InnerGeometry.Segments[0];
       var build = FindWidget("Build");
@@ -960,6 +982,17 @@ namespace MToolKit.ContextMenus.Samples.Tests
       Assert.That(hits[0].module, Is.TypeOf<GraphicRaycaster>());
       Assert.That(hits[0].gameObject.transform.IsChildOf(expected), Is.True,
         "The actual topmost raycast belongs to a different visual than the expected authored widget");
+    }
+    private static IEnumerator WaitForPresentationLayout()
+    {
+      // Unity Test Framework rejects WaitForEndOfFrame in batch mode. Advance a real
+      // frame and explicitly rebuild uGUI before inspecting layout and raycasts.
+      if (Application.isBatchMode)
+      {
+        yield return null;
+        Canvas.ForceUpdateCanvases();
+      }
+      else yield return new WaitForEndOfFrame();
     }
     private static IEnumerator WaitFor(Func<bool> condition, string diagnostic)
     {

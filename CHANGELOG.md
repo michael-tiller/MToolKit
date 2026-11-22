@@ -55,6 +55,8 @@ not a roadmap milestone.
 
 ### Fixed
 
+- Keep gallery PlayMode layout and media regression coverage valid in Unity batch mode. (v1.25.15)
+
 - Route licensed menu CI Unity stages through the pinned consumer's Captain Editor queue. (v1.25.14)
 
 - Keep gallery media coverage aligned with the icon-only NestedWheel defaults. (v1.25.13)
